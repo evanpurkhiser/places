@@ -8,12 +8,18 @@
   "scripts": {
     "lint": "oxlint .",
     "format": "oxfmt .",
-    "format:check": "oxfmt --check ."
+    "format:check": "oxfmt --check .",
+    "typecheck": "pnpm -r typecheck",
+    "test": "vitest run",
+    "server": "pnpm --filter @places/server start",
+    "places": "pnpm --filter @places/cli start"
   },
   "devDependencies": {
     "@evanpurkhiser/oxc-config": "^0.8.0",
     "oxfmt": "^0.47.0",
-    "oxlint": "^1.62.0"
+    "oxlint": "^1.62.0",
+    "typescript": "^7.0.2",
+    "vitest": "5.0.1"
   },
   "devEngines": {
     "packageManager": {

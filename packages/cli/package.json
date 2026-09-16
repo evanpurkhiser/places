@@ -1,0 +1,22 @@
+{
+  "name": "@places/cli",
+  "version": "0.0.0",
+  "private": true,
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "start": "node src/main.ts"
+  },
+  "dependencies": {
+    "@optique/core": "^1.2.7",
+    "@optique/run": "^1.2.7",
+    "@optique/zod": "^1.2.7",
+    "@orpc/client": "1.15.1",
+    "@places/common": "workspace:*",
+    "zod": "4.6.5"
+  },
+  "devDependencies": {
+    "@types/node": "^24.13.4"
+  }
+}

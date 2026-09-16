@@ -1,0 +1,6 @@
+server:
+  host: 127.0.0.1
+  port: 5188
+
+database:
+  url: postgres://places:places@127.0.0.1:5432/places

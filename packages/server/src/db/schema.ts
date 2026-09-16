@@ -1,0 +1,107 @@
+import {sql} from 'drizzle-orm';
+import {
+  check,
+  customType,
+  index,
+  jsonb,
+  pgTable,
+  primaryKey,
+  text,
+  timestamp,
+  uuid,
+} from 'drizzle-orm/pg-core';
+
+// PostGIS accepts EWKT on writes and returns hex EWKB. Convert to named
+// latitude/longitude values in the API projection once the driver is selected.
+const geographyPoint = customType<{data: string; driverData: string}>({
+  dataType: () => 'geography(Point, 4326)',
+});
+
+const createdAt = () =>
+  timestamp('created_at', {withTimezone: true}).defaultNow().notNull();
+
+// $onUpdate applies to Drizzle writes. Direct SQL updates must set updated_at.
+const updatedAt = () =>
+  timestamp('updated_at', {withTimezone: true})
+    .defaultNow()
+    .notNull()
+    .$onUpdate(() => new Date());
+
+export const places = pgTable(
+  'places',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    googlePlaceId: text('google_place_id').notNull().unique(),
+    name: text('name').notNull(),
+    formattedAddress: text('formatted_address').notNull(),
+    googleMapsUrl: text('google_maps_url'),
+    coordinates: geographyPoint('coordinates').notNull(),
+    userNote: text('user_note'),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  table => [index('places_coordinates_idx').using('gist', table.coordinates)],
+);
+
+export const tags = pgTable(
+  'tags',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    name: text('name').notNull().unique(),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  table => [
+    check(
+      'tags_name_normalized',
+      sql`${table.name} <> '' AND ${table.name} = lower(btrim(${table.name}))`,
+    ),
+  ],
+);
+
+export const placeTags = pgTable(
+  'place_tags',
+  {
+    placeId: uuid('place_id')
+      .notNull()
+      .references(() => places.id, {onDelete: 'cascade'}),
+    tagId: uuid('tag_id')
+      .notNull()
+      .references(() => tags.id, {onDelete: 'cascade'}),
+    createdAt: createdAt(),
+  },
+  table => [
+    primaryKey({columns: [table.placeId, table.tagId]}),
+    index('place_tags_tag_id_idx').on(table.tagId),
+  ],
+);
+
+export const sources = pgTable('sources', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  url: text('url'),
+  type: text('type').notNull(),
+  description: text('description'),
+  data: jsonb('data'),
+  createdAt: createdAt(),
+  updatedAt: updatedAt(),
+});
+
+export const placeSources = pgTable(
+  'place_sources',
+  {
+    placeId: uuid('place_id')
+      .notNull()
+      .references(() => places.id, {onDelete: 'cascade'}),
+    sourceId: uuid('source_id')
+      .notNull()
+      .references(() => sources.id, {onDelete: 'cascade'}),
+    description: text('description'),
+    data: jsonb('data'),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  table => [
+    primaryKey({columns: [table.placeId, table.sourceId]}),
+    index('place_sources_source_id_idx').on(table.sourceId),
+  ],
+);

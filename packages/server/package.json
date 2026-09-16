@@ -1,0 +1,29 @@
+{
+  "name": "@places/server",
+  "version": "0.0.0",
+  "private": true,
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "db:generate": "drizzle-kit generate",
+    "start": "node src/main.ts",
+    "db:migrate": "node src/db/migrate.ts"
+  },
+  "dependencies": {
+    "@hono/node-server": "^2.1.1",
+    "@orpc/server": "1.15.1",
+    "@places/common": "workspace:*",
+    "drizzle-orm": "0.45.2",
+    "hono": "4.13.8",
+    "pg": "^8.23.0",
+    "yaml": "^2.9.1",
+    "zod": "4.6.5"
+  },
+  "devDependencies": {
+    "@orpc/client": "1.15.1",
+    "@types/node": "^24.13.4",
+    "@types/pg": "^8.23.1",
+    "drizzle-kit": "0.31.10"
+  }
+}

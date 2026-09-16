@@ -1,7 +1,18 @@
 {
-  "name": "@personal-map/common",
+  "name": "@places/common",
   "version": "0.0.0",
   "private": true,
   "license": "MIT",
-  "type": "module"
+  "type": "module",
+  "exports": {
+    "./contract": "./src/contract/index.ts",
+    "./contract/tag": "./src/contract/tag.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@orpc/contract": "1.15.1",
+    "zod": "4.6.5"
+  }
 }
