@@ -114,3 +114,44 @@ Use a development instance. CLI integration tests bind `127.0.0.1:15188` and
 ```sh
 TEST_DATABASE_URL=postgres://places:places@127.0.0.1:5432/places pnpm test
 ```
+
+## Container
+
+The image runs Node directly with production dependencies and the shared workspace
+contracts. Build it locally with `podman build -t places .` (Docker also works).
+CI runs prek (including lint and formatting), typechecking, and tests against
+PostGIS before building the image. Pushes to `main` publish
+`ghcr.io/evanpurkhiser/places:latest` through the shared Docker workflow; pull
+requests build without publishing. The shared workflow builds Linux amd64.
+
+Mount a YAML config at `/etc/places.yaml` read-only. Use the same config for the
+server, worker, and migration command. For containers on a shared network:
+
+```yaml
+server:
+  host: 0.0.0.0
+  port: 5188
+database:
+  url: postgres://places:password@postgres:5432/places
+google:
+  apiKey: your-google-places-api-key
+```
+
+PostgreSQL with PostGIS runs separately. The database hostname must be reachable
+from the containers. Within a Podman pod, use `127.0.0.1` for PostgreSQL; the
+containers share a network namespace. Publish the HTTP port on host loopback.
+Keep the config readable only by the service account and mount it into each
+container. Application containers keep their persistent state in PostgreSQL.
+
+Run migrations once before starting or updating the server and worker:
+
+```sh
+podman run --rm --network places -v /etc/places.yaml:/etc/places.yaml:ro \
+  ghcr.io/evanpurkhiser/places:latest migrate
+```
+
+Use the default `server` command for the HTTP container and `worker` for a second
+container from the same image. Both support `--config PATH` to select another
+mounted config. Node receives container stop signals directly. `/health` serves
+the HTTP health check. Ansible can manage the PostgreSQL volume, pod, config,
+service units, and image updates using the existing registry auto-update pattern.

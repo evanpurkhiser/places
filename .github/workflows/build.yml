@@ -1,0 +1,49 @@
+name: build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: checks
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgis/postgis:17-3.5
+        env:
+          POSTGRES_USER: places
+          POSTGRES_PASSWORD: places
+          POSTGRES_DB: places
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U places -d places"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      TEST_DATABASE_URL: postgres://places:places@127.0.0.1:5432/places
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          persist-credentials: false
+      - uses: jdx/mise-action@e6a8b3978addb5a52f2b4cd9d91eafa7f0ab959d # v4.2.0
+      - run: pnpm install --frozen-lockfile
+      - run: prek run --all-files
+      - run: pnpm typecheck
+      - run: pnpm test
+
+  build:
+    name: image
+    needs: check
+    permissions:
+      contents: read
+      packages: write
+    uses: evanpurkhiser/workflows/.github/workflows/docker.yml@main # zizmor: ignore[unpinned-uses]
+    with:
+      publish: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
