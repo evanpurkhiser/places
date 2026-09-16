@@ -13,6 +13,7 @@
 | Initial access  | Tailscale   | Restrict access to the tailnet                       |
 | API             | oRPC        | API contracts, server procedures, and typed clients  |
 | HTTP framework  | Hono        | HTTP middleware and hosting oRPC handlers            |
+| CLI parsing     | Optique     | Typed arguments, options, and subcommands            |
 
 ## Workspace
 
@@ -36,6 +37,15 @@ Drizzle table definitions and database migrations belong to the server. API sche
 represent client-facing operations and responses, including related tags and user
 context. Drizzle's Zod helpers can derive validators where a table's shape matches
 what an operation needs.
+
+## CLI argument parsing
+
+Use Optique in `apps/cli` to define arguments, options, and subcommands with
+inferred TypeScript types. Compose parsers to describe each command's accepted
+inputs and generate help text.
+
+Use Optique's Zod integration where argument values can reuse shared validators.
+Command handlers call the server through the typed oRPC client.
 
 ## Testing and build tooling
 
@@ -86,6 +96,8 @@ through that interface. OpenAPI generation uses a Zod-to-JSON-Schema converter.
 
 ## References
 
+- [Optique](https://optique.dev/)
+- [Optique Zod integration](https://optique.dev/integrations/zod)
 - [Vitest](https://vitest.dev/guide/)
 - [Vite](https://vite.dev/guide/)
 - [Hono](https://hono.dev/docs)
