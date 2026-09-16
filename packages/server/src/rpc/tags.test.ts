@@ -12,10 +12,10 @@ import {randomUUID} from 'node:crypto';
 import {fileURLToPath} from 'node:url';
 import {promisify} from 'node:util';
 
-import {createApp} from './app.ts';
-import {configSchema} from './config.ts';
-import {createDatabase} from './db/index.ts';
-import {places, placeTags, tags} from './db/schema.ts';
+import {createApp} from '../app.ts';
+import {configSchema} from '../config.ts';
+import {createDatabase} from '../db/index.ts';
+import {places, placeTags, tags} from '../db/schema.ts';
 
 const exec = promisify(execFile);
 const testUrl = process.env.TEST_DATABASE_URL;
@@ -40,7 +40,7 @@ describe.skipIf(!testUrl)('tag API and CLI against PostgreSQL', () => {
   beforeAll(async () => {
     await admin.query(`CREATE DATABASE "${databaseName}"`);
     await migrate(db, {
-      migrationsFolder: fileURLToPath(new URL('../drizzle', import.meta.url)),
+      migrationsFolder: fileURLToPath(new URL('../../drizzle', import.meta.url)),
     });
   }, 30000);
 
@@ -153,7 +153,7 @@ describe.skipIf(!testUrl)('tag API and CLI against PostgreSQL', () => {
 
   it('runs the actual CLI through HTTP with JSON output and nonzero failures', async () => {
     const server = serve({fetch: app.fetch, hostname: '127.0.0.1', port: 15188});
-    const cliPath = fileURLToPath(new URL('../../cli/src/main.ts', import.meta.url));
+    const cliPath = fileURLToPath(new URL('../../../cli/src/main.ts', import.meta.url));
     const cli = (...args: string[]) =>
       exec(process.execPath, [
         cliPath,
