@@ -4,3 +4,7 @@ server:
 
 database:
   url: postgres://places:places@127.0.0.1:5432/places
+
+# Required for importing places and running the worker.
+# google:
+#   apiKey: your-google-places-api-key

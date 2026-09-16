@@ -12,7 +12,8 @@
     "typecheck": "pnpm -r typecheck",
     "test": "vitest run",
     "server": "pnpm --filter @places/server start",
-    "places": "pnpm --filter @places/cli start"
+    "places": "pnpm --filter @places/cli start",
+    "worker": "pnpm --filter @places/server worker"
   },
   "devDependencies": {
     "@evanpurkhiser/oxc-config": "^0.8.0",

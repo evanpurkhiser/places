@@ -7,6 +7,7 @@ import {zod} from '@optique/zod';
 import {createORPCClient} from '@orpc/client';
 import {RPCLink} from '@orpc/client/fetch';
 import type {Client} from '@places/common/contract';
+import {importInput} from '@places/common/contract/place';
 import {tag} from '@places/common/contract/tag';
 import {z} from 'zod';
 
@@ -30,26 +31,53 @@ export const parser = merge(
       'http://127.0.0.1:5188',
     ),
   }),
-  command(
-    'tags',
-    or(
-      command('list', object({action: constant('list')}), {
-        description: message`List all tags sorted by name.`,
+  or(
+    command(
+      'import',
+      object({
+        action: constant('import'),
+        input: argument(zod(importInput, {metavar: 'INPUT', placeholder: ''}), {
+          description: message`URL or provider reference to import. Currently supports Google Maps URLs and gmaps:<place_id>.`,
+        }),
       }),
-      command('get', object({action: constant('get'), id}), {
-        description: message`Show a tag by ID.`,
-      }),
-      command('create', object({action: constant('create'), name}), {
-        description: message`Create a tag. Duplicate names are rejected.`,
-      }),
-      command('update', object({action: constant('update'), id, name}), {
-        description: message`Rename a tag, preserving its ID and place associations.`,
-      }),
-      command('delete', object({action: constant('delete'), id}), {
-        description: message`Delete a tag and its associations. Saved places are preserved.`,
-      }),
+      {
+        description: message`Import places from a supported URL or provider reference. Returns an import type and job ID.`,
+      },
     ),
-    {description: message`Create, browse, rename, and delete tags for saved places.`},
+    command('list', object({action: constant('places-list')}), {
+      description: message`List saved places, newest first.`,
+    }),
+    command(
+      'import-status',
+      object({
+        action: constant('import-status'),
+        jobId: argument(zod(z.uuid(), {metavar: 'JOB_ID', placeholder: ''})),
+      }),
+      {
+        description: message`Show an import's status and resulting place IDs. Jobs are retained for seven days after completion.`,
+      },
+    ),
+    command(
+      'tags',
+      or(
+        command('list', object({action: constant('list')}), {
+          description: message`List all tags sorted by name.`,
+        }),
+        command('get', object({action: constant('get'), id}), {
+          description: message`Show a tag by ID.`,
+        }),
+        command('create', object({action: constant('create'), name}), {
+          description: message`Create a tag. Duplicate names are rejected.`,
+        }),
+        command('update', object({action: constant('update'), id, name}), {
+          description: message`Rename a tag, preserving its ID and place associations.`,
+        }),
+        command('delete', object({action: constant('delete'), id}), {
+          description: message`Delete a tag and its associations. Saved places are preserved.`,
+        }),
+      ),
+      {description: message`Create, browse, rename, and delete tags for saved places.`},
+    ),
   ),
 );
 
@@ -59,6 +87,12 @@ export function createClient(server: string): Client {
 
 export function execute(args: InferValue<typeof parser>, client: Client) {
   switch (args.action) {
+    case 'import':
+      return client.places.import({input: args.input});
+    case 'places-list':
+      return client.places.list();
+    case 'import-status':
+      return client.places.importStatus({jobId: args.jobId});
     case 'list':
       return client.tags.list();
     case 'get':

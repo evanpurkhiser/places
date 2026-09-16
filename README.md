@@ -57,6 +57,45 @@ Names are trimmed and lowercased. Empty names are rejected; duplicate names retu
 preserves the tag ID and place associations; deleting removes those associations
 while preserving places. Create, get, update, and delete return the tag record.
 
+## Google Maps imports
+
+Enable Places API (New) for your Google Cloud project and put the API key in the
+ignored `packages/server/config.yaml`:
+
+```yaml
+google:
+  apiKey: your-google-places-api-key
+```
+
+Run `pnpm server` and `pnpm worker` as separate processes using the same database
+and config. The worker also accepts `--config /absolute/path/to/config.yaml`.
+pg-boss creates and manages its own schema at startup.
+
+```sh
+pnpm places import 'https://maps.app.goo.gl/jbJWNK3airzeACCC7'
+pnpm places import 'gmaps:ChIJ...'
+pnpm places import-status <job-id>
+pnpm places list
+```
+
+Import resolves the input to a Google Place ID in the RPC request and returns a
+job ID and provider type (`gmaps`). Import status returns the resulting place IDs.
+The worker fetches name, formatted address, Maps URL, and coordinates,
+then inserts the complete place. Existing places are reused. Failed attempts
+leave no partial place; pg-boss retries three times with backoff. Status comes
+from pg-boss and is temporary (completed jobs are retained for seven days).
+
+Supported URLs include `query_place_id`, `q=place_id:...`, `ftid`, and Maps
+place links with identifiers in their `data=` payload, including Takeout exports.
+Short links are expanded with validated redirects. Feature IDs are converted
+locally to Place IDs using a reverse-engineered binary layout; the worker fetches
+Place Details to validate them and populate metadata. Links must identify a
+specific place; otherwise, supply `gmaps:<place_id>`.
+
+The initial listing returns all saved places newest first, with named
+`coordinates.latitude` and `coordinates.longitude`. Provider storage and map
+display constraints are documented in [place metadata](design/place-metadata.md).
+
 ## Checks
 
 ```sh
@@ -69,7 +108,8 @@ pnpm test
 Database integration tests run when `TEST_DATABASE_URL` points to a PostgreSQL
 instance with PostGIS available. They create and drop a separate randomly named
 database; the supplied role needs database creation and extension permissions.
-Use a development instance. The CLI integration test binds `127.0.0.1:15188`.
+Use a development instance. CLI integration tests bind `127.0.0.1:15188` and
+`127.0.0.1:15189`.
 
 ```sh
 TEST_DATABASE_URL=postgres://places:places@127.0.0.1:5432/places pnpm test

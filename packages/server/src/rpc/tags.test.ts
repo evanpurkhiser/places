@@ -5,6 +5,7 @@ import type {Client} from '@places/common/contract';
 import {eq} from 'drizzle-orm';
 import {migrate} from 'drizzle-orm/node-postgres/migrator';
 import {Pool} from 'pg';
+import {PgBoss} from 'pg-boss';
 import {afterAll, beforeAll, beforeEach, describe, expect, it} from 'vitest';
 
 import {execFile} from 'node:child_process';
@@ -16,6 +17,7 @@ import {createApp} from '../app.ts';
 import {configSchema} from '../config.ts';
 import {createDatabase} from '../db/index.ts';
 import {places, placeTags, tags} from '../db/schema.ts';
+import {createGooglePlaces} from '../services/google/index.ts';
 
 const exec = promisify(execFile);
 const testUrl = process.env.TEST_DATABASE_URL;
@@ -29,7 +31,12 @@ describe.skipIf(!testUrl)('tag API and CLI against PostgreSQL', () => {
 
   const db = createDatabase(url.href);
   const config = configSchema.parse({database: {url: url.href}});
-  const app = createApp({db, config});
+  const app = createApp({
+    db,
+    config,
+    jobs: new PgBoss(url.href),
+    google: createGooglePlaces(),
+  });
   const client: Client = createORPCClient(
     new RPCLink({
       url: 'http://localhost/rpc',

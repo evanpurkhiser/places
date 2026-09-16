@@ -121,6 +121,11 @@ middleware model for server-wide concerns.
 
 Serve typed RPC at `/rpc`. Tag operations are
 create, list, get, update, and delete; the CLI exposes them under `places tags`.
+Place imports use `places.import` and `places.importStatus`, and saved places
+are listed through `places.list`. The import request resolves a Maps input to a
+Google Place ID before enqueueing `{googlePlaceId}`. The worker retrieves required
+metadata and inserts the complete canonical place. pg-boss provides temporary
+import status.
 
 ## Background jobs
 
@@ -156,7 +161,17 @@ through that interface.
 - Deployment and migration execution workflow.
 - Confirm Vite for the web and choose distribution build tooling.
 - Concrete place contracts and CLI commands.
-- pg-boss version, worker concurrency, retry policies, and job-status API.
+- Worker concurrency tuning and additional background job types.
+
+## Google Places client
+
+Use Google's `@googlemaps/places` SDK for Places API (New) Place
+Details, with API-key authentication and explicit field masks. The SDK uses its
+HTTP transport with a ten-second timeout; pg-boss controls import retries.
+Maps short links are expanded separately with validated HTTP redirects. Embedded
+feature IDs are converted locally into Place IDs before enqueueing. The conversion
+uses a reverse-engineered protobuf layout; the worker validates IDs through Place
+Details. Inputs must contain an explicit place identifier.
 
 ## References
 
@@ -173,3 +188,4 @@ through that interface.
 - [Drizzle Zod integration](https://orm.drizzle.team/docs/zod)
 - [oRPC contract-first guide](https://orpc.dev/docs/contract-first)
 - [oRPC Zod integration](https://orpc.dev/docs/integrations/zod)
+- [Google Places SDK](https://github.com/googleapis/google-cloud-node/tree/main/packages/google-maps-places)

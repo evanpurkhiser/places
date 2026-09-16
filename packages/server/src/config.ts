@@ -5,6 +5,17 @@ import {readFile} from 'node:fs/promises';
 import {parseArgs} from 'node:util';
 
 export const configSchema = z.strictObject({
+  google: z
+    .strictObject({
+      apiKey: z
+        .string()
+        .trim()
+        .min(1)
+        .optional()
+        .describe('Google Places API (New) key; required for imports.'),
+    })
+    .prefault({})
+    .describe('Google Places integration.'),
   server: z
     .strictObject({
       host: z.string().default('127.0.0.1').describe('Network address to listen on.'),
@@ -34,7 +45,9 @@ export async function loadConfig(args = process.argv.slice(2)): Promise<Config> 
     args,
     options: {config: {type: 'string', default: 'config.yaml'}},
   });
-  const result = configSchema.safeParse(parse(await readFile(values.config!, 'utf8')));
+  const result = configSchema.safeParse(
+    parse(await readFile(values.config!, 'utf8'), {prettyErrors: false}),
+  );
 
   if (!result.success) {
     // Report paths and validation messages without including secret values.

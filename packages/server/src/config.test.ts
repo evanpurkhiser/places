@@ -1,6 +1,23 @@
 import {expect, it} from 'vitest';
 
-import {configSchema} from './config.ts';
+import {mkdtemp, writeFile, rm} from 'node:fs/promises';
+import {tmpdir} from 'node:os';
+import {join} from 'node:path';
+
+import {configSchema, loadConfig} from './config.ts';
+
+it('does not include secrets from malformed YAML in loader errors', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'places-config-'));
+  const path = join(directory, 'config.yaml');
+
+  try {
+    await writeFile(path, 'google:\n  apiKey: "sentinel-secret\n');
+    await expect(loadConfig(['--config', path])).rejects.toThrow();
+    await expect(loadConfig(['--config', path])).rejects.not.toThrow('sentinel-secret');
+  } finally {
+    await rm(directory, {recursive: true});
+  }
+});
 
 it.each([0, 80, 443, 3000, 5188, 65535])('accepts valid TCP port %i', port => {
   expect(

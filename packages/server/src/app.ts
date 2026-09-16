@@ -11,6 +11,8 @@ export function createApp(context: Context) {
   app.use('*', async (c, next) => {
     c.set('config', context.config);
     c.set('db', context.db);
+    c.set('jobs', context.jobs);
+    c.set('google', context.google);
     await next();
   });
 

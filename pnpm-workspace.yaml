@@ -2,6 +2,7 @@ packages:
   - packages/*
 allowBuilds:
   esbuild: true
+  protobufjs: false
 minimumReleaseAgeExclude:
   - '@orpc/client@1.15.1'
   - '@orpc/contract@1.15.1'
