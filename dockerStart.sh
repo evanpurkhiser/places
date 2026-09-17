@@ -7,7 +7,10 @@ if [ "$#" -gt 0 ]; then
 fi
 
 case "$command" in
-server) script=src/main.ts ;;
+server)
+	node src/db/migrate.ts --config /etc/places.yaml "$@"
+	script=src/main.ts
+	;;
 worker) script=src/worker.ts ;;
 migrate) script=src/db/migrate.ts ;;
 *)

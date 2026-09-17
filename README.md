@@ -144,7 +144,9 @@ containers share a network namespace. Publish the HTTP port on host loopback.
 Keep the config readable only by the service account and mount it into each
 container. Application containers keep their persistent state in PostgreSQL.
 
-Run migrations once before starting or updating the server and worker:
+The default `server` command runs database migrations before starting the HTTP
+server. If a migration fails, the container exits. Start or update the server
+before the worker so the database schema is ready. To run migrations separately:
 
 ```sh
 podman run --rm --network places -v /etc/places.yaml:/etc/places.yaml:ro \
