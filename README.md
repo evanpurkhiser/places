@@ -119,8 +119,9 @@ TEST_DATABASE_URL=postgres://places:places@127.0.0.1:5432/places pnpm test
 
 The image runs Node directly with production dependencies and the shared workspace
 contracts. Build it locally with `podman build -t places .` (Docker also works).
-CI runs prek (including lint and formatting), typechecking, and tests against
-PostGIS before building the image. Pushes to `main` publish
+The lint workflow runs prek, including lint and formatting. The build workflow
+runs typechecking and tests against PostGIS before building the image. Both run
+on pull requests and pushes to `main`. Pushes to `main` publish
 `ghcr.io/evanpurkhiser/places:latest` through the shared Docker workflow; pull
 requests build without publishing. The shared workflow builds Linux amd64.
 

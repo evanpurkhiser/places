@@ -9,8 +9,8 @@ permissions:
   contents: read
 
 jobs:
-  check:
-    name: checks
+  test:
+    name: test
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -34,13 +34,12 @@ jobs:
           persist-credentials: false
       - uses: jdx/mise-action@e6a8b3978addb5a52f2b4cd9d91eafa7f0ab959d # v4.2.0
       - run: pnpm install --frozen-lockfile
-      - run: prek run --all-files
       - run: pnpm typecheck
       - run: pnpm test
 
   build:
-    name: image
-    needs: check
+    name: build
+    needs: test
     permissions:
       contents: read
       packages: write
