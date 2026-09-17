@@ -82,6 +82,8 @@ describe.skipIf(!testUrl)('tag API and CLI against PostgreSQL', () => {
     const bakery = await client.tags.create({name: 'bakery'});
 
     expect(cafe.name).toBe('type:cafe');
+    expect(cafe.icon).toBeNull();
+    expect(cafe.description).toBeNull();
     expect(cafe.createdAt).toBeInstanceOf(Date);
     expect(await client.tags.list()).toEqual([bakery, cafe]);
     expect(await client.tags.get({id: cafe.id})).toEqual(cafe);
@@ -122,6 +124,66 @@ describe.skipIf(!testUrl)('tag API and CLI against PostgreSQL', () => {
     });
     expect(await client.tags.get({id: other.id})).toEqual(other);
   });
+
+  it('creates, replaces, preserves, and clears tag icons', async () => {
+    const tag = await client.tags.create({name: 'lunch', icon: {emoji: '🍱'}});
+
+    expect(tag.icon).toEqual({emoji: '🍱'});
+    expect((await client.tags.get({id: tag.id})).icon).toEqual({emoji: '🍱'});
+
+    const updated = await client.tags.update({id: tag.id, icon: {emoji: '🍜'}});
+
+    expect(updated).toMatchObject({name: 'lunch', icon: {emoji: '🍜'}});
+    expect(await client.tags.update({id: tag.id, name: 'dinner'})).toMatchObject({
+      name: 'dinner',
+      icon: {emoji: '🍜'},
+    });
+    expect(await client.tags.update({id: tag.id, icon: null})).toMatchObject({
+      name: 'dinner',
+      icon: null,
+    });
+    expect((await client.tags.get({id: tag.id})).icon).toBeNull();
+  });
+
+  it('creates, edits, preserves, and clears tag descriptions', async () => {
+    const tag = await client.tags.create({
+      name: 'lunch',
+      description: 'Weekday lunch spots',
+    });
+
+    expect(tag.description).toBe('Weekday lunch spots');
+    expect(await client.tags.get({id: tag.id})).toEqual(tag);
+    expect(
+      await client.tags.update({id: tag.id, description: 'Quick lunches'}),
+    ).toMatchObject({name: 'lunch', description: 'Quick lunches'});
+    expect(
+      await client.tags.update({id: tag.id, name: 'weekday', icon: {emoji: '🍱'}}),
+    ).toMatchObject({description: 'Quick lunches'});
+    expect(await client.tags.update({id: tag.id, description: null})).toMatchObject({
+      name: 'weekday',
+      icon: {emoji: '🍱'},
+      description: null,
+    });
+    expect((await client.tags.get({id: tag.id})).description).toBeNull();
+  });
+
+  it.each([{}, {emoji: ''}, {emoji: 1}, {emoji: '🍱', url: 'icon.png'}])(
+    'rejects invalid icon JSON %j',
+    async icon => {
+      const tag = await client.tags.create({name: 'lunch'});
+
+      // Exercise runtime validation with values outside the client contract.
+      const invalidIcon = icon as unknown as {emoji: string};
+
+      await expect(
+        client.tags.create({name: 'dinner', icon: invalidIcon}),
+      ).rejects.toMatchObject({status: 400});
+      await expect(
+        client.tags.update({id: tag.id, icon: invalidIcon}),
+      ).rejects.toMatchObject({status: 400});
+      expect(await client.tags.get({id: tag.id})).toEqual(tag);
+    },
+  );
 
   it('validates input and reports missing tags', async () => {
     await expect(client.tags.create({name: ' \t '})).rejects.toMatchObject({status: 400});

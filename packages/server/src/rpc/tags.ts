@@ -47,7 +47,7 @@ export const tagRouter = api.router({
   update: tagWrite.update.handler(async ({input, context: {db}, errors}) => {
     const [tag] = await db
       .update(tags)
-      .set({name: input.name})
+      .set({name: input.name, icon: input.icon, description: input.description})
       .where(eq(tags.id, input.id))
       .returning();
 

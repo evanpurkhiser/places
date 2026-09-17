@@ -8,6 +8,20 @@
       "when": 1789569146865,
       "tag": "0000_closed_havok",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1789610085439,
+      "tag": "0001_freezing_ezekiel",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1789610324409,
+      "tag": "0002_swift_punisher",
+      "breakpoints": true
     }
   ]
 }

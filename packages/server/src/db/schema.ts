@@ -1,3 +1,4 @@
+import type {TagIcon} from '@places/common/contract/tag';
 import {sql} from 'drizzle-orm';
 import {
   check,
@@ -48,6 +49,8 @@ export const tags = pgTable(
   {
     id: uuid('id').defaultRandom().primaryKey(),
     name: text('name').notNull().unique(),
+    icon: jsonb('icon').$type<TagIcon>(),
+    description: text('description'),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
