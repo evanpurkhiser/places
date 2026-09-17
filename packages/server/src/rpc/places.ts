@@ -25,7 +25,9 @@ export const placeRouter = api.router({
       coordinates: {latitude, longitude},
     }));
   }),
-  import: api.import.handler(({input, context}) => enqueueImport(input.input, context)),
+  import: api.import.handler(({input, context}) =>
+    enqueueImport(input.input, context, input.tags),
+  ),
   importStatus: api.importStatus.handler(({input, context}) =>
     getImportStatus(input.jobId, context),
   ),

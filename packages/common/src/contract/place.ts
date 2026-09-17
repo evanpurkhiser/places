@@ -1,6 +1,8 @@
 import {oc} from '@orpc/contract';
 import {z} from 'zod';
 
+import {tag} from './tag.ts';
+
 export const place = z.object({
   id: z.uuid(),
   googlePlaceId: z.string(),
@@ -24,7 +26,7 @@ export const placeContract = {
       BAD_REQUEST: {message: 'Unsupported or invalid import input.'},
       SERVICE_UNAVAILABLE: {message: 'Import service is unavailable.'},
     })
-    .input(z.object({input: importInput}))
+    .input(z.object({input: importInput, tags: z.array(tag.shape.name).default([])}))
     .output(
       z.object({
         jobId: z.uuid(),

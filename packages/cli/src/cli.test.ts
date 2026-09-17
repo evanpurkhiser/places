@@ -35,3 +35,30 @@ describe('tag arguments', () => {
     expect(parse(parser, args)).toMatchObject({success: false});
   });
 });
+
+describe('import tag arguments', () => {
+  it('accepts repeated tags by name and ID around the input', () => {
+    const id = '9a53fa46-9d9d-4dac-b0b2-f3a8334900ef';
+
+    expect(
+      parse(parser, ['import', '--tag', ' Type:CAFE ', 'gmaps:ChIJtest', '--tag', id]),
+    ).toMatchObject({
+      success: true,
+      value: {action: 'import', input: 'gmaps:ChIJtest', tags: ['type:cafe', id]},
+    });
+  });
+
+  it('defaults to no tags', () => {
+    expect(parse(parser, ['import', 'gmaps:ChIJtest'])).toMatchObject({
+      success: true,
+      value: {tags: []},
+    });
+  });
+
+  it.each([
+    ['import', 'gmaps:ChIJtest', '--tag'],
+    ['import', 'gmaps:ChIJtest', '--tag', '  '],
+  ])('rejects invalid tag arguments: %j', (...args) => {
+    expect(parse(parser, args)).toMatchObject({success: false});
+  });
+});

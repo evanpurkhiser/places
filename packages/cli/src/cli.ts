@@ -1,6 +1,6 @@
 import {merge, object, or} from '@optique/core/constructs';
 import {message} from '@optique/core/message';
-import {withDefault} from '@optique/core/modifiers';
+import {multiple, withDefault} from '@optique/core/modifiers';
 import type {InferValue} from '@optique/core/parser';
 import {argument, command, constant, option} from '@optique/core/primitives';
 import {zod} from '@optique/zod';
@@ -36,6 +36,11 @@ export const parser = merge(
       'import',
       object({
         action: constant('import'),
+        tags: multiple(
+          option('--tag', zod(tag.shape.name, {metavar: 'NAME_OR_ID', placeholder: ''}), {
+            description: message`Existing tag name or UUID. Repeat to apply multiple tags.`,
+          }),
+        ),
         input: argument(zod(importInput, {metavar: 'INPUT', placeholder: ''}), {
           description: message`URL or provider reference to import. Currently supports Google Maps URLs and gmaps:<place_id>.`,
         }),
@@ -88,7 +93,7 @@ export function createClient(server: string): Client {
 export function execute(args: InferValue<typeof parser>, client: Client) {
   switch (args.action) {
     case 'import':
-      return client.places.import({input: args.input});
+      return client.places.import({input: args.input, tags: [...args.tags]});
     case 'places-list':
       return client.places.list();
     case 'import-status':

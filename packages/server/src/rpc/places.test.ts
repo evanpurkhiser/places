@@ -15,7 +15,7 @@ import {promisify} from 'node:util';
 import {createApp} from '../app.ts';
 import {configSchema} from '../config.ts';
 import {createDatabase} from '../db/index.ts';
-import {places} from '../db/schema.ts';
+import {places, placeTags, tags} from '../db/schema.ts';
 import {importPlace, importQueue, registerImportWorker} from '../jobs/gmaps-import.ts';
 import {createGooglePlaces} from '../services/google/index.ts';
 
@@ -60,6 +60,7 @@ describe.skipIf(!testUrl)('place import with PostgreSQL and pg-boss', () => {
 
   beforeEach(async () => {
     await db.delete(places);
+    await db.delete(tags);
     google.get.mockReset().mockResolvedValue(details);
   });
 
@@ -85,7 +86,7 @@ describe.skipIf(!testUrl)('place import with PostgreSQL and pg-boss', () => {
     const submitted = await client.places.import({input: 'gmaps:ChIJtest'});
     const job = await jobs.getJobById(importQueue, submitted.jobId);
 
-    expect(job?.data).toEqual({googlePlaceId: 'ChIJtest'});
+    expect(job?.data).toEqual({googlePlaceId: 'ChIJtest', tagIds: []});
 
     const result = await waitForState(submitted.jobId, 'completed');
     const saved = await client.places.list();
@@ -117,6 +118,56 @@ describe.skipIf(!testUrl)('place import with PostgreSQL and pg-boss', () => {
     );
     expect(google.get).not.toHaveBeenCalled();
   }, 20000);
+
+  it('resolves names and IDs, deduplicates tags, and adds tags on reimport', async () => {
+    const cafe = await client.tags.create({name: 'type:cafe'});
+    const favorite = await client.tags.create({name: 'favorite'});
+    const submitted = await client.places.import({
+      input: 'gmaps:ChIJtest',
+      tags: [' Type:CAFE ', cafe.id, cafe.id],
+    });
+    const result = await waitForState(submitted.jobId, 'completed');
+
+    expect(await db.select().from(placeTags)).toMatchObject([
+      {placeId: result.placeIds[0], tagId: cafe.id},
+    ]);
+
+    google.get.mockClear();
+    const repeated = await client.places.import({
+      input: 'gmaps:ChIJtest',
+      tags: [cafe.id, favorite.id],
+    });
+
+    await waitForState(repeated.jobId, 'completed');
+    expect((await db.select().from(placeTags)).map(row => row.tagId).sort()).toEqual(
+      [cafe.id, favorite.id].sort(),
+    );
+    expect(google.get).not.toHaveBeenCalled();
+  }, 20000);
+
+  it('rejects unknown tag names and IDs before queuing', async () => {
+    const send = vi.spyOn(jobs, 'send');
+
+    try {
+      for (const tag of ['missing', randomUUID()]) {
+        await expect(
+          client.places.import({input: 'gmaps:ChIJtest', tags: [tag]}),
+        ).rejects.toMatchObject({
+          code: 'BAD_REQUEST',
+          message: `Tag not found: ${tag}`,
+        });
+      }
+
+      expect(send).not.toHaveBeenCalled();
+    } finally {
+      send.mockRestore();
+    }
+  });
+
+  it('rolls back a new place if a tag was deleted before the worker runs', async () => {
+    await expect(importPlace(db, google, 'ChIJtest', [randomUUID()])).rejects.toThrow();
+    expect(await client.places.list()).toEqual([]);
+  });
 
   it('retries transient metadata failures and eventually creates the place', async () => {
     google.get.mockRejectedValueOnce(new Error('temporary failure'));
@@ -150,13 +201,18 @@ describe.skipIf(!testUrl)('place import with PostgreSQL and pg-boss', () => {
       exec(process.execPath, [cliPath, '--server', 'http://127.0.0.1:15189', ...args]);
 
     try {
-      const submitted = JSON.parse((await cli('import', 'gmaps:ChIJtest')).stdout);
+      const tag = await client.tags.create({name: 'favorite'});
+      const submitted = JSON.parse(
+        (await cli('import', 'gmaps:ChIJtest', '--tag', tag.name, '--tag', tag.id))
+          .stdout,
+      );
 
       await waitForState(submitted.jobId, 'completed');
       expect(JSON.parse((await cli('import-status', submitted.jobId)).stdout).state).toBe(
         'completed',
       );
       expect(JSON.parse((await cli('list')).stdout)).toHaveLength(1);
+      expect(await db.select().from(placeTags)).toMatchObject([{tagId: tag.id}]);
       await expect(cli('import', 'https://evil.test')).rejects.toMatchObject({code: 1});
     } finally {
       await new Promise<void>((resolve, reject) =>

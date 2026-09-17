@@ -3,7 +3,7 @@ import type {PgBoss} from 'pg-boss';
 import {z} from 'zod';
 
 import type {Database} from '../db/index.ts';
-import {places} from '../db/schema.ts';
+import {places, placeTags} from '../db/schema.ts';
 import type {GooglePlaces} from '../services/google/index.ts';
 
 export const importQueue = 'gmaps-import';
@@ -14,10 +14,13 @@ export const queueOptions = {
   expireInSeconds: 60,
   deleteAfterSeconds: 7 * 24 * 60 * 60,
 };
-export const importPayload = z.object({googlePlaceId: z.string().min(1)});
+export const importPayload = z.object({
+  googlePlaceId: z.string().min(1),
+  tagIds: z.array(z.uuid()).default([]),
+});
 
-export async function importPlace(
-  db: Database,
+async function savePlace(
+  db: Pick<Database, 'select' | 'insert'>,
   google: GooglePlaces,
   googlePlaceId: string,
 ) {
@@ -59,10 +62,30 @@ export async function importPlace(
   return {placeIds: [canonical.id]};
 }
 
+export function importPlace(
+  db: Database,
+  google: GooglePlaces,
+  googlePlaceId: string,
+  tagIds: string[] = [],
+) {
+  return db.transaction(async tx => {
+    const result = await savePlace(tx, google, googlePlaceId);
+
+    if (tagIds.length > 0) {
+      await tx
+        .insert(placeTags)
+        .values(tagIds.map(tagId => ({placeId: result.placeIds[0]!, tagId})))
+        .onConflictDoNothing();
+    }
+
+    return result;
+  });
+}
+
 export function registerImportWorker(boss: PgBoss, db: Database, google: GooglePlaces) {
   return boss.work(importQueue, {batchSize: 1}, ([job]) => {
-    const {googlePlaceId} = importPayload.parse(job!.data);
+    const {googlePlaceId, tagIds} = importPayload.parse(job!.data);
 
-    return importPlace(db, google, googlePlaceId);
+    return importPlace(db, google, googlePlaceId, tagIds);
   });
 }

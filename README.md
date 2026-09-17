@@ -74,9 +74,14 @@ pg-boss creates and manages its own schema at startup.
 ```sh
 pnpm places import 'https://maps.app.goo.gl/jbJWNK3airzeACCC7'
 pnpm places import 'gmaps:ChIJ...'
+pnpm places import 'gmaps:ChIJ...' --tag type:cafe --tag <tag-id>
 pnpm places import-status <job-id>
 pnpm places list
 ```
+
+Repeat `--tag NAME_OR_ID` to apply existing tags by name or UUID. Names are trimmed
+and lowercased. Unknown tags are rejected before queuing. Tags are added to new
+and existing places; repeated tags are applied once.
 
 Import resolves the input to a Google Place ID in the RPC request and returns a
 job ID and provider type (`gmaps`). Import status returns the resulting place IDs.

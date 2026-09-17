@@ -1,6 +1,9 @@
 import {ORPCError} from '@orpc/server';
 import {importResult} from '@places/common/contract/place';
+import {inArray, or} from 'drizzle-orm';
+import {z} from 'zod';
 
+import {tags} from '../db/schema.ts';
 import {importPayload, importQueue} from '../jobs/gmaps-import.ts';
 import type {Context} from '../rpc/context.ts';
 import {isGoogleMapsInput} from '../services/google/index.ts';
@@ -15,7 +18,40 @@ const importers = [
   },
 ];
 
-export async function enqueueImport(input: string, context: Context) {
+function tagsByNameOrId(values: string[]) {
+  const ids = values.filter(value => z.uuid().safeParse(value).success);
+
+  return or(inArray(tags.id, ids), inArray(tags.name, values));
+}
+
+async function resolveTags(namesOrIds: string[], {db}: Context) {
+  if (namesOrIds.length === 0) {
+    return [];
+  }
+
+  const matches = await db
+    .select({id: tags.id, name: tags.name})
+    .from(tags)
+    .where(tagsByNameOrId(namesOrIds));
+  const tagIds = namesOrIds.map(value => {
+    const match =
+      matches.find(tag => tag.id === value) ?? matches.find(tag => tag.name === value);
+
+    if (!match) {
+      throw new ORPCError('BAD_REQUEST', {message: `Tag not found: ${value}`});
+    }
+
+    return match.id;
+  });
+
+  return [...new Set(tagIds)];
+}
+
+export async function enqueueImport(
+  input: string,
+  context: Context,
+  tags: string[] = [],
+) {
   const importer = importers.find(candidate => candidate.accepts(input));
 
   if (!importer) {
@@ -25,7 +61,8 @@ export async function enqueueImport(input: string, context: Context) {
     });
   }
 
-  const payload = await importer.prepare(input, context);
+  const tagIds = await resolveTags(tags, context);
+  const payload = {...(await importer.prepare(input, context)), tagIds};
   const jobId = await context.jobs.send(importer.queue, payload);
 
   if (!jobId) {
