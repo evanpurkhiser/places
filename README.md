@@ -65,6 +65,24 @@ an optional name and preserves omitted fields. Pass an empty string with
 `--icon ''` or `--description ''` to set that field to null. Updates require
 at least one change.
 
+## Place tags
+
+Apply existing tags to saved places using the place UUID from `list` or
+`import-status` and a tag name or UUID:
+
+```sh
+pnpm places tag <place-id> attr:nice-bathroom
+pnpm places tag <place-id> attr:nice-bathroom --notes 'Code 1234'
+pnpm places tag <place-id> attr:nice-bathroom --notes ''
+pnpm places untag <place-id> attr:nice-bathroom
+```
+
+`tag` ensures the assignment exists and returns it, including its note. Omitted
+`--notes` preserves the current note; supplied text replaces it, and an empty
+string clears it. `untag` removes the assignment and its note, preserving the
+place and shared tag definition. Its `removed` result is false when the tag was
+already unassigned. Both commands report an error for an unknown place or tag.
+
 ## Google Maps imports
 
 Enable Places API (New) for your Google Cloud project and put the API key in the
@@ -84,6 +102,7 @@ pnpm places import 'https://maps.app.goo.gl/jbJWNK3airzeACCC7'
 pnpm places import 'gmaps:ChIJ...'
 pnpm places import 'gmaps:ChIJ...' --tag type:cafe --tag <tag-id>
 pnpm places import 'gmaps:ChIJ...' --notes 'Try the espresso tonic'
+pnpm places import 'gmaps:ChIJ...' --tag-note attr:nice-bathroom 'Code 1234'
 pnpm places import-status <job-id>
 pnpm places list
 ```
@@ -94,6 +113,14 @@ and existing places; repeated tags are applied once.
 
 Use `--notes TEXT` to save notes with a place. On reimport, supplied notes replace
 the saved note; omitting the option preserves it. Use `--notes ''` to clear it.
+
+Use `--tag-note NAME_OR_ID NOTE` to apply an existing tag and save a note on its
+assignment to the place. Repeat the option for multiple tags. Supplied notes
+replace existing assignment notes; an empty string clears the note while keeping
+the tag. Omitting a tag note, including when using plain `--tag`, preserves it.
+If multiple notes resolve to the same tag, the last note wins. Tag names are
+normalized; note text is preserved verbatim. `--notes` stores the place's general
+note independently.
 
 Import resolves the input to a Google Place ID in the RPC request and returns a
 job ID and provider type (`gmaps`). Import status returns the resulting place IDs.

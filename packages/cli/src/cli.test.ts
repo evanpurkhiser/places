@@ -79,6 +79,56 @@ describe('import arguments', () => {
     });
   });
 
+  it.each(['Code 1234', '', '  Case Preserved\nSecond line  ', 'gmaps:note'])(
+    'keeps repeated tag notes paired around the input: %j',
+    note => {
+      const result = parse(parser, [
+        'import',
+        '--tag-note',
+        ' Attr:Nice-Bathroom ',
+        note,
+        '--tag',
+        'type:cafe',
+        'gmaps:ChIJtest',
+        '--tag-note',
+        'favorite',
+        'Order the Espresso',
+        '--notes',
+        'Place note',
+      ]);
+
+      expect(result).toMatchObject({success: true});
+
+      if (!result.success) {
+        throw new Error('Expected valid arguments');
+      }
+
+      const places = {import: vi.fn()};
+      execute(result.value, {places} as unknown as Client);
+
+      expect(places.import).toHaveBeenCalledWith({
+        input: 'gmaps:ChIJtest',
+        notes: 'Place note',
+        tags: [
+          {tag: 'type:cafe'},
+          {tag: 'attr:nice-bathroom', note},
+          {tag: 'favorite', note: 'Order the Espresso'},
+        ],
+      });
+    },
+  );
+
+  it.each([
+    ['import', 'gmaps:ChIJtest', '--tag-note'],
+    ['import', 'gmaps:ChIJtest', '--tag-note', 'favorite'],
+    ['import', 'gmaps:ChIJtest', '--tag-note', 'favorite', '--tag', 'type:cafe'],
+    ['import', '--tag-note', 'favorite', 'Note'],
+    ['import', 'gmaps:ChIJtest', '--tag-note', ' ', 'Note'],
+    ['import', 'gmaps:ChIJtest', 'Stray note'],
+  ])('rejects incomplete or invalid tag-note arguments: %j', (...args) => {
+    expect(parse(parser, args)).toMatchObject({success: false});
+  });
+
   it('defaults to no tags', () => {
     expect(parse(parser, ['import', 'gmaps:ChIJtest'])).toMatchObject({
       success: true,
@@ -188,5 +238,56 @@ describe('tag metadata', () => {
     ['update', id, '--description'],
   ])('rejects invalid metadata arguments: %j', (...args) => {
     expect(parse(parser, ['tags', ...args])).toMatchObject({success: false});
+  });
+});
+
+describe('place tagging arguments', () => {
+  const placeId = '9a53fa46-9d9d-4dac-b0b2-f3a8334900ef';
+
+  it.each([undefined, '', '  Code 1234\nDownstairs  '])(
+    'forwards assignment notes: %j',
+    notes => {
+      const result = parse(parser, [
+        'tag',
+        placeId,
+        ' Attr:Nice-Bathroom ',
+        ...(notes === undefined ? [] : ['--notes', notes]),
+      ]);
+
+      if (!result.success) {
+        throw new Error('Expected valid arguments');
+      }
+
+      const places = {tag: vi.fn()};
+      execute(result.value, {places} as unknown as Client);
+      expect(places.tag).toHaveBeenCalledWith({
+        placeId,
+        tag: 'attr:nice-bathroom',
+        notes,
+      });
+    },
+  );
+
+  it('forwards untag by UUID', () => {
+    const result = parse(parser, ['untag', placeId, placeId]);
+
+    if (!result.success) {
+      throw new Error('Expected valid arguments');
+    }
+
+    const places = {untag: vi.fn()};
+    execute(result.value, {places} as unknown as Client);
+    expect(places.untag).toHaveBeenCalledWith({placeId, tag: placeId});
+  });
+
+  it.each([
+    ['tag', 'bad-id', 'favorite'],
+    ['tag', placeId],
+    ['tag', placeId, ' '],
+    ['tag', placeId, 'favorite', '--notes'],
+    ['untag', placeId],
+    ['untag', placeId, 'favorite', '--notes', 'Note'],
+  ])('rejects invalid assignment arguments: %j', (...args) => {
+    expect(parse(parser, args)).toMatchObject({success: false});
   });
 });

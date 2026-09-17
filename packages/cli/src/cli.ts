@@ -1,4 +1,4 @@
-import {merge, object, or} from '@optique/core/constructs';
+import {merge, object, or, seq} from '@optique/core/constructs';
 import {message} from '@optique/core/message';
 import {multiple, optional, withDefault} from '@optique/core/modifiers';
 import type {InferValue} from '@optique/core/parser';
@@ -8,7 +8,7 @@ import {zod} from '@optique/zod';
 import {createORPCClient} from '@orpc/client';
 import {RPCLink} from '@orpc/client/fetch';
 import type {Client} from '@places/common/contract';
-import {importInput} from '@places/common/contract/place';
+import {importInput, place} from '@places/common/contract/place';
 import {tag, tagIcon} from '@places/common/contract/tag';
 import {z} from 'zod';
 
@@ -18,6 +18,15 @@ const id = argument(zod(tag.shape.id, {metavar: 'ID', placeholder: ''}), {
 const name = argument(zod(tag.shape.name, {metavar: 'NAME', placeholder: ''}), {
   description: message`Tag name; trimmed and lowercased. Namespaces such as type:cafe are optional.`,
 });
+
+const assignmentArguments = {
+  placeId: argument(zod(place.shape.id, {metavar: 'PLACE_ID', placeholder: ''}), {
+    description: message`Saved place UUID, shown by list or import-status.`,
+  }),
+  tag: argument(zod(tag.shape.name, {metavar: 'NAME_OR_ID', placeholder: ''}), {
+    description: message`Existing tag name or UUID.`,
+  }),
+};
 
 const tagMetadata = {
   icon: optional(
@@ -67,6 +76,20 @@ export const parser = merge(
             description: message`Existing tag name or UUID. Repeat to apply multiple tags.`,
           }),
         ),
+        tagNotes: multiple(
+          seq(
+            option(
+              '--tag-note',
+              zod(tag.shape.name, {metavar: 'NAME_OR_ID', placeholder: ''}),
+              {
+                description: message`Apply an existing tag with a note. Repeat for multiple tags; an empty note clears it.`,
+              },
+            ),
+            argument(string({metavar: 'NOTE'}), {
+              description: message`Note for the preceding --tag-note tag. An empty string clears it.`,
+            }),
+          ),
+        ),
         input: argument(zod(importInput, {metavar: 'INPUT', placeholder: ''}), {
           description: message`URL or provider reference to import. Currently supports Google Maps URLs and gmaps:<place_id>.`,
         }),
@@ -74,6 +97,27 @@ export const parser = merge(
       {
         description: message`Import places from a supported URL or provider reference. Returns an import type and job ID.`,
       },
+    ),
+    command(
+      'tag',
+      object({
+        action: constant('place-tag'),
+        ...assignmentArguments,
+        notes: optional(
+          option('--notes', string({metavar: 'TEXT'}), {
+            description: message`Note for this tag assignment. Omit to preserve it; an empty string clears it.`,
+          }),
+        ),
+      }),
+      {description: message`Apply a tag to a saved place, optionally updating its note.`},
+    ),
+    command(
+      'untag',
+      object({
+        action: constant('place-untag'),
+        ...assignmentArguments,
+      }),
+      {description: message`Remove a tag and its assignment note from a saved place.`},
     ),
     command('list', object({action: constant('places-list')}), {
       description: message`List saved places, newest first.`,
@@ -130,9 +174,16 @@ export function execute(args: InferValue<typeof parser>, client: Client) {
     case 'import':
       return client.places.import({
         input: args.input,
-        tags: [...args.tags],
+        tags: [
+          ...args.tags.map(tag => ({tag})),
+          ...args.tagNotes.map(([tag, note]) => ({tag, note})),
+        ],
         notes: args.notes,
       });
+    case 'place-tag':
+      return client.places.tag({placeId: args.placeId, tag: args.tag, notes: args.notes});
+    case 'place-untag':
+      return client.places.untag({placeId: args.placeId, tag: args.tag});
     case 'places-list':
       return client.places.list();
     case 'import-status':

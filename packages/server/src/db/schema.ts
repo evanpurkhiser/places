@@ -71,6 +71,7 @@ export const placeTags = pgTable(
     tagId: uuid('tag_id')
       .notNull()
       .references(() => tags.id, {onDelete: 'cascade'}),
+    note: text('note'),
     createdAt: createdAt(),
   },
   table => [

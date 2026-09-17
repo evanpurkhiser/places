@@ -86,7 +86,7 @@ describe.skipIf(!testUrl)('place import with PostgreSQL and pg-boss', () => {
     const submitted = await client.places.import({input: 'gmaps:ChIJtest'});
     const job = await jobs.getJobById(importQueue, submitted.jobId);
 
-    expect(job?.data).toEqual({googlePlaceId: 'ChIJtest', tagIds: []});
+    expect(job?.data).toEqual({googlePlaceId: 'ChIJtest', tags: []});
 
     const result = await waitForState(submitted.jobId, 'completed');
     const saved = await client.places.list();
@@ -124,7 +124,7 @@ describe.skipIf(!testUrl)('place import with PostgreSQL and pg-boss', () => {
     const favorite = await client.tags.create({name: 'favorite'});
     const submitted = await client.places.import({
       input: 'gmaps:ChIJtest',
-      tags: [' Type:CAFE ', cafe.id, cafe.id],
+      tags: [{tag: ' Type:CAFE '}, {tag: cafe.id}, {tag: cafe.id}],
     });
     const result = await waitForState(submitted.jobId, 'completed');
 
@@ -135,7 +135,7 @@ describe.skipIf(!testUrl)('place import with PostgreSQL and pg-boss', () => {
     google.get.mockClear();
     const repeated = await client.places.import({
       input: 'gmaps:ChIJtest',
-      tags: [cafe.id, favorite.id],
+      tags: [{tag: cafe.id}, {tag: favorite.id}],
     });
 
     await waitForState(repeated.jobId, 'completed');
@@ -145,18 +145,124 @@ describe.skipIf(!testUrl)('place import with PostgreSQL and pg-boss', () => {
     expect(google.get).not.toHaveBeenCalled();
   }, 20000);
 
+  it('applies tag notes, resolves aliases, and preserves, replaces, and clears them', async () => {
+    const bathroom = await client.tags.create({name: 'attr:nice-bathroom'});
+    const cafe = await client.tags.create({name: 'type:cafe'});
+
+    for (const [tagNotes, expected] of [
+      [
+        [
+          {tag: ' Attr:Nice-Bathroom ', note: 'Old'},
+          {tag: bathroom.id, note: '  Code 1234\nDownstairs  '},
+        ],
+        '  Code 1234\nDownstairs  ',
+      ],
+      [[], '  Code 1234\nDownstairs  '],
+      [[{tag: bathroom.name, note: 'Code 5678'}], 'Code 5678'],
+      [[{tag: bathroom.id, note: ''}], null],
+    ] as const) {
+      const submitted = await client.places.import({
+        input: 'gmaps:ChIJtest',
+        tags: [{tag: cafe.name}, ...tagNotes, {tag: bathroom.id}],
+        notes: 'General place note',
+      });
+
+      await waitForState(submitted.jobId, 'completed');
+      const assignments = await db.select().from(placeTags);
+
+      expect(assignments).toHaveLength(2);
+      expect(assignments).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({tagId: bathroom.id, note: expected}),
+          expect.objectContaining({tagId: cafe.id, note: null}),
+        ]),
+      );
+      expect(await client.places.list()).toMatchObject([
+        {userNote: 'General place note'},
+      ]);
+    }
+  }, 60000);
+
+  it('tags existing places, preserves and edits notes, and removes assignments idempotently', async () => {
+    const {
+      placeIds: [placeId],
+    } = await importPlace(db, google, 'ChIJtest');
+    const tag = await client.tags.create({name: 'attr:nice-bathroom'});
+    const input = {placeId: placeId!, tag: tag.id};
+    const first = await client.places.tag({...input, tag: ' Attr:Nice-Bathroom '});
+
+    expect(first).toMatchObject({placeId, tagId: tag.id, note: null});
+
+    for (const [notes, expected] of [
+      ['  Code 1234\nDownstairs  ', '  Code 1234\nDownstairs  '],
+      [undefined, '  Code 1234\nDownstairs  '],
+      ['Code 5678', 'Code 5678'],
+      ['', null],
+    ]) {
+      expect(await client.places.tag({...input, notes: notes ?? undefined})).toEqual({
+        ...first,
+        note: expected,
+      });
+      expect(await db.select().from(placeTags)).toHaveLength(1);
+    }
+
+    await client.places.tag({...input, notes: 'Removed with assignment'});
+    expect(await client.places.untag({...input, tag: tag.name})).toEqual({
+      placeId,
+      tagId: tag.id,
+      removed: true,
+    });
+    expect(await client.places.untag(input)).toEqual({
+      placeId,
+      tagId: tag.id,
+      removed: false,
+    });
+    expect(await db.select().from(placeTags)).toEqual([]);
+    expect(await client.tags.get({id: tag.id})).toMatchObject({id: tag.id});
+    expect(await client.places.list()).toHaveLength(1);
+    expect(await client.places.tag(input)).toMatchObject({note: null});
+  });
+
+  it('rejects missing places and tags for assignment commands', async () => {
+    const {
+      placeIds: [placeId],
+    } = await importPlace(db, google, 'ChIJtest');
+    const tag = await client.tags.create({name: 'favorite'});
+
+    for (const action of [client.places.tag, client.places.untag]) {
+      await expect(action({placeId: randomUUID(), tag: tag.name})).rejects.toMatchObject({
+        code: 'NOT_FOUND',
+      });
+
+      for (const missing of ['missing', randomUUID()]) {
+        await expect(action({placeId: placeId!, tag: missing})).rejects.toMatchObject({
+          code: 'NOT_FOUND',
+        });
+      }
+    }
+
+    expect(await db.select().from(placeTags)).toEqual([]);
+  });
+
   it('rejects unknown tag names and IDs before queuing', async () => {
     const send = vi.spyOn(jobs, 'send');
 
     try {
       for (const tag of ['missing', randomUUID()]) {
         await expect(
-          client.places.import({input: 'gmaps:ChIJtest', tags: [tag]}),
+          client.places.import({input: 'gmaps:ChIJtest', tags: [{tag}]}),
         ).rejects.toMatchObject({
           code: 'BAD_REQUEST',
           message: `Tag not found: ${tag}`,
         });
       }
+
+      await expect(
+        client.places.import({
+          input: 'gmaps:ChIJtest',
+          tags: [{tag: 'missing', note: 'Code'}],
+        }),
+      ).rejects.toMatchObject({code: 'BAD_REQUEST', message: 'Tag not found: missing'});
 
       expect(send).not.toHaveBeenCalled();
     } finally {
@@ -182,7 +288,9 @@ describe.skipIf(!testUrl)('place import with PostgreSQL and pg-boss', () => {
   }, 60000);
 
   it('rolls back a new place if a tag was deleted before the worker runs', async () => {
-    await expect(importPlace(db, google, 'ChIJtest', [randomUUID()])).rejects.toThrow();
+    await expect(
+      importPlace(db, google, 'ChIJtest', [{tagId: randomUUID()}]),
+    ).rejects.toThrow();
     expect(await client.places.list()).toEqual([]);
   });
 
@@ -228,6 +336,9 @@ describe.skipIf(!testUrl)('place import with PostgreSQL and pg-boss', () => {
             tag.name,
             '--tag',
             tag.id,
+            '--tag-note',
+            tag.name,
+            'Order the Espresso',
             '--notes',
             'Try the espresso tonic',
           )
@@ -242,7 +353,19 @@ describe.skipIf(!testUrl)('place import with PostgreSQL and pg-boss', () => {
       expect(JSON.parse((await cli('list')).stdout)[0].userNote).toBe(
         'Try the espresso tonic',
       );
-      expect(await db.select().from(placeTags)).toMatchObject([{tagId: tag.id}]);
+      expect(await db.select().from(placeTags)).toMatchObject([
+        {tagId: tag.id, note: 'Order the Espresso'},
+      ]);
+      const [saved] = await client.places.list();
+      expect(
+        JSON.parse(
+          (await cli('tag', saved!.id, tag.name, '--notes', 'Updated note')).stdout,
+        ),
+      ).toMatchObject({tagId: tag.id, note: 'Updated note'});
+      expect(JSON.parse((await cli('untag', saved!.id, tag.id)).stdout)).toMatchObject({
+        removed: true,
+      });
+      expect(await db.select().from(placeTags)).toEqual([]);
       await expect(cli('import', 'https://evil.test')).rejects.toMatchObject({code: 1});
     } finally {
       await new Promise<void>((resolve, reject) =>

@@ -1,5 +1,5 @@
 import {ORPCError} from '@orpc/server';
-import {importResult} from '@places/common/contract/place';
+import {type ImportTag, importResult} from '@places/common/contract/place';
 import {inArray, or} from 'drizzle-orm';
 import {z} from 'zod';
 
@@ -24,16 +24,18 @@ function tagsByNameOrId(values: string[]) {
   return or(inArray(tags.id, ids), inArray(tags.name, values));
 }
 
-async function resolveTags(namesOrIds: string[], {db}: Context) {
-  if (namesOrIds.length === 0) {
+async function resolveTags(assignments: ImportTag[], {db}: Context) {
+  if (assignments.length === 0) {
     return [];
   }
 
   const matches = await db
     .select({id: tags.id, name: tags.name})
     .from(tags)
-    .where(tagsByNameOrId(namesOrIds));
-  const tagIds = namesOrIds.map(value => {
+    .where(tagsByNameOrId(assignments.map(({tag}) => tag)));
+  const resolved = new Map<string, {tagId: string; note?: string}>();
+
+  for (const {tag: value, note} of assignments) {
     const match =
       matches.find(tag => tag.id === value) ?? matches.find(tag => tag.name === value);
 
@@ -41,16 +43,20 @@ async function resolveTags(namesOrIds: string[], {db}: Context) {
       throw new ORPCError('BAD_REQUEST', {message: `Tag not found: ${value}`});
     }
 
-    return match.id;
-  });
+    // A bare assignment preserves any explicitly supplied note for the same tag.
+    resolved.set(match.id, {
+      tagId: match.id,
+      note: note ?? resolved.get(match.id)?.note,
+    });
+  }
 
-  return [...new Set(tagIds)];
+  return [...resolved.values()];
 }
 
 export async function enqueueImport(
   input: string,
   context: Context,
-  tags: string[] = [],
+  tags: ImportTag[] = [],
   notes?: string,
 ) {
   const importer = importers.find(candidate => candidate.accepts(input));
@@ -62,8 +68,12 @@ export async function enqueueImport(
     });
   }
 
-  const tagIds = await resolveTags(tags, context);
-  const payload = {...(await importer.prepare(input, context)), tagIds, notes};
+  const resolvedTags = await resolveTags(tags, context);
+  const payload = {
+    ...(await importer.prepare(input, context)),
+    tags: resolvedTags,
+    notes,
+  };
   const jobId = await context.jobs.send(importer.queue, payload);
 
   if (!jobId) {

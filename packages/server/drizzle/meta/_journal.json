@@ -22,6 +22,13 @@
       "when": 1789610324409,
       "tag": "0002_swift_punisher",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1789651474936,
+      "tag": "0003_workable_lester",
+      "breakpoints": true
     }
   ]
 }

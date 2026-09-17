@@ -19,7 +19,30 @@ export const importInput = z.string().trim().min(1).max(4096);
 export const importType = z.enum(['gmaps']);
 export const importResult = z.object({placeIds: z.array(z.uuid())});
 
+const assignmentInput = z.object({placeId: place.shape.id, tag: tag.shape.name});
+export const placeTag = z.object({
+  placeId: place.shape.id,
+  tagId: tag.shape.id,
+  note: z.string().nullable(),
+  createdAt: z.date(),
+});
+export type PlaceTag = z.infer<typeof placeTag>;
+
+export const importTag = z.object({
+  tag: tag.shape.name,
+  note: placeTag.shape.note.unwrap().optional(),
+});
+export type ImportTag = z.infer<typeof importTag>;
+
+const assignmentAction = oc.errors({NOT_FOUND: {message: 'Place or tag not found'}});
+
 export const placeContract = {
+  tag: assignmentAction
+    .input(assignmentInput.extend({notes: z.string().optional()}))
+    .output(placeTag),
+  untag: assignmentAction
+    .input(assignmentInput)
+    .output(placeTag.pick({placeId: true, tagId: true}).extend({removed: z.boolean()})),
   list: oc.output(z.array(place)),
   import: oc
     .errors({
@@ -29,7 +52,7 @@ export const placeContract = {
     .input(
       z.object({
         input: importInput,
-        tags: z.array(tag.shape.name).default([]),
+        tags: z.array(importTag).default([]),
         notes: z.string().optional(),
       }),
     )

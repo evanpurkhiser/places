@@ -1,4 +1,5 @@
-import {eq} from 'drizzle-orm';
+import {importTag, placeTag} from '@places/common/contract/place';
+import {eq, sql} from 'drizzle-orm';
 import type {PgBoss} from 'pg-boss';
 import {z} from 'zod';
 
@@ -14,9 +15,14 @@ export const queueOptions = {
   expireInSeconds: 60,
   deleteAfterSeconds: 7 * 24 * 60 * 60,
 };
+const importAssignment = placeTag
+  .pick({tagId: true})
+  .extend({note: importTag.shape.note});
+type ImportAssignment = z.infer<typeof importAssignment>;
+
 export const importPayload = z.object({
   googlePlaceId: z.string().min(1),
-  tagIds: z.array(z.uuid()).default([]),
+  tags: z.array(importAssignment).default([]),
   notes: z.string().optional(),
 });
 
@@ -67,7 +73,7 @@ export function importPlace(
   db: Database,
   google: GooglePlaces,
   googlePlaceId: string,
-  tagIds: string[] = [],
+  tags: ImportAssignment[] = [],
   notes?: string,
 ) {
   return db.transaction(async tx => {
@@ -80,11 +86,30 @@ export function importPlace(
         .where(eq(places.id, result.placeIds[0]!));
     }
 
-    if (tagIds.length > 0) {
+    const bareTags = tags.filter(({note}) => note === undefined);
+    const annotatedTags = tags.filter(({note}) => note !== undefined);
+
+    if (bareTags.length > 0) {
       await tx
         .insert(placeTags)
-        .values(tagIds.map(tagId => ({placeId: result.placeIds[0]!, tagId})))
+        .values(bareTags.map(({tagId}) => ({placeId: result.placeIds[0]!, tagId})))
         .onConflictDoNothing();
+    }
+
+    if (annotatedTags.length > 0) {
+      await tx
+        .insert(placeTags)
+        .values(
+          annotatedTags.map(({tagId, note}) => ({
+            placeId: result.placeIds[0]!,
+            tagId,
+            note: note === '' ? null : note,
+          })),
+        )
+        .onConflictDoUpdate({
+          target: [placeTags.placeId, placeTags.tagId],
+          set: {note: sql`excluded.note`},
+        });
     }
 
     return result;
@@ -93,8 +118,8 @@ export function importPlace(
 
 export function registerImportWorker(boss: PgBoss, db: Database, google: GooglePlaces) {
   return boss.work(importQueue, {batchSize: 1}, ([job]) => {
-    const {googlePlaceId, tagIds, notes} = importPayload.parse(job!.data);
+    const {googlePlaceId, tags, notes} = importPayload.parse(job!.data);
 
-    return importPlace(db, google, googlePlaceId, tagIds, notes);
+    return importPlace(db, google, googlePlaceId, tags, notes);
   });
 }
