@@ -51,6 +51,7 @@ export async function enqueueImport(
   input: string,
   context: Context,
   tags: string[] = [],
+  notes?: string,
 ) {
   const importer = importers.find(candidate => candidate.accepts(input));
 
@@ -62,7 +63,7 @@ export async function enqueueImport(
   }
 
   const tagIds = await resolveTags(tags, context);
-  const payload = {...(await importer.prepare(input, context)), tagIds};
+  const payload = {...(await importer.prepare(input, context)), tagIds, notes};
   const jobId = await context.jobs.send(importer.queue, payload);
 
   if (!jobId) {

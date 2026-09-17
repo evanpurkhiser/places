@@ -17,6 +17,7 @@ export const queueOptions = {
 export const importPayload = z.object({
   googlePlaceId: z.string().min(1),
   tagIds: z.array(z.uuid()).default([]),
+  notes: z.string().optional(),
 });
 
 async function savePlace(
@@ -67,9 +68,17 @@ export function importPlace(
   google: GooglePlaces,
   googlePlaceId: string,
   tagIds: string[] = [],
+  notes?: string,
 ) {
   return db.transaction(async tx => {
     const result = await savePlace(tx, google, googlePlaceId);
+
+    if (notes !== undefined) {
+      await tx
+        .update(places)
+        .set({userNote: notes === '' ? null : notes})
+        .where(eq(places.id, result.placeIds[0]!));
+    }
 
     if (tagIds.length > 0) {
       await tx
@@ -84,8 +93,8 @@ export function importPlace(
 
 export function registerImportWorker(boss: PgBoss, db: Database, google: GooglePlaces) {
   return boss.work(importQueue, {batchSize: 1}, ([job]) => {
-    const {googlePlaceId, tagIds} = importPayload.parse(job!.data);
+    const {googlePlaceId, tagIds, notes} = importPayload.parse(job!.data);
 
-    return importPlace(db, google, googlePlaceId, tagIds);
+    return importPlace(db, google, googlePlaceId, tagIds, notes);
   });
 }

@@ -164,6 +164,23 @@ describe.skipIf(!testUrl)('place import with PostgreSQL and pg-boss', () => {
     }
   });
 
+  it('saves, preserves, replaces, and clears notes on import', async () => {
+    for (const [notes, expected] of [
+      ['  First note\nSecond line  ', '  First note\nSecond line  '],
+      [undefined, '  First note\nSecond line  '],
+      ['Replacement note', 'Replacement note'],
+      ['', null],
+    ]) {
+      const submitted = await client.places.import({
+        input: 'gmaps:ChIJtest',
+        notes: notes ?? undefined,
+      });
+
+      await waitForState(submitted.jobId, 'completed');
+      expect(await client.places.list()).toMatchObject([{userNote: expected}]);
+    }
+  }, 60000);
+
   it('rolls back a new place if a tag was deleted before the worker runs', async () => {
     await expect(importPlace(db, google, 'ChIJtest', [randomUUID()])).rejects.toThrow();
     expect(await client.places.list()).toEqual([]);
@@ -203,8 +220,18 @@ describe.skipIf(!testUrl)('place import with PostgreSQL and pg-boss', () => {
     try {
       const tag = await client.tags.create({name: 'favorite'});
       const submitted = JSON.parse(
-        (await cli('import', 'gmaps:ChIJtest', '--tag', tag.name, '--tag', tag.id))
-          .stdout,
+        (
+          await cli(
+            'import',
+            'gmaps:ChIJtest',
+            '--tag',
+            tag.name,
+            '--tag',
+            tag.id,
+            '--notes',
+            'Try the espresso tonic',
+          )
+        ).stdout,
       );
 
       await waitForState(submitted.jobId, 'completed');
@@ -212,6 +239,9 @@ describe.skipIf(!testUrl)('place import with PostgreSQL and pg-boss', () => {
         'completed',
       );
       expect(JSON.parse((await cli('list')).stdout)).toHaveLength(1);
+      expect(JSON.parse((await cli('list')).stdout)[0].userNote).toBe(
+        'Try the espresso tonic',
+      );
       expect(await db.select().from(placeTags)).toMatchObject([{tagId: tag.id}]);
       await expect(cli('import', 'https://evil.test')).rejects.toMatchObject({code: 1});
     } finally {

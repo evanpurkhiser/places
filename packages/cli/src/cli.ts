@@ -57,6 +57,11 @@ export const parser = merge(
       'import',
       object({
         action: constant('import'),
+        notes: optional(
+          option('--notes', string({metavar: 'TEXT'}), {
+            description: message`Notes for the place. Replaces existing notes; an empty string clears them.`,
+          }),
+        ),
         tags: multiple(
           option('--tag', zod(tag.shape.name, {metavar: 'NAME_OR_ID', placeholder: ''}), {
             description: message`Existing tag name or UUID. Repeat to apply multiple tags.`,
@@ -123,7 +128,11 @@ export function createClient(server: string): Client {
 export function execute(args: InferValue<typeof parser>, client: Client) {
   switch (args.action) {
     case 'import':
-      return client.places.import({input: args.input, tags: [...args.tags]});
+      return client.places.import({
+        input: args.input,
+        tags: [...args.tags],
+        notes: args.notes,
+      });
     case 'places-list':
       return client.places.list();
     case 'import-status':

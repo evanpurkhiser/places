@@ -37,7 +37,37 @@ describe('tag arguments', () => {
   });
 });
 
-describe('import tag arguments', () => {
+describe('import arguments', () => {
+  it.each([undefined, '', '  Try the espresso tonic.\nAsk for oat milk.  '])(
+    'forwards notes verbatim: %j',
+    notes => {
+      const result = parse(parser, [
+        'import',
+        'gmaps:ChIJtest',
+        ...(notes === undefined ? [] : ['--notes', notes]),
+      ]);
+
+      if (!result.success) {
+        throw new Error('Expected valid arguments');
+      }
+
+      const places = {import: vi.fn()};
+      execute(result.value, {places} as unknown as Client);
+
+      expect(places.import).toHaveBeenCalledWith({
+        input: 'gmaps:ChIJtest',
+        tags: [],
+        notes,
+      });
+    },
+  );
+
+  it('requires a value for notes', () => {
+    expect(parse(parser, ['import', 'gmaps:ChIJtest', '--notes'])).toMatchObject({
+      success: false,
+    });
+  });
+
   it('accepts repeated tags by name and ID around the input', () => {
     const id = '9a53fa46-9d9d-4dac-b0b2-f3a8334900ef';
 

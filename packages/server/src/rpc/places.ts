@@ -26,7 +26,7 @@ export const placeRouter = api.router({
     }));
   }),
   import: api.import.handler(({input, context}) =>
-    enqueueImport(input.input, context, input.tags),
+    enqueueImport(input.input, context, input.tags, input.notes),
   ),
   importStatus: api.importStatus.handler(({input, context}) =>
     getImportStatus(input.jobId, context),

@@ -26,7 +26,13 @@ export const placeContract = {
       BAD_REQUEST: {message: 'Unsupported or invalid import input.'},
       SERVICE_UNAVAILABLE: {message: 'Import service is unavailable.'},
     })
-    .input(z.object({input: importInput, tags: z.array(tag.shape.name).default([])}))
+    .input(
+      z.object({
+        input: importInput,
+        tags: z.array(tag.shape.name).default([]),
+        notes: z.string().optional(),
+      }),
+    )
     .output(
       z.object({
         jobId: z.uuid(),
