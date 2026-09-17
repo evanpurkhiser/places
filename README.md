@@ -1,4 +1,4 @@
-# Personal Map
+# Places
 
 A personal saved-places service organized around tags.
 

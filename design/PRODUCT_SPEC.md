@@ -1,4 +1,4 @@
-# Personal Map Saved Places Service - Product Spec
+# Places - Product Spec
 
 ## Product Vision
 
