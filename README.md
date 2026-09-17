@@ -39,9 +39,12 @@ extension. The server defaults to `127.0.0.1:5188`, available on the tailnet at
 
 ```sh
 pnpm places tags create 'type:cafe'
+pnpm places tags create 'type:bar' --icon '🍸' --description 'Primarily visited for drinks'
 pnpm places tags list
 pnpm places tags get <id>
 pnpm places tags update <id> 'type:coffee'
+pnpm places tags update <id> --icon '☕' --description 'Cafe or coffee shop'
+pnpm places tags update <id> --icon '' --description ''
 pnpm places tags delete <id>
 ```
 
@@ -56,6 +59,11 @@ Names are trimmed and lowercased. Empty names are rejected; duplicate names retu
 409, and missing IDs return 404. Listing returns all tags sorted by name. Renaming
 preserves the tag ID and place associations; deleting removes those associations
 while preserving places. Create, get, update, and delete return the tag record.
+
+Create and update accept `--icon EMOJI` and `--description TEXT`. Update accepts
+an optional name and preserves omitted fields. Pass an empty string with
+`--icon ''` or `--description ''` to set that field to null. Updates require
+at least one change.
 
 ## Google Maps imports
 
