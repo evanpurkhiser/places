@@ -74,7 +74,8 @@ describe.skipIf(!testUrl)('place import with PostgreSQL and pg-boss', () => {
   async function waitForState(jobId: string, state: 'completed' | 'failed') {
     await vi.waitFor(
       async () => {
-        expect((await client.places.importStatus({jobId})).state).toBe(state);
+        const status = await client.places.importStatus({jobId});
+        expect(status.state).toBe(state);
       },
       {timeout: 15000, interval: 100},
     );
@@ -113,9 +114,8 @@ describe.skipIf(!testUrl)('place import with PostgreSQL and pg-boss', () => {
 
     const submitted = await client.places.import({input: 'gmaps:ChIJtest'});
 
-    expect((await waitForState(submitted.jobId, 'completed')).placeIds).toEqual(
-      first.placeIds,
-    );
+    const completed = await waitForState(submitted.jobId, 'completed');
+    expect(completed.placeIds).toEqual(first.placeIds);
     expect(google.get).not.toHaveBeenCalled();
   }, 20000);
 
@@ -139,9 +139,8 @@ describe.skipIf(!testUrl)('place import with PostgreSQL and pg-boss', () => {
     });
 
     await waitForState(repeated.jobId, 'completed');
-    expect((await db.select().from(placeTags)).map(row => row.tagId).sort()).toEqual(
-      [cafe.id, favorite.id].sort(),
-    );
+    const savedTags = await db.select().from(placeTags);
+    expect(savedTags.map(row => row.tagId).sort()).toEqual([cafe.id, favorite.id].sort());
     expect(google.get).not.toHaveBeenCalled();
   }, 20000);
 
@@ -327,42 +326,39 @@ describe.skipIf(!testUrl)('place import with PostgreSQL and pg-boss', () => {
 
     try {
       const tag = await client.tags.create({name: 'favorite'});
-      const submitted = JSON.parse(
-        (
-          await cli(
-            'import',
-            'gmaps:ChIJtest',
-            '--tag',
-            tag.name,
-            '--tag',
-            tag.id,
-            '--tag-note',
-            tag.name,
-            'Order the Espresso',
-            '--notes',
-            'Try the espresso tonic',
-          )
-        ).stdout,
-      );
-
-      await waitForState(submitted.jobId, 'completed');
-      expect(JSON.parse((await cli('import-status', submitted.jobId)).stdout).state).toBe(
-        'completed',
-      );
-      expect(JSON.parse((await cli('list')).stdout)).toHaveLength(1);
-      expect(JSON.parse((await cli('list')).stdout)[0].userNote).toBe(
+      const importOutput = await cli(
+        'import',
+        'gmaps:ChIJtest',
+        '--tag',
+        tag.name,
+        '--tag',
+        tag.id,
+        '--tag-note',
+        tag.name,
+        'Order the Espresso',
+        '--notes',
         'Try the espresso tonic',
       );
+      const submitted = JSON.parse(importOutput.stdout);
+
+      await waitForState(submitted.jobId, 'completed');
+      const statusOutput = await cli('import-status', submitted.jobId);
+      expect(JSON.parse(statusOutput.stdout).state).toBe('completed');
+      const listOutput = await cli('list');
+      expect(JSON.parse(listOutput.stdout)).toHaveLength(1);
+      const notesOutput = await cli('list');
+      expect(JSON.parse(notesOutput.stdout)[0].userNote).toBe('Try the espresso tonic');
       expect(await db.select().from(placeTags)).toMatchObject([
         {tagId: tag.id, note: 'Order the Espresso'},
       ]);
       const [saved] = await client.places.list();
-      expect(
-        JSON.parse(
-          (await cli('tag', saved!.id, tag.name, '--notes', 'Updated note')).stdout,
-        ),
-      ).toMatchObject({tagId: tag.id, note: 'Updated note'});
-      expect(JSON.parse((await cli('untag', saved!.id, tag.id)).stdout)).toMatchObject({
+      const tagOutput = await cli('tag', saved!.id, tag.name, '--notes', 'Updated note');
+      expect(JSON.parse(tagOutput.stdout)).toMatchObject({
+        tagId: tag.id,
+        note: 'Updated note',
+      });
+      const untagOutput = await cli('untag', saved!.id, tag.id);
+      expect(JSON.parse(untagOutput.stdout)).toMatchObject({
         removed: true,
       });
       expect(await db.select().from(placeTags)).toEqual([]);

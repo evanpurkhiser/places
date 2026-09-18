@@ -92,9 +92,8 @@ describe.skipIf(!testUrl)('place filtering through API and CLI', () => {
       query: '(tag[type:cafe, notes:outlets] AND notes[coffee]) OR !has[notes]',
     });
     expect(result.map(place => place.id).sort()).toEqual([cafeId, bakeryId].sort());
-    expect(
-      (await client.places.list({query: '!tag[type:cafe]'})).map(place => place.id),
-    ).toEqual([bakeryId]);
+    const nonCafes = await client.places.list({query: '!tag[type:cafe]'});
+    expect(nonCafes.map(place => place.id)).toEqual([bakeryId]);
   });
 
   it.each([

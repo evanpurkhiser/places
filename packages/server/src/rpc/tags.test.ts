@@ -59,7 +59,8 @@ describe.skipIf(!testUrl)('tag API and CLI against PostgreSQL', () => {
       }),
     );
 
-    expect(await (await app.request('/context-test')).json()).toEqual({
+    const response = await app.request('/context-test');
+    expect(await response.json()).toEqual({
       port: config.server.port,
       sameDatabase: true,
     });
@@ -129,7 +130,8 @@ describe.skipIf(!testUrl)('tag API and CLI against PostgreSQL', () => {
     const tag = await client.tags.create({name: 'lunch', icon: {emoji: '🍱'}});
 
     expect(tag.icon).toEqual({emoji: '🍱'});
-    expect((await client.tags.get({id: tag.id})).icon).toEqual({emoji: '🍱'});
+    const retrieved = await client.tags.get({id: tag.id});
+    expect(retrieved.icon).toEqual({emoji: '🍱'});
 
     const updated = await client.tags.update({id: tag.id, icon: {emoji: '🍜'}});
 
@@ -142,7 +144,8 @@ describe.skipIf(!testUrl)('tag API and CLI against PostgreSQL', () => {
       name: 'dinner',
       icon: null,
     });
-    expect((await client.tags.get({id: tag.id})).icon).toBeNull();
+    const cleared = await client.tags.get({id: tag.id});
+    expect(cleared.icon).toBeNull();
   });
 
   it('creates, edits, preserves, and clears tag descriptions', async () => {
@@ -164,7 +167,8 @@ describe.skipIf(!testUrl)('tag API and CLI against PostgreSQL', () => {
       icon: {emoji: '🍱'},
       description: null,
     });
-    expect((await client.tags.get({id: tag.id})).description).toBeNull();
+    const cleared = await client.tags.get({id: tag.id});
+    expect(cleared.description).toBeNull();
   });
 
   it.each([{}, {emoji: ''}, {emoji: 1}, {emoji: '🍱', url: 'icon.png'}])(
@@ -233,19 +237,22 @@ describe.skipIf(!testUrl)('tag API and CLI against PostgreSQL', () => {
       ]);
 
     try {
-      const tag = JSON.parse((await cli('create', ' Type:CAFE ')).stdout);
+      const createdOutput = await cli('create', ' Type:CAFE ');
+      const tag = JSON.parse(createdOutput.stdout);
 
       expect(tag.name).toBe('type:cafe');
-      expect(JSON.parse((await cli('list')).stdout)).toEqual([tag]);
-      expect(JSON.parse((await cli('get', tag.id)).stdout)).toEqual(tag);
-      expect(JSON.parse((await cli('update', tag.id, 'Coffee')).stdout).name).toBe(
-        'coffee',
-      );
+      const listOutput = await cli('list');
+      expect(JSON.parse(listOutput.stdout)).toEqual([tag]);
+      const getOutput = await cli('get', tag.id);
+      expect(JSON.parse(getOutput.stdout)).toEqual(tag);
+      const updatedOutput = await cli('update', tag.id, 'Coffee');
+      expect(JSON.parse(updatedOutput.stdout).name).toBe('coffee');
       await expect(cli('create', 'coffee')).rejects.toMatchObject({code: 1});
       await cli('delete', tag.id);
       await expect(cli('get', tag.id)).rejects.toMatchObject({code: 1});
       await expect(cli('create', '   ')).rejects.toMatchObject({code: 1});
-      expect(JSON.parse((await cli('list')).stdout)).toEqual([]);
+      const emptyOutput = await cli('list');
+      expect(JSON.parse(emptyOutput.stdout)).toEqual([]);
     } finally {
       await new Promise<void>((resolve, reject) =>
         server.close(error => (error ? reject(error) : resolve())),

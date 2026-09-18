@@ -165,8 +165,10 @@ describe('Places SQL predicates', () => {
   });
 
   it('makes stars literal for equality', async () => {
-    expect((await compile('tag[=star:*]')).params).toEqual(['star:*']);
-    expect((await compile('notes[="*outlet*"]')).params).toEqual(['*outlet*']);
+    const tagResult = await compile('tag[=star:*]');
+    expect(tagResult.params).toEqual(['star:*']);
+    const notesResult = await compile('notes[="*outlet*"]');
+    expect(notesResult.params).toEqual(['*outlet*']);
   });
 
   it('supports boolean composition, presence hooks', async () => {
@@ -176,7 +178,8 @@ describe('Places SQL predicates', () => {
     expect(result.sql).toContain(' and ');
     expect(result.sql).toContain('not (');
     expect(result.sql).toContain('"places"."user_note" is not null');
-    expect((await compile('')).sql).toBe('true');
+    const emptyResult = await compile('');
+    expect(emptyResult.sql).toBe('true');
   });
 
   it('rejects unsupported filters, functions, presence, and operators', async () => {
@@ -191,12 +194,14 @@ describe('Places SQL predicates', () => {
     }
   });
   it('matches text fields with substring, literal equality, and wildcard semantics', async () => {
-    expect((await compile('address[Broadway]')).params).toEqual(['%Broadway%']);
-    expect((await compile('name[="La Cabra"]')).params).toEqual(['La Cabra']);
-    expect((await compile('notes[="*outlet*"]')).params).toEqual(['*outlet*']);
-    expect((await compile(String.raw`notes["a\*b*%_"]`)).params).toEqual([
-      '%a*b%\\%\\_%',
-    ]);
+    const addressResult = await compile('address[Broadway]');
+    expect(addressResult.params).toEqual(['%Broadway%']);
+    const nameResult = await compile('name[="La Cabra"]');
+    expect(nameResult.params).toEqual(['La Cabra']);
+    const notesResult = await compile('notes[="*outlet*"]');
+    expect(notesResult.params).toEqual(['*outlet*']);
+    const wildcardResult = await compile(String.raw`notes["a\*b*%_"]`);
+    expect(wildcardResult.params).toEqual(['%a*b%\\%\\_%']);
   });
 
   it('composes Boolean predicates', async () => {
@@ -204,6 +209,7 @@ describe('Places SQL predicates', () => {
     expect(result.sql).toContain(' or ');
     expect(result.sql).toContain(' and ');
     expect(result.sql).toContain('not (');
-    expect((await compile('')).sql).toBe('true');
+    const emptyResult = await compile('');
+    expect(emptyResult.sql).toBe('true');
   });
 });
