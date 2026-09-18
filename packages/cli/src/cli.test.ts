@@ -336,3 +336,30 @@ describe('query documentation', () => {
     expect(describe).toHaveBeenCalledExactlyOnceWith();
   });
 });
+
+describe('place sync commands', () => {
+  it('queues all places or forwards a filter query', async () => {
+    const sync = vi
+      .fn()
+      .mockResolvedValue({matched: 0, queued: 0, alreadyQueued: 0, jobIds: []});
+    const client = {places: {sync}} as unknown as Client;
+
+    for (const args of [['sync'], ['sync', '--query', 'tag[favorite]']]) {
+      const result = parse(parser, args);
+      expect(result.success).toBe(true);
+
+      if (result.success) {
+        await execute(result.value, client);
+      }
+    }
+
+    expect(sync.mock.calls).toEqual([[{query: undefined}], [{query: 'tag[favorite]'}]]);
+  });
+
+  it('parses sync status and rejects invalid job IDs', () => {
+    expect(
+      parse(parser, ['sync-status', '00000000-0000-4000-8000-000000000001']),
+    ).toMatchObject({success: true, value: {action: 'sync-status'}});
+    expect(parse(parser, ['sync-status', 'invalid'])).toMatchObject({success: false});
+  });
+});

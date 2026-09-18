@@ -1,6 +1,7 @@
 import {PgBoss} from 'pg-boss';
 
 import {importQueue, queueOptions} from './gmaps-import.ts';
+import {syncQueue} from './gmaps-sync.ts';
 
 export async function startJobs(connectionString: string) {
   const boss = new PgBoss({connectionString});
@@ -10,6 +11,7 @@ export async function startJobs(connectionString: string) {
   try {
     await boss.start();
     await boss.createQueue(importQueue, queueOptions);
+    await boss.createQueue(syncQueue, {...queueOptions, policy: 'exclusive'});
 
     return boss;
   } catch (error) {

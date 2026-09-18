@@ -8,6 +8,7 @@ import type {Database} from '../db/index.ts';
 import {places, placeTags, tags} from '../db/schema.ts';
 import {compilePlaceQuery} from '../filter-engine/index.ts';
 import {enqueueImport, getImportStatus} from '../imports/index.ts';
+import {syncQueue, syncPayload} from '../jobs/gmaps-sync.ts';
 
 import type {Context} from './context.ts';
 import {rethrowGoogleError} from './google-errors.ts';
@@ -49,18 +50,7 @@ export const placeRouter = api.router({
     }),
   ),
   list: api.list.handler(async ({input, context: {db, google}}) => {
-    const predicate = await compilePlaceQuery(input?.query ?? '', {db, google}).catch(
-      error => {
-        if (error instanceof SearchError) {
-          throw new ORPCError('BAD_REQUEST', {
-            message: error.message,
-            data: {diagnostics: error.diagnostics},
-          });
-        }
-
-        rethrowGoogleError(error);
-      },
-    );
+    const predicate = await queryPredicate(input?.query, {db, google});
     const rows = await db
       .select({
         ...getTableColumns(places),
@@ -75,6 +65,71 @@ export const placeRouter = api.router({
       ...place,
       coordinates: {latitude, longitude},
     }));
+  }),
+  sync: api.sync.handler(async ({input, context: {db, google, jobs, config}}) => {
+    const predicate = await queryPredicate(input?.query, {db, google});
+
+    if (!config.google.apiKey) {
+      throw new ORPCError('SERVICE_UNAVAILABLE', {
+        message: 'Configure google.apiKey to sync places.',
+      });
+    }
+
+    const matches = await db
+      .select({id: places.id})
+      .from(places)
+      .where(predicate)
+      .orderBy(places.id);
+
+    if (!matches.length) {
+      return {matched: 0, queued: 0, alreadyQueued: 0, jobIds: []};
+    }
+
+    const jobIds = await jobs.insert(
+      syncQueue,
+      matches.map(({id}) => ({
+        data: {placeId: id},
+        singletonKey: id,
+      })),
+      {returnId: true},
+    );
+
+    if (!jobIds) {
+      throw new ORPCError('SERVICE_UNAVAILABLE', {message: 'Could not queue sync jobs.'});
+    }
+
+    return {
+      matched: matches.length,
+      queued: jobIds.length,
+      alreadyQueued: matches.length - jobIds.length,
+      jobIds,
+    };
+  }),
+  syncStatus: api.syncStatus.handler(async ({input, context: {jobs}}) => {
+    const job = await jobs.getJobById(syncQueue, input.jobId);
+
+    if (!job) {
+      throw new ORPCError('NOT_FOUND', {message: 'Sync not found or expired.'});
+    }
+
+    const {placeId} = syncPayload.parse(job.data);
+    const result =
+      job.state === 'completed'
+        ? z
+            .object({status: z.enum(['updated', 'unchanged', 'missing', 'superseded'])})
+            .parse(job.output).status
+        : null;
+
+    return {
+      jobId: job.id,
+      placeId,
+      state: job.state,
+      result,
+      error:
+        job.state === 'failed' || job.state === 'retry'
+          ? 'Sync failed. Check the provider configuration and retry.'
+          : null,
+    };
   }),
   import: api.import.handler(({input, context}) =>
     enqueueImport(input.input, context, input.tags, input.notes).catch(
@@ -119,4 +174,20 @@ async function resolvePlaceTag(
   }
 
   return tag.id;
+}
+
+function queryPredicate(
+  query: string | undefined,
+  context: Pick<Context, 'db' | 'google'>,
+) {
+  return compilePlaceQuery(query ?? '', context).catch(error => {
+    if (error instanceof SearchError) {
+      throw new ORPCError('BAD_REQUEST', {
+        message: error.message,
+        data: {diagnostics: error.diagnostics},
+      });
+    }
+
+    rethrowGoogleError(error);
+  });
 }

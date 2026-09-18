@@ -141,6 +141,28 @@ export const parser = merge(
       {description: message`List saved places, newest first.`},
     ),
     command(
+      'sync',
+      object({
+        action: constant('sync'),
+        query: optional(
+          option('--query', string({metavar: 'QUERY'}), {
+            description: message`Sync only places matching this filter query.`,
+          }),
+        ),
+      }),
+      {
+        description: message`Queue a Google refresh for every matching saved place; defaults to all places.`,
+      },
+    ),
+    command(
+      'sync-status',
+      object({
+        action: constant('sync-status'),
+        jobId: argument(zod(z.uuid(), {metavar: 'JOB_ID', placeholder: ''})),
+      }),
+      {description: message`Show a sync job's status and result.`},
+    ),
+    command(
       'import-status',
       object({
         action: constant('import-status'),
@@ -208,6 +230,10 @@ export function execute(args: InferValue<typeof parser>, client: Client) {
       return args.query === undefined
         ? client.places.list()
         : client.places.list({query: args.query});
+    case 'sync':
+      return client.places.sync({query: args.query});
+    case 'sync-status':
+      return client.places.syncStatus({jobId: args.jobId});
     case 'import-status':
       return client.places.importStatus({jobId: args.jobId});
     case 'list':

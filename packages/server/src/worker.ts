@@ -1,20 +1,22 @@
 import {loadConfig} from './config.ts';
 import {createDatabase} from './db/index.ts';
 import {registerImportWorker} from './jobs/gmaps-import.ts';
+import {registerSyncWorker} from './jobs/gmaps-sync.ts';
 import {startJobs} from './jobs/index.ts';
 import {createGooglePlaces} from './services/google/index.ts';
 
 const config = await loadConfig();
 
 if (!config.google.apiKey) {
-  throw new Error('Configure google.apiKey to run the import worker.');
+  throw new Error('Configure google.apiKey to run the worker.');
 }
 
 const db = createDatabase(config.database.url);
 const jobs = await startJobs(config.database.url);
 
 await registerImportWorker(jobs, db, createGooglePlaces(config.google.apiKey));
-console.log('Places import worker started.');
+await registerSyncWorker(jobs, db, createGooglePlaces(config.google.apiKey));
+console.log('Places import and sync worker started.');
 
 async function shutdown() {
   await jobs.stop();

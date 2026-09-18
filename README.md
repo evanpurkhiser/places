@@ -141,6 +141,37 @@ The initial listing returns all saved places newest first, with named
 `coordinates.latitude` and `coordinates.longitude`. Provider storage and map
 display constraints are documented in [place metadata](design/place-metadata.md).
 
+## Sync Google place metadata
+
+```sh
+pnpm places sync
+pnpm places sync --query 'tag[type:cafe]'
+pnpm places sync-status <job-id>
+```
+
+Sync selects saved places using the same query syntax as `list` and queues one
+job per place. With no query it selects all places. The response includes
+`matched`, `queued`, `alreadyQueued`, and `jobIds`. Pending and active jobs are
+deduplicated per place. Run the worker to process them; transient failures retry
+three times with backoff. Sync status reports the queue state and an `updated`,
+`unchanged`, `missing`, or `superseded` result after completion.
+
+Each job refreshes Google's place ID, name, address, Maps URL, coordinates, IANA time zone,
+business status, and regular weekly hours. Notes, tags, and source associations
+are preserved. `lastSync` records successful refreshes, including unchanged
+results; `updatedAt` advances when saved metadata changes. Failed requests leave
+saved data intact. A successful response with unavailable hours clears old hours.
+Hours fields require Google's Place Details Enterprise tier. A refreshed Google ID
+replaces the saved provider ID while preserving the internal UUID. If another
+saved place owns that ID, the refresh fails atomically and preserves both places.
+
+`list` includes nullable `timeZone`, `businessStatus`, `lastSync`, and
+`hoursWeeklyOpen`. Hours are pairs of inclusive-start/exclusive-end minute offsets
+from Sunday midnight, between 0 and 10,080. For example, Monday 09:00–12:00 is
+`[[1980,2160]]`; 24/7 is `[[0,10080]]`. Null means unknown and an empty array means
+known closed throughout the week. Queries for opening hours are planned; the
+saved weekly schedule reflects the last sync and may differ on holidays.
+
 ## Search and filter engine
 
 Discover the running server's supported filters, functions, value types, and examples:

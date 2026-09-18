@@ -70,6 +70,32 @@ export const placeContract = {
     })
     .input(z.object({query: z.string().optional()}).optional())
     .output(z.array(place)),
+  sync: oc
+    .errors({
+      BAD_REQUEST: {message: 'Invalid place query.', data: queryErrorData},
+      SERVICE_UNAVAILABLE: {message: 'Sync service is unavailable.'},
+    })
+    .input(z.object({query: z.string().optional()}).optional())
+    .output(
+      z.object({
+        matched: z.number().int(),
+        queued: z.number().int(),
+        alreadyQueued: z.number().int(),
+        jobIds: z.array(z.uuid()),
+      }),
+    ),
+  syncStatus: oc
+    .errors({NOT_FOUND: {message: 'Sync not found or expired.'}})
+    .input(z.object({jobId: z.uuid()}))
+    .output(
+      z.object({
+        jobId: z.uuid(),
+        placeId: z.uuid(),
+        state: z.enum(['created', 'retry', 'active', 'completed', 'cancelled', 'failed']),
+        result: z.enum(['updated', 'unchanged', 'missing', 'superseded']).nullable(),
+        error: z.string().nullable(),
+      }),
+    ),
   import: oc
     .errors({
       BAD_REQUEST: {message: 'Unsupported or invalid import input.'},
