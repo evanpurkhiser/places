@@ -9,14 +9,6 @@ import {createGooglePlaces} from '../services/google/index.ts';
 import {createContext, type Point} from './context.ts';
 import {placeFilterEngine} from './index.ts';
 
-function deferred<T>() {
-  let complete!: (value: T) => void;
-  const promise = new Promise<T>(resolve => {
-    complete = resolve;
-  });
-  return {promise, resolve: complete};
-}
-
 const dialect = new PgDialect();
 const db = createDatabase('postgres://localhost/unused');
 const eastVillage = {
@@ -51,8 +43,8 @@ describe('named geographic points', () => {
     'resolves %s branches concurrently and preserves parameter order',
     async operator => {
       const {google, compile} = setup();
-      const first = deferred<Array<typeof eastVillage>>();
-      const second = deferred<Array<typeof eastVillage>>();
+      const first = Promise.withResolvers<Array<typeof eastVillage>>();
+      const second = Promise.withResolvers<Array<typeof eastVillage>>();
       google.search
         .mockReturnValueOnce(first.promise)
         .mockReturnValueOnce(second.promise);
@@ -75,7 +67,7 @@ describe('named geographic points', () => {
 
   it('shares pending lookups within a query context', async () => {
     const {google, compile} = setup();
-    const pending = deferred<Array<typeof eastVillage>>();
+    const pending = Promise.withResolvers<Array<typeof eastVillage>>();
     google.search.mockReturnValue(pending.promise);
     const result = compile(
       'location[radius(" East Village ", 1mi)] location[radius("East Village", 2mi)]',
