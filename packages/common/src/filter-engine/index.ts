@@ -6,6 +6,7 @@ export {
 } from './definitions.ts';
 export type {
   FilterDefinition,
+  FilterRegistry,
   FunctionDefinition,
   Parameter,
   PositionalParameter,

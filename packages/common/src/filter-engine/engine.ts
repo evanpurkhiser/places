@@ -11,6 +11,7 @@ import type {
 import {
   InvalidValueError,
   type FilterDefinition,
+  type FilterRegistry,
   type FunctionDefinition,
   type RuntimeArguments,
   type Signature,
@@ -109,6 +110,7 @@ export class FilterEngine<Predicate, Context> {
   readonly #options: EngineOptions<Predicate, Context>;
   readonly #types: Map<string, ValueType<unknown, Context>>;
   readonly #filters: Map<string, FilterDefinition<Predicate, Context>>;
+  readonly #registry: FilterRegistry<Predicate, Context>;
   readonly #functions: Map<string, FunctionDefinition<Context>>;
   readonly #prepared = new WeakMap<
     PreparedQuery,
@@ -123,6 +125,7 @@ export class FilterEngine<Predicate, Context> {
     this.#options = options;
     this.#types = registry('type', options.types);
     this.#filters = registry('filter', options.filters);
+    this.#registry = {filters: this.#filters};
     this.#functions = registry('function', options.functions ?? []);
     this.#validateRegistrations();
   }
@@ -284,7 +287,7 @@ export class FilterEngine<Predicate, Context> {
       }
     }
 
-    const message = signature.validate?.(args);
+    const message = signature.validate?.(args, this.#registry);
 
     if (message) {
       fail('invalid_value', message, source);
@@ -383,7 +386,7 @@ export class FilterEngine<Predicate, Context> {
         return this.#options.boolean.all();
       case 'filter':
         return withSource(tree.call.source, () =>
-          tree.call.definition.compile(tree.call.arguments, context),
+          tree.call.definition.compile(tree.call.arguments, context, this.#registry),
         );
       case 'not':
         return this.#options.boolean.not(this.#compileTree(tree.child, context));

@@ -35,13 +35,23 @@ export interface PositionalParameter<T = unknown, Context = unknown> extends Par
   name: string;
 }
 
+/**
+ * Read-only access to the filters registered with the invoking engine.
+ */
+export interface FilterRegistry<Predicate, Context> {
+  readonly filters: ReadonlyMap<string, FilterDefinition<Predicate, Context>>;
+}
+
 export interface Signature<Context = unknown> {
   positional: ReadonlyArray<PositionalParameter<unknown, Context>>;
   named?: Readonly<Record<string, Parameter<unknown, Context>>>;
   /**
    * Cross-argument constraints run before any asynchronous resolution.
    */
-  validate?(arguments_: readonly Argument[]): string | undefined;
+  validate?(
+    arguments_: readonly Argument[],
+    registry: FilterRegistry<unknown, Context>,
+  ): string | undefined;
 }
 
 export interface ResolvedArgument<T = unknown> {
@@ -75,7 +85,12 @@ export interface RuntimeArguments {
 
 export interface FilterDefinition<Predicate, Context> extends Signature<Context> {
   name: string;
-  compile(arguments_: RuntimeArguments, context: Context): Predicate;
+  compile(
+    arguments_: RuntimeArguments,
+    context: Context,
+    registry: FilterRegistry<Predicate, Context>,
+  ): Predicate;
+  presence?(context: Context): Predicate;
 }
 
 export interface FunctionDefinition<Context> extends Signature<Context> {
@@ -99,11 +114,16 @@ export function defineFilter<
   name: string;
   positional: P;
   named?: N;
-  validate?(arguments_: readonly Argument[]): string | undefined;
+  validate?(
+    arguments_: readonly Argument[],
+    registry: FilterRegistry<unknown, Context>,
+  ): string | undefined;
   compile(
     arguments_: ResolvedArguments<{positional: P; named: N}>,
     context: Context,
+    registry: FilterRegistry<Predicate, Context>,
   ): Predicate;
+  presence?(context: Context): Predicate;
 }): FilterDefinition<Predicate, Context> {
   return definition as unknown as FilterDefinition<Predicate, Context>;
 }
@@ -120,7 +140,10 @@ export function defineFunction<
   name: string;
   positional: P;
   named?: N;
-  validate?(arguments_: readonly Argument[]): string | undefined;
+  validate?(
+    arguments_: readonly Argument[],
+    registry: FilterRegistry<unknown, Context>,
+  ): string | undefined;
   returns: ValueType<T, Context>;
   resolve(
     arguments_: ResolvedArguments<{positional: P; named: N}>,
