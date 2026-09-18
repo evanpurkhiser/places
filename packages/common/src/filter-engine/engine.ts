@@ -21,10 +21,21 @@ export interface EngineOptions<Predicate, Context> {
   types: ReadonlyArray<ValueType<unknown, Context>>;
   filters: ReadonlyArray<FilterDefinition<Predicate, Context>>;
   functions?: ReadonlyArray<FunctionDefinition<Context>>;
+  boolean: {
+    and(predicates: Predicate[]): Predicate;
+    or(predicates: Predicate[]): Predicate;
+    not(predicate: Predicate): Predicate;
+    all(): Predicate;
+  };
 }
 
 export interface PreparedQuery {
   readonly phase: 'prepared';
+  readonly query: Query;
+}
+
+export interface ResolvedQuery {
+  readonly phase: 'resolved';
   readonly query: Query;
 }
 
@@ -41,6 +52,12 @@ interface PreparedCall<P, C> {
   source: SourceSpan;
   resolve: ResolveArguments<C>;
 }
+interface ResolvedCall<P, C> {
+  definition: FilterDefinition<P, C>;
+  source: SourceSpan;
+  arguments: RuntimeArguments;
+}
+
 function fail(code: Diagnostic['code'], message: string, source: SourceSpan): never {
   throw new SearchError([{code, message, location: source.location}]);
 }
@@ -89,6 +106,7 @@ function registry<T extends {name: string}>(kind: string, definitions: readonly 
  * Owns dispatch and boolean composition. Registrations supply all domain behavior.
  */
 export class FilterEngine<Predicate, Context> {
+  readonly #options: EngineOptions<Predicate, Context>;
   readonly #types: Map<string, ValueType<unknown, Context>>;
   readonly #filters: Map<string, FilterDefinition<Predicate, Context>>;
   readonly #functions: Map<string, FunctionDefinition<Context>>;
@@ -96,8 +114,13 @@ export class FilterEngine<Predicate, Context> {
     PreparedQuery,
     Tree<PreparedCall<Predicate, Context>>
   >();
+  readonly #resolved = new WeakMap<
+    ResolvedQuery,
+    Tree<ResolvedCall<Predicate, Context>>
+  >();
 
   constructor(options: EngineOptions<Predicate, Context>) {
+    this.#options = options;
     this.#types = registry('type', options.types);
     this.#filters = registry('filter', options.filters);
     this.#functions = registry('function', options.functions ?? []);
@@ -322,11 +345,83 @@ export class FilterEngine<Predicate, Context> {
     };
   }
 
+  async #resolveTree(
+    tree: Tree<PreparedCall<Predicate, Context>>,
+    context: Context,
+  ): Promise<Tree<ResolvedCall<Predicate, Context>>> {
+    switch (tree.kind) {
+      case 'all':
+        return tree;
+      case 'filter':
+        return {
+          kind: 'filter',
+          call: {
+            definition: tree.call.definition,
+            source: tree.call.source,
+            arguments: await tree.call.resolve(context),
+          },
+        };
+      case 'not':
+        return {kind: 'not', child: await this.#resolveTree(tree.child, context)};
+      case 'and':
+      case 'or':
+        return {
+          kind: tree.kind,
+          children: await Promise.all(
+            tree.children.map(child => this.#resolveTree(child, context)),
+          ),
+        };
+    }
+  }
+
+  #compileTree(
+    tree: Tree<ResolvedCall<Predicate, Context>>,
+    context: Context,
+  ): Predicate {
+    switch (tree.kind) {
+      case 'all':
+        return this.#options.boolean.all();
+      case 'filter':
+        return withSource(tree.call.source, () =>
+          tree.call.definition.compile(tree.call.arguments, context),
+        );
+      case 'not':
+        return this.#options.boolean.not(this.#compileTree(tree.child, context));
+      case 'and':
+      case 'or':
+        return this.#options.boolean[tree.kind](
+          tree.children.map(child => this.#compileTree(child, context)),
+        );
+    }
+  }
+
   prepare(input: string): PreparedQuery {
     const query = parseQuery(input);
     const result: PreparedQuery = {phase: 'prepared', query};
     this.#prepared.set(result, query ? this.#prepareExpression(query) : {kind: 'all'});
     return result;
+  }
+
+  async resolve(query: PreparedQuery, context: Context): Promise<ResolvedQuery> {
+    const tree = this.#prepared.get(query);
+
+    if (!tree) {
+      throw new Error('Query was not prepared by this filter engine');
+    }
+
+    const result: ResolvedQuery = {phase: 'resolved', query: query.query};
+    this.#resolved.set(result, await this.#resolveTree(tree, context));
+    return result;
+  }
+
+  compile(query: ResolvedQuery, context: Context): Predicate {
+    const tree = this.#resolved.get(query);
+
+    if (!tree) {
+      throw new Error('Query was not resolved by this filter engine');
+    }
+
+    return this.#compileTree(tree, context);
   }
 }
 
