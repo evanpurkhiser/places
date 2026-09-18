@@ -1,14 +1,8 @@
-import {defineFilter, InvalidValueError, valueType} from '@places/common/filter-engine';
-import type {StringValue} from '@places/common/search';
+import {defineFilter, InvalidValueError} from '@places/common/filter-engine';
 import type {SQL} from 'drizzle-orm';
 
 import type {Context} from './context.ts';
-
-export const property = valueType({
-  name: 'property with presence support',
-  description: 'Name of a registered filter with presence support.',
-  decode: (value: StringValue) => value.value,
-});
+import {property} from './data-types/property.ts';
 
 export const has = defineFilter({
   name: 'has',

@@ -6,7 +6,8 @@ import {expect, it, vi} from 'vitest';
 import {createGooglePlaces} from '../services/google/index.ts';
 
 import type {Context} from './context.ts';
-import {has, property} from './has.ts';
+import {property} from './data-types/property.ts';
+import {has} from './has.ts';
 
 const dialect = new PgDialect();
 

@@ -1,35 +1,13 @@
-import {defineFilter, InvalidValueError, valueType} from '@places/common/filter-engine';
-import type {Argument, StringValue} from '@places/common/search';
+import {defineFilter} from '@places/common/filter-engine';
 import {sql, type SQL} from 'drizzle-orm';
 
 import {places, placeTags, tags} from '../db/schema.ts';
 
-import type {Context} from './context.ts';
+import {tagName} from './data-types/tag-name.ts';
+import {text} from './data-types/text.ts';
+import {equality} from './operators.ts';
 import {likePattern, matchText} from './text.ts';
-import {equality, text} from './values.ts';
 
-export const tagName = valueType<StringValue, Context>({
-  name: 'tag name',
-  description:
-    'Tag names are arbitrary labels, normalized by trimming and lowercasing. Colons are ordinary characters. Matches the complete tag name; use * for patterns. Unknown exact names produce an error, including under !. = treats stars literally.',
-  decode: (value: StringValue) => {
-    if (!value.value.trim()) {
-      throw new InvalidValueError('Expected a nonempty tag name');
-    }
-
-    return value;
-  },
-  resolve: async (value, context, argument: Argument) => {
-    const exact = argument.operator !== null || value.wildcards.length === 0;
-    const name = value.value.trim().toLowerCase();
-
-    if (exact && !(await context.tagExists(name))) {
-      throw new InvalidValueError(`Unknown tag: ${name}`);
-    }
-
-    return value;
-  },
-});
 export const tagPresence = () => sql`exists (
   select 1 from ${placeTags} where ${placeTags.placeId} = ${places.id}
 )`;

@@ -1,13 +1,4 @@
 import {InvalidValueError, valueType} from '@places/common/filter-engine';
-import type {StringValue} from '@places/common/search';
-
-export const text = valueType({
-  name: 'text',
-  description:
-    'Matches anywhere within the field, ignoring case. Use = to match the complete literal value. Unescaped * matches zero or more characters; SQL % and _ are literal.',
-  decode: (value: StringValue) => value,
-});
-export const equality = ['='] as const;
 
 const metersPerUnit = {m: 1, km: 1000, ft: 0.3048, mi: 1609.344};
 export const distance = valueType({
