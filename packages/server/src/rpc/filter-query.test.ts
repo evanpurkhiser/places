@@ -5,7 +5,7 @@ import type {Client} from '@places/common/contract';
 import {migrate} from 'drizzle-orm/node-postgres/migrator';
 import {Pool} from 'pg';
 import {PgBoss} from 'pg-boss';
-import {afterAll, beforeAll, describe, expect, it} from 'vitest';
+import {afterAll, beforeAll, describe, expect, it, vi} from 'vitest';
 
 import {execFile} from 'node:child_process';
 import {randomUUID} from 'node:crypto';
@@ -17,6 +17,7 @@ import {createApp} from '../app.ts';
 import {configSchema} from '../config.ts';
 import {createDatabase} from '../db/index.ts';
 import {places, placeTags, tags} from '../db/schema.ts';
+import {GoogleUnavailableError} from '../services/google/errors.ts';
 import {createGooglePlaces} from '../services/google/index.ts';
 
 const exec = promisify(execFile);
@@ -28,11 +29,12 @@ describe.skipIf(!testUrl)('place filtering through API and CLI', () => {
   const url = new URL(testUrl ?? 'postgres://localhost/places');
   url.pathname = `/${databaseName}`;
   const db = createDatabase(url.href);
+  const google = {...createGooglePlaces(), search: vi.fn()};
   const app = createApp({
     db,
     config: configSchema.parse({database: {url: url.href}}),
     jobs: new PgBoss(url.href),
-    google: createGooglePlaces(),
+    google,
   });
   const client: Client = createORPCClient(
     new RPCLink({
@@ -94,6 +96,76 @@ describe.skipIf(!testUrl)('place filtering through API and CLI', () => {
     expect(result.map(place => place.id).sort()).toEqual([cafeId, bakeryId].sort());
     const nonCafes = await client.places.list({query: '!tag[type:cafe]'});
     expect(nonCafes.map(place => place.id)).toEqual([bakeryId]);
+  });
+
+  it('resolves named origins through the API before filtering saved places', async () => {
+    google.search.mockResolvedValue([
+      {
+        id: 'origin',
+        displayName: {text: 'Origin'},
+        formattedAddress: 'New York',
+        googleMapsUri: 'https://maps.google.com/?q=origin',
+        location: {longitude: -74, latitude: 40},
+      },
+    ]);
+    const result = await client.places.list({
+      query: 'tag[type:cafe] location[radius("Origin, NYC", 1mi)]',
+    });
+    expect(result.map(place => place.id)).toEqual([cafeId]);
+    expect(google.search).toHaveBeenCalledWith('Origin, NYC');
+  });
+
+  it('returns query diagnostics for unmatched origins and service errors for outages', async () => {
+    google.search.mockResolvedValueOnce([]);
+    await expect(
+      client.places.list({query: 'location[radius("missing", 1mi)]'}),
+    ).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+      data: {
+        diagnostics: [{code: 'invalid_value', message: 'No place found for "missing".'}],
+      },
+    });
+    google.search.mockRejectedValueOnce(
+      new GoogleUnavailableError('Google Places search failed. Try again.'),
+    );
+    await expect(
+      client.places.list({query: 'location[radius("NYC", 1mi)]'}),
+    ).rejects.toMatchObject({
+      code: 'SERVICE_UNAVAILABLE',
+      message: 'Google Places search failed. Try again.',
+    });
+  });
+
+  it('maps shared Google input errors to query diagnostics and import errors', async () => {
+    await expect(
+      client.places.list({query: 'location[radius("gmaps:bad/id", 1mi)]'}),
+    ).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+      data: {diagnostics: [{code: 'invalid_value', message: 'Invalid Google Place ID.'}]},
+    });
+    await expect(client.places.import({input: 'gmaps:bad/id'})).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+      message: 'Invalid Google Place ID.',
+    });
+  });
+
+  it('maps Google availability errors at the import RPC boundary', async () => {
+    const resolve = vi
+      .spyOn(google, 'resolve')
+      .mockRejectedValueOnce(
+        new GoogleUnavailableError('Could not reach Google Maps. Try again.'),
+      );
+
+    try {
+      await expect(
+        client.places.import({input: 'https://maps.app.goo.gl/example'}),
+      ).rejects.toMatchObject({
+        code: 'SERVICE_UNAVAILABLE',
+        message: 'Could not reach Google Maps. Try again.',
+      });
+    } finally {
+      resolve.mockRestore();
+    }
   });
 
   it.each([

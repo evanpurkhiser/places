@@ -60,7 +60,10 @@ export const placeContract = {
     .input(assignmentInput)
     .output(placeTag.pick({placeId: true, tagId: true}).extend({removed: z.boolean()})),
   list: oc
-    .errors({BAD_REQUEST: {message: 'Invalid place query.', data: queryErrorData}})
+    .errors({
+      BAD_REQUEST: {message: 'Invalid place query.', data: queryErrorData},
+      SERVICE_UNAVAILABLE: {message: 'Place resolution is unavailable.'},
+    })
     .input(z.object({query: z.string().optional()}).optional())
     .output(z.array(place)),
   import: oc

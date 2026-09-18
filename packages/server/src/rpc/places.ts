@@ -58,7 +58,7 @@ export const placeRouter = api.router({
           });
         }
 
-        throw error;
+        rethrowGoogleError(error);
       },
     );
     const rows = await db

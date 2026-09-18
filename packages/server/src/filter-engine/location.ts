@@ -8,6 +8,7 @@ import {sql, type SQL} from 'drizzle-orm';
 
 import {places} from '../db/schema.ts';
 
+import type {Context, Point} from './context.ts';
 import {distance} from './values.ts';
 
 const coordinate = (name: string, limit: number) =>
@@ -33,9 +34,21 @@ const coordinate = (name: string, limit: number) =>
 
 const longitude = coordinate('longitude', 180);
 const latitude = coordinate('latitude', 90);
-const geographicPoint = valueType<{longitude: number; latitude: number}>({
+const geographicPoint = valueType<Point, Context, string>({
   name: 'geographic point',
-  description: 'An explicit point(longitude, latitude).',
+  description:
+    'A place name, address, Google Maps place link, gmaps:<place_id>, or explicit point(longitude, latitude). Include a city or region in place names to guide the search.',
+  decode: literal => {
+    const name = literal.value.trim();
+
+    if (!name || name.length > 4096) {
+      throw new InvalidValueError('Expected a place name of 1–4096 characters.');
+    }
+
+    return name;
+  },
+  resolve: (value, context) =>
+    typeof value === 'string' ? context.resolvePoint(value) : value,
 });
 const geographicPredicate = valueType<SQL>({
   name: 'geographic predicate',
@@ -100,6 +113,10 @@ export const location = defineFilter({
   name: 'location',
   description: 'Match places using a geographic condition.',
   examples: [
+    {
+      query: 'location[radius("East Village, NY", 1mi)]',
+      description: 'Places within one mile of the resolved neighborhood point.',
+    },
     {
       query: 'location[radius(point(-73.985, 40.726), 800m)]',
       description: 'Places within 800 meters of the given point.',

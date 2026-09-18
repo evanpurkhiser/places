@@ -37,7 +37,11 @@ it('uses the invoking engine registry and passes context to presence handlers', 
   const secondPresence = vi.fn((_context: Context) => sql`false`);
   const first = makeEngine('custom', firstPresence);
   const second = makeEngine('custom', secondPresence);
-  const context = {google: createGooglePlaces(), tagExists: vi.fn()};
+  const context = {
+    google: createGooglePlaces(),
+    tagExists: vi.fn(),
+    resolvePoint: vi.fn(),
+  };
 
   for (const [engine, expected] of [
     [first, 'true'],

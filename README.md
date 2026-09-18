@@ -159,18 +159,27 @@ Filter saved places through the API or CLI:
 pnpm places list --query 'tag[favorite] AND !tag[visited]'
 pnpm places list --query 'tag[laptop-friendly, notes:outlet]'
 pnpm places list --query '(name[coffee] OR tag[type:bakery]) !has[notes]'
+pnpm places list --query 'location[radius("East Village, NY", 1mi)]'
 ```
 
-Supported filters are `tag`, `name`, `address`, `notes`, and `has`.
+Supported filters are `tag`, `name`, `address`, `notes`, `has`, and `location`.
 Tags support exact
 names and wildcard patterns; `notes:` within a tag predicate matches that same
 assignment's note. Exact unknown tags return errors, including under negation.
 `has` supports filters that register a presence check: `tag`, `name`, `address`,
 and `notes`.
 
+`location` supports `radius(point(longitude, latitude), distance)` and
+`rect(topLeft, bottomRight)`. Points also accept place names, addresses, and
+`"gmaps:<place_id>"` strings and Google Maps place links. Names resolve through Google Places Text Search using
+`google.apiKey`; include a city or region to guide the search. The first Google result
+provides the origin point. Independent
+lookups run concurrently, and repeated names share one lookup per query.
+Radius distances support `m`, `km`, `ft`, and `mi`.
+
 Listing accepts an optional query and returns the existing array of places, newest
 first. Query failures print JSON diagnostics with source locations to stderr and
-exit nonzero. Location, hours, saved-query, and date filters require future server
+exit nonzero. Area boundaries, hours, saved-query, and date filters require future server
 implementations.
 
 The shared package exports a PEG-based query parser at `@places/common/search`:

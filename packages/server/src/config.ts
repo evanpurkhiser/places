@@ -12,7 +12,9 @@ export const configSchema = z.strictObject({
         .trim()
         .min(1)
         .optional()
-        .describe('Google Places API (New) key; required for imports.'),
+        .describe(
+          'Google Places API (New) key; required for imports and place name resolution.',
+        ),
     })
     .prefault({})
     .describe('Google Places integration.'),

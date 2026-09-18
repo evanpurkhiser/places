@@ -1,6 +1,6 @@
 import {SearchError} from '@places/common/search';
 import {PgDialect} from 'drizzle-orm/pg-core';
-import {describe, expect, it} from 'vitest';
+import {describe, expect, it, vi} from 'vitest';
 
 import {createGooglePlaces} from '../services/google/index.ts';
 
@@ -11,6 +11,7 @@ async function compile(query: string, names = ['type:cafe', 'type:bar', 'star:*'
   const context = {
     google: createGooglePlaces(),
     tagExists: (name: string) => Promise.resolve(names.includes(name)),
+    resolvePoint: vi.fn(),
   };
   const prepared = placeFilterEngine.prepare(query);
   const resolved = await placeFilterEngine.resolve(prepared, context);
@@ -40,7 +41,6 @@ describe('Places SQL predicates', () => {
     'point(181, 0), point(0, 0)',
     'point(0, 0), point(0, -91)',
     'point(0, 0)',
-    '"NYC", point(0, 0)',
     'point(0, -10), point(1, 10)',
   ])('rejects invalid rect arguments: %s', async arguments_ => {
     await expect(compile(`location[rect(${arguments_})]`)).rejects.toThrow(SearchError);
@@ -84,7 +84,7 @@ describe('Places SQL predicates', () => {
     'point(0, 0), 1',
     'point(0, 0), 1yd',
     'point(0, 0), NaNkm',
-    '"New York", 1mi',
+    '" ", 1mi',
   ])('rejects invalid radius arguments: %s', arguments_ => {
     expect(() => placeFilterEngine.prepare(`location[radius(${arguments_})]`)).toThrow(
       SearchError,
