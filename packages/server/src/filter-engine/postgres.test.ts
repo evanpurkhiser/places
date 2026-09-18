@@ -1,4 +1,4 @@
-import {eq, inArray} from 'drizzle-orm';
+import {eq, inArray, sql} from 'drizzle-orm';
 import {migrate} from 'drizzle-orm/node-postgres/migrator';
 import {Pool} from 'pg';
 import {afterAll, beforeAll, describe, expect, it} from 'vitest';
@@ -119,6 +119,114 @@ describe.skipIf(!testUrl)('filter engine with PostgreSQL', () => {
         'Cafe',
         'Empty',
       ]);
+    } finally {
+      await db.delete(places).where(
+        inArray(
+          places.id,
+          inserted.map(row => row.id),
+        ),
+      );
+    }
+  });
+
+  it('buffers every sector edge, crosses the antimeridian, and handles north wrap', async () => {
+    const fixtures = [
+      ['SectorOrigin', 0, 0],
+      ['SectorBehind', 199, 270],
+      ['SectorTooFarBehind', 201, 270],
+      ['SectorAhead', 900, 90],
+      ['SectorCap', 1199, 90],
+      ['SectorPastCap', 1201, 90],
+      ['SectorSide', 1000, 110],
+      ['SectorOutside', 1000, 130],
+      ['SectorNorthWest', 900, 355],
+      ['SectorNorthEast', 900, 5],
+    ] as const;
+    const inserted = await db
+      .insert(places)
+      .values(
+        fixtures.map(([name, distance, bearing]) => ({
+          googlePlaceId: randomUUID(),
+          name,
+          formattedAddress: '',
+          coordinates: sql`ST_Project(ST_SetSRID(ST_MakePoint(179.999, 0), 4326)::geography, ${distance}::double precision, radians(${bearing}))`,
+        })),
+      )
+      .returning({id: places.id});
+    const sector = 'location[sector(point(179.999, 0), bearing:90deg, range:1km)]';
+
+    try {
+      const [endpoint] = await db
+        .select({
+          longitude: sql<number>`ST_X(${places.coordinates}::geometry)`,
+          latitude: sql<number>`ST_Y(${places.coordinates}::geometry)`,
+        })
+        .from(places)
+        .where(eq(places.name, 'SectorAhead'));
+      const towards = `towards:point(${endpoint!.longitude}, ${endpoint!.latitude})`;
+      expect(await names(`location[sector(point(179.999, 0), ${towards})]`)).toEqual([
+        'SectorAhead',
+        'SectorBehind',
+        'SectorOrigin',
+        'SectorSide',
+      ]);
+      expect(
+        await names(`location[sector(point(179.999, 0), ${towards}, range:1km)]`),
+      ).toEqual(await names(sector));
+      expect(
+        await names(`location[sector(point(179.999, 0), ${towards}, spread:360deg)]`),
+      ).toEqual(
+        fixtures
+          .map(([name]) => name)
+          .filter(name => !['SectorCap', 'SectorPastCap'].includes(name))
+          .sort(),
+      );
+      expect(await names(sector)).toEqual([
+        'SectorAhead',
+        'SectorBehind',
+        'SectorCap',
+        'SectorOrigin',
+        'SectorSide',
+      ]);
+      expect(await names(`name[Sector*] !${sector}`)).toEqual([
+        'SectorNorthEast',
+        'SectorNorthWest',
+        'SectorOutside',
+        'SectorPastCap',
+        'SectorTooFarBehind',
+      ]);
+      expect(
+        await names(
+          'location[sector(point(179.999, 0), bearing:0deg, range:1km, buffer:1m)]',
+        ),
+      ).toEqual(['SectorNorthEast', 'SectorNorthWest', 'SectorOrigin']);
+      expect(
+        await names(
+          'location[sector(point(179.999, 0), towards:point(-179, 0), range:1km)]',
+        ),
+      ).toEqual(await names(sector));
+      expect(
+        await names(
+          'location[sector(point(179.999, 0), bearing:90deg, spread:270deg, range:1km, buffer:1m)]',
+        ),
+      ).toEqual([
+        'SectorAhead',
+        'SectorNorthEast',
+        'SectorNorthWest',
+        'SectorOrigin',
+        'SectorOutside',
+        'SectorSide',
+      ]);
+      expect(
+        await names(
+          'location[sector(point(179.999, 0), bearing:90deg, spread:360deg, range:1km)]',
+        ),
+      ).toEqual(
+        fixtures
+          .map(([name]) => name)
+          .filter(name => name !== 'SectorPastCap')
+          .sort(),
+      );
     } finally {
       await db.delete(places).where(
         inArray(

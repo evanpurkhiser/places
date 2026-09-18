@@ -6,6 +6,7 @@ import {places} from '../db/schema.ts';
 import type {GooglePlaces} from '../services/google/index.ts';
 
 import {createContext, type Context} from './context.ts';
+import {degrees} from './data-types/degrees.ts';
 import {distance} from './data-types/distance.ts';
 import {geographicPoint} from './data-types/geographic-point.ts';
 import {geographicPredicate} from './data-types/geographic-predicate.ts';
@@ -17,6 +18,7 @@ import {text} from './data-types/text.ts';
 import {point} from './functions/point.ts';
 import {radius} from './functions/radius.ts';
 import {rect} from './functions/rect.ts';
+import {sector} from './functions/sector.ts';
 import {has} from './has.ts';
 import {location} from './location.ts';
 import {equality} from './operators.ts';
@@ -88,13 +90,14 @@ export const placeFilterEngine = createFilterEngine<SQL, Context>({
     tagName,
     property,
     distance,
+    degrees,
     longitude,
     latitude,
     geographicPoint,
     geographicPredicate,
   ],
   filters: [tag, ...textFilters, has, location],
-  functions: [point, radius, rect],
+  functions: [point, radius, rect, sector],
   boolean: {
     all: () => sql`true`,
     and: predicates => sql`(${sql.join(predicates, sql` and `)})`,

@@ -7,6 +7,10 @@ export const location = defineFilter({
   description: 'Match places using a geographic condition.',
   examples: [
     {
+      query: 'location[sector("Union Square, NYC", towards:"East Village, NYC")]',
+      description: 'Places in a buffered sector heading towards the East Village.',
+    },
+    {
       query: 'location[radius("East Village, NY", 1mi)]',
       description: 'Places within one mile of the resolved neighborhood point.',
     },

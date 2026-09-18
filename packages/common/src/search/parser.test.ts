@@ -229,7 +229,7 @@ describe('query syntax examples', () => {
     'location[within("Manhattan, NYC")]',
     'location[radius(point(-73.985, 40.726), 800m)]',
     'location[route(@home, @work, buffer:800ft, mode:walk)]',
-    'location[direction(@home, bearing:90deg, spread:60deg, radius:2mi)]',
+    'location[sector(@home, bearing:90deg, spread:60deg, range:2mi)]',
     'hours[open(now)] hours[openDuring("2026-09-17T15:00:00-04:00", "2026-09-17T17:00:00-04:00")]',
     'saved["date night"] name[="La Cabra"]',
   ])('accepts Places syntax: %s', input => {

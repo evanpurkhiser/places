@@ -216,23 +216,38 @@ additional modes depend on the routing integration. Route alternatives, waypoint
 and reuse of an existing route are extension points. Expose the selected route
 and provider identity so the caller can inspect what was used.
 
-### Directional sector
+### Sector
 
 ```text
-location[direction("Union Square, NYC", bearing:90deg, spread:60deg, radius:2mi)]
+location[sector("Union Square, NYC", towards:"East Village, NYC")]
+location[sector("Union Square, NYC", bearing:90deg, spread:60deg, buffer:200m, range:2mi)]
 ```
 
-Resolve an origin point and select a sector centered on the requested bearing.
+Resolve an origin and select a sector facing either `towards` or `bearing`.
+Require exactly one heading argument. `towards` supplies a point from which to
+calculate the heading and default range. An explicit `range` overrides that
+distance. Require `range` with `bearing`. Resolve origin and heading place names
+concurrently. Coincident origin and heading points are invalid.
+
 Bearings run clockwise from true north: 0 degrees is north, 90 east, 180 south,
 and 270 west. `spread` is the full opening angle; 60 degrees means 30 degrees on
-either side of the bearing. `radius` limits distance from the origin.
+either side of the bearing. Defaults are `spread:30deg` and `buffer:200m`.
+
+Expand the entire sector by `buffer`, including its sides, forward edge, and
+origin. This includes places up to the buffer distance behind the starting point.
+`range` is forward reach before buffering, so the maximum distance from the
+origin is `range + buffer`.
 
 Include the origin and sector edges. Accept bearings in `[0, 360)` and spreads in
-`(0, 360]`. A 360-degree spread is equivalent to a radius selection. The geometry
-implementation must handle sectors crossing north and geographic discontinuities.
+`(0, 360]`. A 360-degree spread selects a circle of `range + buffer`. Explicit
+ranges must be less than 10000km to keep the geography interior within a
+hemisphere. When deriving range, require the heading point to be within 90 degrees
+of the origin.
 
-A future `toward:` argument could derive bearing from a destination. Device
-heading and phrases such as "this way" require explicit caller-provided context.
+Build sector boundaries using WGS84 geodesic projections. Approximate the outer
+arc with steps of at most one degree, refined for a nominal chord error of 0.5m.
+Measure the buffer using PostGIS geography distances in meters. Sectors support
+headings crossing north and coordinates crossing the antimeridian.
 
 ### Named locations
 
@@ -242,7 +257,7 @@ Named locations give saved geographic references short, reusable names:
 location[radius(@home, 1mi)]
 location[within(@neighborhood)]
 location[route(@home, @work, buffer:800ft, mode:walk)]
-location[direction(@home, bearing:90deg, spread:60deg, radius:2mi)]
+location[sector(@home, bearing:90deg, spread:60deg, range:2mi)]
 ```
 
 Resolve `@name` from an application-managed location registry. Each entry has a
