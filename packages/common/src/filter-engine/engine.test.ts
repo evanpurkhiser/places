@@ -12,10 +12,12 @@ import {
 
 const text = valueType<StringValue>({
   name: 'text',
+  description: 'Text with wildcard metadata.',
   decode: value => value,
 });
 const number = valueType<number>({
   name: 'number',
+  description: 'Number test registration.',
   decode: literal => {
     if (!/^-?\d+(?:\.\d+)?$/.test(literal.value)) {
       throw new InvalidValueError('Expected a number');
@@ -32,20 +34,33 @@ const boolean = {
 };
 const name = defineFilter({
   name: 'name',
-  positional: [{name: 'value', type: text, operators: ['=']}],
-  named: {notes: {type: text, optional: true}},
+  examples: [
+    {query: 'name[cafe]', description: 'Find cafes.'},
+    {query: 'name[cafe, notes:upstairs]'},
+  ],
+  description: 'Name test registration.',
+  positional: [
+    {name: 'value', description: 'Argument value.', type: text, operators: ['=']},
+  ],
+  named: {notes: {description: 'Argument value.', type: text, optional: true}},
   compile: ({positional: [value], named}, _context: null) =>
     `name${value.operator ?? '~'}${value.value.value}${named.notes ? `/${named.notes.value.value}` : ''}`,
+  presence: (_context: null) => 'name IS PRESENT',
 });
 const count = defineFilter({
   name: 'count',
-  positional: [{name: 'value', type: number, operators: ['>=']}],
+  description: 'Count test registration.',
+  positional: [
+    {name: 'value', description: 'Argument value.', type: number, operators: ['>=']},
+  ],
   compile: ({positional: [value]}, _context: null) =>
     `count${value.operator ?? '='}${value.value}`,
 });
 const twice = defineFunction({
   name: 'twice',
-  positional: [{name: 'value', type: number}],
+  examples: [{query: 'count[twice(2)]'}],
+  description: 'Twice test registration.',
+  positional: [{name: 'value', description: 'Argument value.', type: number}],
   returns: number,
   resolve: ({positional: [value]}, _context: null) => value.value * 2,
 });
@@ -65,6 +80,107 @@ async function compile(input: string) {
 }
 
 describe('filter engine', () => {
+  it('describes registered signatures and capabilities as serializable data', () => {
+    const engine = makeEngine();
+    const description = engine.describe();
+
+    expect(description.types).toEqual([
+      {name: 'text', description: text.description, literals: true, references: false},
+      {
+        name: 'number',
+        description: number.description,
+        literals: true,
+        references: false,
+      },
+    ]);
+    expect(description.filters[0]).toEqual({
+      name: 'name',
+      description: name.description,
+      examples: [
+        {query: 'name[cafe]', description: 'Find cafes.'},
+        {query: 'name[cafe, notes:upstairs]'},
+      ],
+      presence: true,
+      positional: [
+        {
+          name: 'value',
+          description: 'Argument value.',
+          type: 'text',
+          optional: false,
+          operators: ['='],
+        },
+      ],
+      named: [
+        {
+          name: 'notes',
+          description: 'Argument value.',
+          type: 'text',
+          optional: true,
+          operators: [],
+        },
+      ],
+    });
+    expect(description.filters[1]).toMatchObject({presence: false, examples: []});
+    expect(description.functions).toEqual([
+      {
+        name: 'twice',
+        description: twice.description,
+        examples: [{query: 'count[twice(2)]'}],
+        returns: 'number',
+        positional: [
+          {
+            name: 'value',
+            description: 'Argument value.',
+            type: 'number',
+            optional: false,
+            operators: [],
+          },
+        ],
+        named: [],
+      },
+    ]);
+    expect(JSON.parse(JSON.stringify(description))).toEqual(description);
+
+    for (const registration of [...description.filters, ...description.functions]) {
+      for (const example of registration.examples) {
+        expect(() => engine.prepare(example.query)).not.toThrow();
+      }
+    }
+  });
+
+  it('describes reference-only types without invoking their handlers', () => {
+    const resolveReference = vi.fn(() => 'home');
+    const location = valueType({
+      name: 'location',
+      description: 'A named location.',
+      resolveReference,
+    });
+    const engine = createFilterEngine({types: [location], filters: [], boolean});
+    expect(engine.describe()).toEqual({
+      types: [
+        {
+          name: 'location',
+          description: 'A named location.',
+          literals: false,
+          references: true,
+        },
+      ],
+      filters: [],
+      functions: [],
+    });
+    expect(resolveReference).not.toHaveBeenCalled();
+  });
+
+  it('returns documentation snapshots independent of registration state', () => {
+    const engine = makeEngine();
+    const description = engine.describe();
+    description.filters[0]!.examples.push({query: 'invalid example'});
+    description.filters[0]!.positional[0]!.operators.push('>');
+    description.types[0]!.name = 'changed';
+    expect(engine.describe()).toEqual(makeEngine().describe());
+    expect(() => engine.prepare('name[>x]')).toThrow('Operator > is not allowed');
+  });
+
   it('dispatches filters and composes precedence, groups and negation', async () => {
     expect(await compile('name[cafe] OR (count[>=twice(2)] AND !name[bar])')).toBe(
       '(name~cafe OR (count>=4 AND NOT name~bar))',
@@ -92,7 +208,10 @@ describe('filter engine', () => {
       filters: [
         defineFilter({
           name: 'inspect',
-          positional: [{name: 'value', type: text, operators: ['=']}],
+          description: 'Inspect test registration.',
+          positional: [
+            {name: 'value', description: 'Argument value.', type: text, operators: ['=']},
+          ],
           compile: ({positional: [value]}, _ctx: null) => value,
         }),
       ],
@@ -117,8 +236,11 @@ describe('filter engine', () => {
   it('validates named function parameters, ordering, and cross-argument constraints', async () => {
     const add = defineFunction({
       name: 'add',
-      positional: [{name: 'value', type: number, optional: true}],
-      named: {amount: {type: number}},
+      description: 'Add test registration.',
+      positional: [
+        {name: 'value', description: 'Argument value.', type: number, optional: true},
+      ],
+      named: {amount: {description: 'Argument value.', type: number}},
       returns: number,
       resolve: ({positional: [value], named}, _context: null) =>
         (value?.value ?? 0) + named.amount.value,
@@ -154,19 +276,24 @@ describe('filter engine', () => {
     );
     const type = valueType<number, null>({
       name: 'resolved-number',
+      description: 'Resolved-number test registration.',
       decode: value => Number(value.value),
       resolve,
       resolveReference: () => 5,
     });
     const value = defineFunction({
       name: 'value',
+      description: 'Value test registration.',
       positional: [],
       returns: type,
       resolve: (_args, _context: null) => 3,
     });
     const filter = defineFilter({
       name: 'value',
-      positional: [{name: 'value', type, operators: ['>=']}],
+      description: 'Value test registration.',
+      positional: [
+        {name: 'value', description: 'Argument value.', type, operators: ['>=']},
+      ],
       compile: ({positional: [argument]}, _ctx: null) => `${argument.value}`,
     });
     const engine = createFilterEngine({
@@ -191,6 +318,7 @@ describe('filter engine', () => {
     const error = new Error('Invalid internal query');
     const filter = defineFilter({
       name: 'broken',
+      description: 'Broken test registration.',
       positional: [],
       compile: (_args, _ctx: null): string => {
         throw error;
@@ -220,8 +348,16 @@ describe('filter engine', () => {
   it('validates named arguments and cross-argument constraints', () => {
     const add = defineFunction({
       name: 'add',
-      positional: [{name: 'value', type: number, optional: true}],
-      named: {amount: {type: number}},
+      description: 'Add numbers.',
+      positional: [
+        {
+          name: 'value',
+          description: 'Optional base value.',
+          type: number,
+          optional: true,
+        },
+      ],
+      named: {amount: {description: 'Amount to add.', type: number}},
       returns: number,
       resolve: ({positional: [value], named}, _context: null) =>
         (value?.value ?? 0) + named.amount.value,
@@ -291,6 +427,7 @@ describe('filter engine', () => {
     const resolve = vi.fn((value: string) => Promise.resolve(value));
     const external = valueType<string>({
       name: 'external',
+      description: 'External test registration.',
       decode: value => value.value,
       resolve,
     });
@@ -299,7 +436,8 @@ describe('filter engine', () => {
       filters: [
         defineFilter({
           name: 'external',
-          positional: [{name: 'value', type: external}],
+          description: 'External test registration.',
+          positional: [{name: 'value', description: 'Argument value.', type: external}],
           compile: ({positional: [value]}, _ctx: null) => value.value,
         }),
       ],
@@ -313,6 +451,7 @@ describe('filter engine', () => {
     const providerFailure = new Error('Provider unavailable');
     const point = valueType<string>({
       name: 'point',
+      description: 'Point test registration.',
       resolveReference: name => {
         if (name === 'missing') {
           throw new InvalidValueError('Unknown location');
@@ -330,7 +469,8 @@ describe('filter engine', () => {
       filters: [
         defineFilter({
           name: 'at',
-          positional: [{name: 'value', type: point}],
+          description: 'At test registration.',
+          positional: [{name: 'value', description: 'Argument value.', type: point}],
           compile: ({positional: [value]}, _ctx: null) => value.value,
         }),
       ],

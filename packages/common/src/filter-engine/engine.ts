@@ -17,6 +17,7 @@ import {
   type Signature,
   type ValueType,
 } from './definitions.ts';
+import {describeSignature, type EngineDescription} from './documentation.ts';
 
 export interface EngineOptions<Predicate, Context> {
   types: ReadonlyArray<ValueType<unknown, Context>>;
@@ -128,6 +129,28 @@ export class FilterEngine<Predicate, Context> {
     this.#registry = {filters: this.#filters};
     this.#functions = registry('function', options.functions ?? []);
     this.#validateRegistrations();
+  }
+
+  /**
+   * Describes the available registrations without resolving or compiling queries.
+   */
+  describe(): EngineDescription {
+    return {
+      types: [...this.#types.values()].map(type => ({
+        name: type.name,
+        description: type.description,
+        literals: Boolean(type.decode),
+        references: Boolean(type.resolveReference),
+      })),
+      filters: [...this.#filters.values()].map(filter => ({
+        ...describeSignature(filter),
+        presence: Boolean(filter.presence),
+      })),
+      functions: [...this.#functions.values()].map(fn => ({
+        ...describeSignature(fn),
+        returns: fn.returns.name,
+      })),
+    };
   }
 
   #checkType(type: ValueType<unknown, Context>) {

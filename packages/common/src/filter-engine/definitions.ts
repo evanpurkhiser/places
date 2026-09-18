@@ -10,6 +10,7 @@ export class InvalidValueError extends Error {}
  */
 export interface ValueType<T, Context = unknown> {
   name: string;
+  description: string;
   decode?(literal: StringValue): T;
   /**
    * Resolves values from literals, functions, and references before their consumer runs.
@@ -23,6 +24,7 @@ export function valueType<T, Context = unknown>(definition: ValueType<T, Context
 }
 
 export interface Parameter<T = unknown, Context = unknown> {
+  description: string;
   type: ValueType<T, Context>;
   operators?: readonly Operator[];
   optional?: boolean;
@@ -83,8 +85,15 @@ export interface RuntimeArguments {
   named: Record<string, ResolvedArgument>;
 }
 
+export interface QueryExample {
+  query: string;
+  description?: string;
+}
+
 export interface FilterDefinition<Predicate, Context> extends Signature<Context> {
   name: string;
+  description: string;
+  examples?: readonly QueryExample[];
   compile(
     arguments_: RuntimeArguments,
     context: Context,
@@ -95,6 +104,8 @@ export interface FilterDefinition<Predicate, Context> extends Signature<Context>
 
 export interface FunctionDefinition<Context> extends Signature<Context> {
   name: string;
+  description: string;
+  examples?: readonly QueryExample[];
   returns: ValueType<unknown, Context>;
   resolve(arguments_: RuntimeArguments, context: Context): unknown | Promise<unknown>;
 }
@@ -112,6 +123,8 @@ export function defineFilter<
   >,
 >(definition: {
   name: string;
+  description: string;
+  examples?: readonly QueryExample[];
   positional: P;
   named?: N;
   validate?(
@@ -138,6 +151,8 @@ export function defineFunction<
   >,
 >(definition: {
   name: string;
+  description: string;
+  examples?: readonly QueryExample[];
   positional: P;
   named?: N;
   validate?(

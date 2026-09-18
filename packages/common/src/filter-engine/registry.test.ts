@@ -2,7 +2,11 @@ import {describe, expect, it} from 'vitest';
 
 import {createFilterEngine, defineFilter, defineFunction, valueType} from './index.ts';
 
-const text = valueType({name: 'text', decode: value => value.value});
+const text = valueType({
+  name: 'text',
+  description: 'Text value.',
+  decode: value => value.value,
+});
 const boolean = {
   all: () => true,
   and: (values: boolean[]) => values.every(Boolean),
@@ -11,7 +15,8 @@ const boolean = {
 };
 const present = defineFilter({
   name: 'present',
-  positional: [{name: 'property', type: text}],
+  description: 'Check property presence.',
+  positional: [{name: 'property', description: 'Property to check.', type: text}],
   validate: ([argument], registry) =>
     argument?.value.type === 'string' &&
     !registry.filters.get(argument.value.value)?.presence
@@ -22,6 +27,7 @@ const present = defineFilter({
 });
 const property = defineFunction({
   name: 'property',
+  description: 'Select the value property.',
   positional: [],
   returns: text,
   validate: (_args, registry) =>
@@ -35,6 +41,7 @@ function engine(invert: boolean) {
       present,
       defineFilter({
         name: 'value',
+        description: 'Value with presence support.',
         positional: [],
         compile: (_args, context: boolean) => context,
         presence: (context: boolean) => (invert ? !context : context),
