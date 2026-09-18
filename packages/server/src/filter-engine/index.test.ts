@@ -42,14 +42,14 @@ describe('Places SQL predicates', () => {
     'point(0, 0), point(0, -91)',
     'point(0, 0)',
     'point(0, -10), point(1, 10)',
-  ])('rejects invalid rect arguments: %s', async arguments_ => {
-    await expect(compile(`location[rect(${arguments_})]`)).rejects.toThrow(SearchError);
+  ])('rejects invalid rect arguments: %s', async args => {
+    await expect(compile(`location[rect(${args})]`)).rejects.toThrow(SearchError);
   });
 
   it.each(['point(-180, 90), point(180, -90)', 'point(0, 0), point(0, 0)'])(
     'accepts full-world and zero-size rectangles: %s',
-    async arguments_ => {
-      await expect(compile(`location[rect(${arguments_})]`)).resolves.toBeDefined();
+    async args => {
+      await expect(compile(`location[rect(${args})]`)).resolves.toBeDefined();
     },
   );
 
@@ -85,8 +85,8 @@ describe('Places SQL predicates', () => {
     'point(0, 0), 1yd',
     'point(0, 0), NaNkm',
     '" ", 1mi',
-  ])('rejects invalid radius arguments: %s', arguments_ => {
-    expect(() => placeFilterEngine.prepare(`location[radius(${arguments_})]`)).toThrow(
+  ])('rejects invalid radius arguments: %s', args => {
+    expect(() => placeFilterEngine.prepare(`location[radius(${args})]`)).toThrow(
       SearchError,
     );
   });

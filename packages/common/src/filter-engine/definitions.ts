@@ -64,7 +64,7 @@ export interface Signature<Context = unknown> {
    * Cross-argument constraints run before any asynchronous resolution.
    */
   validate?(
-    arguments_: readonly Argument[],
+    args: readonly Argument[],
     registry: FilterRegistry<unknown, Context>,
   ): string | undefined;
 }
@@ -108,7 +108,7 @@ export interface FilterDefinition<Predicate, Context> extends Signature<Context>
   description: string;
   examples?: readonly QueryExample[];
   compile(
-    arguments_: RuntimeArguments,
+    args: RuntimeArguments,
     context: Context,
     registry: FilterRegistry<Predicate, Context>,
   ): Predicate;
@@ -120,7 +120,7 @@ export interface FunctionDefinition<Context> extends Signature<Context> {
   description: string;
   examples?: readonly QueryExample[];
   returns: ValueType<unknown, Context>;
-  resolve(arguments_: RuntimeArguments, context: Context): unknown | Promise<unknown>;
+  resolve(args: RuntimeArguments, context: Context): unknown | Promise<unknown>;
 }
 
 /**
@@ -141,11 +141,11 @@ export function defineFilter<
   positional: P;
   named?: N;
   validate?(
-    arguments_: readonly Argument[],
+    args: readonly Argument[],
     registry: FilterRegistry<unknown, Context>,
   ): string | undefined;
   compile(
-    arguments_: ResolvedArguments<{positional: P; named: N}>,
+    args: ResolvedArguments<{positional: P; named: N}>,
     context: Context,
     registry: FilterRegistry<Predicate, Context>,
   ): Predicate;
@@ -169,12 +169,12 @@ export function defineFunction<
   positional: P;
   named?: N;
   validate?(
-    arguments_: readonly Argument[],
+    args: readonly Argument[],
     registry: FilterRegistry<unknown, Context>,
   ): string | undefined;
   returns: ValueType<T, Context, unknown>;
   resolve(
-    arguments_: ResolvedArguments<{positional: P; named: N}>,
+    args: ResolvedArguments<{positional: P; named: N}>,
     context: Context,
   ): T | Promise<T>;
 }): FunctionDefinition<Context> {

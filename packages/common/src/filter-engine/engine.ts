@@ -317,7 +317,7 @@ export class FilterEngine<Predicate, Context> {
     }
 
     return async context => {
-      const arguments_ = await Promise.all(
+      const resolvedArgs = await Promise.all(
         plans.map(async ({argument, resolve}) => ({
           value: await resolve(context),
           operator: argument.operator,
@@ -325,9 +325,9 @@ export class FilterEngine<Predicate, Context> {
         })),
       );
       return {
-        positional: arguments_.filter(argument => argument.source.name === null),
+        positional: resolvedArgs.filter(argument => argument.source.name === null),
         named: Object.fromEntries(
-          arguments_
+          resolvedArgs
             .filter(argument => argument.source.name !== null)
             .map(argument => [argument.source.name!, argument]),
         ),
