@@ -10,6 +10,16 @@ properties use camelCase and PostgreSQL columns use snake_case.
 - `updated_at` is maintained by Drizzle's `$onUpdate` for Drizzle updates. Direct
   SQL writers must set it explicitly.
 
+## Weekly hours and sync
+
+`places.time_zone` stores the IANA time zone. `hours_weekly_open` is a nullable
+`int4multirange`, exposed as pairs of minute offsets from Sunday midnight.
+A check constraint bounds intervals to `[0,10080)` and a GiST index supports
+containment. Null means unknown; the empty multirange means known closed.
+`business_status` stores the provider's closure status separately from hours.
+`last_sync` advances after each successful Google refresh, including unchanged
+results. Failed refreshes preserve the previous snapshot.
+
 ## PostGIS
 
 Coordinates use `geography(Point, 4326)` and a GiST index. The custom type accepts

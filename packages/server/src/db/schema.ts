@@ -18,6 +18,16 @@ const geographyPoint = customType<{data: string; driverData: string}>({
   dataType: () => 'geography(Point, 4326)',
 });
 
+const weeklyHours = customType<{data: Array<[number, number]>; driverData: string}>({
+  dataType: () => 'int4multirange',
+  toDriver: ranges => `{${ranges.map(([start, end]) => `[${start},${end})`).join(',')}}`,
+  fromDriver: value =>
+    [...value.matchAll(/\[(\d+),(\d+)\)/g)].map(match => [
+      Number(match[1]),
+      Number(match[2]),
+    ]),
+});
+
 const createdAt = () =>
   timestamp('created_at', {withTimezone: true}).defaultNow().notNull();
 
@@ -38,10 +48,21 @@ export const places = pgTable(
     googleMapsUrl: text('google_maps_url'),
     coordinates: geographyPoint('coordinates').notNull(),
     userNote: text('user_note'),
+    timeZone: text('time_zone'),
+    hoursWeeklyOpen: weeklyHours('hours_weekly_open'),
+    businessStatus: text('business_status'),
+    lastSync: timestamp('last_sync', {withTimezone: true}),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
-  table => [index('places_coordinates_idx').using('gist', table.coordinates)],
+  table => [
+    index('places_coordinates_idx').using('gist', table.coordinates),
+    index('places_hours_weekly_open_idx').using('gist', table.hoursWeeklyOpen),
+    check(
+      'places_hours_weekly_open_bounds',
+      sql`${table.hoursWeeklyOpen} <@ '{[0,10080)}'::int4multirange`,
+    ),
+  ],
 );
 
 export const tags = pgTable(

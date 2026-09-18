@@ -11,6 +11,10 @@ export const place = z.object({
   googleMapsUrl: z.string().nullable(),
   coordinates: z.object({latitude: z.number(), longitude: z.number()}),
   userNote: z.string().nullable(),
+  timeZone: z.string().nullable(),
+  hoursWeeklyOpen: z.array(z.tuple([z.number().int(), z.number().int()])).nullable(),
+  businessStatus: z.string().nullable(),
+  lastSync: z.date().nullable(),
   createdAt: z.date(),
   updatedAt: z.date(),
 });
