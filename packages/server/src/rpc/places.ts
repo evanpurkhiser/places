@@ -1,10 +1,12 @@
 import {implement, ORPCError} from '@orpc/server';
 import {contract} from '@places/common/contract';
+import {SearchError} from '@places/common/search';
 import {and, desc, eq, getTableColumns, or, sql} from 'drizzle-orm';
 import {z} from 'zod';
 
 import type {Database} from '../db/index.ts';
 import {places, placeTags, tags} from '../db/schema.ts';
+import {compilePlaceQuery} from '../filter-engine/index.ts';
 import {enqueueImport, getImportStatus} from '../imports/index.ts';
 
 import type {Context} from './context.ts';
@@ -45,7 +47,17 @@ export const placeRouter = api.router({
       return {placeId: input.placeId, tagId, removed: removed.length > 0};
     }),
   ),
-  list: api.list.handler(async ({context: {db}}) => {
+  list: api.list.handler(async ({input, context: {db}}) => {
+    const predicate = await compilePlaceQuery(input?.query ?? '', {db}).catch(error => {
+      if (error instanceof SearchError) {
+        throw new ORPCError('BAD_REQUEST', {
+          message: error.message,
+          data: {diagnostics: error.diagnostics},
+        });
+      }
+
+      throw error;
+    });
     const rows = await db
       .select({
         ...getTableColumns(places),
@@ -53,6 +65,7 @@ export const placeRouter = api.router({
         longitude: sql<number>`ST_X(${places.coordinates}::geometry)`,
       })
       .from(places)
+      .where(predicate)
       .orderBy(desc(places.createdAt), desc(places.id));
 
     return rows.map(({latitude, longitude, ...place}) => ({

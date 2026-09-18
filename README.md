@@ -140,6 +140,54 @@ The initial listing returns all saved places newest first, with named
 `coordinates.latitude` and `coordinates.longitude`. Provider storage and map
 display constraints are documented in [place metadata](design/place-metadata.md).
 
+## Search and filter engine
+
+Filter saved places through the API or CLI:
+
+```sh
+pnpm places list --query 'tag[favorite] AND !tag[visited]'
+pnpm places list --query 'tag[laptop-friendly, notes:outlet]'
+pnpm places list --query '(name[coffee] OR tag[type:bakery]) !has[notes]'
+```
+
+Supported filters are `tag`, `name`, `address`, `notes`, and `has`.
+Tags support exact
+names and wildcard patterns; `notes:` within a tag predicate matches that same
+assignment's note. Exact unknown tags return errors, including under negation.
+`has` supports filters that register a presence check: `tag`, `name`, `address`,
+and `notes`.
+
+Listing accepts an optional query and returns the existing array of places, newest
+first. Query failures print JSON diagnostics with source locations to stderr and
+exit nonzero. Location, hours, saved-query, and date filters require future server
+implementations.
+
+The shared package exports a PEG-based query parser at `@places/common/search`:
+
+```ts
+import {parseQuery} from '@places/common/search';
+
+const query = parseQuery(
+  'tag[laptop-friendly, notes:outlet] location[radius(@home, 1mi)]',
+);
+```
+
+The parser returns a syntax tree with source locations. The filter engine's
+`prepare(input)` validates the complete query against registered filter and
+function signatures. Registrations declare accepted argument types, operators,
+and constraints. Syntax and semantic errors throw `SearchError` with structured
+diagnostics.
+
+`@places/common/filter-engine` owns validation and resolution; server registrations
+produce Drizzle SQL predicates. See
+[Search grammar](design/search-grammar.md) for the language and
+[Filter engine](design/filter-engine.md) for the registration and execution layers.
+
+After editing `packages/common/src/search/grammar.pegjs`, run
+`pnpm --filter @places/common generate:search`. The generated parser ships with the sources;
+tests check that it matches the grammar. Generation uses
+[Peggy](https://peggyjs.org/documentation.html).
+
 ## Checks
 
 ```sh
@@ -152,8 +200,8 @@ pnpm test
 Database integration tests run when `TEST_DATABASE_URL` points to a PostgreSQL
 instance with PostGIS available. They create and drop a separate randomly named
 database; the supplied role needs database creation and extension permissions.
-Use a development instance. CLI integration tests bind `127.0.0.1:15188` and
-`127.0.0.1:15189`.
+Use a development instance. CLI integration tests bind `127.0.0.1` on ports
+15188, 15189, and 15190.
 
 ```sh
 TEST_DATABASE_URL=postgres://places:places@127.0.0.1:5432/places pnpm test

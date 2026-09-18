@@ -1,5 +1,7 @@
 import {message} from '@optique/core/message';
 import {run} from '@optique/run';
+import {ORPCError} from '@orpc/client';
+import {queryErrorData} from '@places/common/contract/place';
 
 import {createClient, execute, parser} from './cli.ts';
 
@@ -16,6 +18,17 @@ try {
 
   console.log(JSON.stringify(result, null, 2));
 } catch (error) {
-  console.error(error instanceof Error ? error.message : 'Request failed');
+  const queryError =
+    error instanceof ORPCError && error.code === 'BAD_REQUEST'
+      ? queryErrorData.safeParse(error.data)
+      : undefined;
+
+  console.error(
+    error instanceof ORPCError && queryError?.success
+      ? JSON.stringify({message: error.message, ...queryError.data}, null, 2)
+      : error instanceof Error
+        ? error.message
+        : 'Request failed',
+  );
   process.exitCode = 1;
 }

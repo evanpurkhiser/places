@@ -291,3 +291,32 @@ describe('place tagging arguments', () => {
     expect(parse(parser, args)).toMatchObject({success: false});
   });
 });
+
+describe('place query arguments', () => {
+  it.each([undefined, '', '  tag[type:cafe] OR notes["Good Coffee"]\n'])(
+    'forwards the query without normalization: %j',
+    query => {
+      const result = parse(parser, [
+        'list',
+        ...(query === undefined ? [] : ['--query', query]),
+      ]);
+
+      if (!result.success) {
+        throw new Error('Expected valid arguments');
+      }
+
+      const places = {list: vi.fn()};
+      execute(result.value, {places} as unknown as Client);
+
+      if (query === undefined) {
+        expect(places.list).toHaveBeenCalledWith();
+      } else {
+        expect(places.list).toHaveBeenCalledWith({query});
+      }
+    },
+  );
+
+  it('requires a query value', () => {
+    expect(parse(parser, ['list', '--query'])).toMatchObject({success: false});
+  });
+});

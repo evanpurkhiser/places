@@ -3,11 +3,9 @@
 ## Goal
 
 Execute the search language through registered filters and functions, with clean
-boundaries between syntax, meaning, resolution, and database queries. The shared
-engine supplies registration, preparation, resolution, compilation, and capability
-descriptions. Places registrations provide SQL predicates for name, address, and
-notes, plus tag membership and assignment-note constraints. API/CLI integration
-follows separately.
+boundaries between syntax, meaning, resolution, and database queries. The first
+slice supports text and tag retrieval through `places list --query`. Geographic
+and opening-hours execution follow separately.
 
 The [search grammar](search-grammar.md) defines the language. Its parser produces
 source-located syntax nodes for generic filters, functions, arguments, values,
@@ -70,13 +68,15 @@ A filter declares its arguments and compiles resolved values to a predicate.
 Filters may resolve application data before compilation, such as looking up exact
 tag names. `tag`, `notes`, `has`, and `location` use the same registration mechanism.
 
-A filter may expose a presence predicate that another registration can discover
+A filter may expose a presence predicate. `has` discovers these capabilities
 through the registry. Validation handlers receive the registry as their second
 argument; compilation handlers receive application context as their second
 argument and the registry as their third. The registry exposes a read-only map of
-the invoking engine's filters.
+the invoking engine's filters. `has` validates literal property names during
+preparation and checks resolved names during compilation.
 
-Each registration owns the meaning of presence for its value.
+The `notes` implementation owns the meaning of “notes
+exist”; the engine does not maintain a separate switch over field names.
 
 The query runner owns selected columns, ordering, and pagination. Filter handlers
 own predicates and any correlated subqueries needed to express membership.
@@ -116,17 +116,9 @@ are programming errors detected when building the engine. User queries produce
 structured diagnostics. Known language features without executable registrations
 must fail explicitly rather than silently broadening the selection.
 
-## Places text filters
+## Initial Places implementations
 
-`name`, `address`, and `notes` match saved place fields. Default text matching is
-case-insensitive substring matching; `=` matches the complete literal field.
-Unescaped stars provide wildcard matching. SQL `%`, `_`, and escape characters
-remain literal user data, and every value is parameterized.
-
-Absent or empty fields fail positive matches. Negation includes places whose
-field is absent. Registrations expose presence handlers for other filters to use.
-
-## Places tag filter
+### Tag
 
 ```text
 tag[favorite]
@@ -145,14 +137,21 @@ are errors, including under negation. Wildcard patterns may match zero definitio
 Default tag matching covers the full name. `=` performs literal matching. Use
 `!` around a predicate for exclusion, including predicates with note constraints.
 
-## Presence filtering
+### Text and presence
 
-`has[notes]` matches places with a nonempty general note. `!has[notes]` matches
-places without one. `has[tag]` checks whether any tag assignment exists.
+```text
+notes[espresso]
+name[="La Cabra"]
+!has[notes]
+```
 
-The `has` registration discovers presence handlers through the invoking engine's
-registry. It validates literal property names during preparation and resolved
-names during compilation. The selected registration defines presence semantics.
+Default text matching is case-insensitive substring matching. Explicit equality
+matches the complete field. Unescaped stars provide wildcard matching; SQL `%`,
+`_`, and escape characters remain literal user data. Every value is parameterized.
+
+Absent or empty notes fail positive note matches. Negation includes places whose
+notes are absent. `has[notes]` uses the notes registration's presence predicate.
+`has[tag]` tests whether any tag assignment exists.
 
 ## Semantic validation
 
@@ -168,7 +167,14 @@ preparation.
 
 ## Scope and verification
 
-Test-only functions demonstrate nested typed composition and asynchronous
-resolution. Verify registration invariants, full-tree validation before resolution,
-nested function compatibility, Boolean composition, registry isolation, and
-serializable capability descriptions.
+The initial release implements the engine, tag and text filters, presence checks,
+and API/CLI search. Location, hours, saved queries, geocoding, and routing are
+future executable registrations. Test-only functions demonstrate nested typed
+composition and asynchronous resolution without inventing a production function
+that has no current use.
+
+Verify parser-to-engine behavior, registration invariants, full-tree validation
+before resolution, nested function compatibility, boolean composition, and SQL
+parameterization. Database tests verify actual result sets for wildcard escaping,
+null notes, tag-note correlation, unknown tags, and whole-place negation. API and
+CLI tests exercise query forwarding and diagnostic transport.

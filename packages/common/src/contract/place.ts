@@ -34,6 +34,22 @@ export const importTag = z.object({
 });
 export type ImportTag = z.infer<typeof importTag>;
 
+const position = z.object({
+  offset: z.number().int().nonnegative(),
+  line: z.number().int().positive(),
+  column: z.number().int().positive(),
+});
+
+export const queryErrorData = z.object({
+  diagnostics: z.array(
+    z.object({
+      code: z.string(),
+      message: z.string(),
+      location: z.object({start: position, end: position}),
+    }),
+  ),
+});
+
 const assignmentAction = oc.errors({NOT_FOUND: {message: 'Place or tag not found'}});
 
 export const placeContract = {
@@ -43,7 +59,10 @@ export const placeContract = {
   untag: assignmentAction
     .input(assignmentInput)
     .output(placeTag.pick({placeId: true, tagId: true}).extend({removed: z.boolean()})),
-  list: oc.output(z.array(place)),
+  list: oc
+    .errors({BAD_REQUEST: {message: 'Invalid place query.', data: queryErrorData}})
+    .input(z.object({query: z.string().optional()}).optional())
+    .output(z.array(place)),
   import: oc
     .errors({
       BAD_REQUEST: {message: 'Unsupported or invalid import input.'},

@@ -3,10 +3,10 @@
 ## Purpose and status
 
 Design for querying saved places through the API and CLI. The shared PEG parser
-and typed syntax tree are implemented in `packages/common/src/search`. Filter
-execution through the API and CLI is planned. The examples below describe the
-intended query language. The first consumer will be an agent managing the
-collection through the CLI.
+and typed syntax tree are implemented in `packages/common/src/search`. The filter
+engine validates and executes registered tag, text, and presence predicates
+through the API and CLI. Geographic, hours, and saved-query execution remain
+planned. The first consumer is an agent managing the collection through the CLI.
 
 Queries select places. Inspection and mutation use the returned place IDs. Sorting,
 pagination, and output selection are separate API inputs and CLI options.
@@ -431,15 +431,27 @@ const query = parseQuery(
 );
 ```
 
+The filter engine's `prepare(input)` parses syntax and validates it against the
+engine's registrations. Registrations define argument types, positional and named
+parameters, optional parameters, allowed operators, reference support, and custom
+constraints. Functions declare return types, which determine where they can be
+used. Unknown filters or functions, incompatible types, invalid values, and
+argument errors produce structured diagnostics with source locations before
+asynchronous resolution begins.
+
 Nodes preserve source text and offsets, line and column positions, explicit
 groups, operators, quoted strings, and references. Scalar values remain decoded
-strings for application-defined semantic validation. Unescaped wildcard positions are retained separately
+strings. Registered value types decode literals into their semantic values
+during engine preparation. Unescaped wildcard positions are retained separately
 from literal stars. Equality operators interpret all stars literally. Filter,
 function, and parameter names are case-sensitive; boolean keywords are case-insensitive.
 
-Syntax failures throw `SearchError` with a `diagnostics` array. Invalid syntax is
-rejected as a complete query. Filter names, function signatures, and value semantics
-will be validated by the execution layer.
+The executable registrations currently support tag, text, and presence
+filters. Geographic, hours, date, and saved-query examples describe planned
+registrations. They can be parsed as syntax; execution requires an implementation.
+
+Syntax and validation failures throw `SearchError` with a `diagnostics` array.
+Invalid syntax is rejected as a complete query.
 
 The generated ES module is included for direct Node and browser imports. Peggy
 is a development dependency; generation runs through
@@ -449,9 +461,9 @@ also verify that the generated module matches the grammar.
 
 ## Execution and agent tooling
 
-The planned filter engine will provide registration, typed function composition,
-resolution, and SQL compilation. Application implementations will live in server
-modules, separate from the PEG grammar.
+The [filter engine](filter-engine.md) defines registration, typed function
+composition, resolution, and SQL compilation layers. Application implementations
+live in server modules, separate from the PEG grammar and shared engine.
 
 1. Parse the complete query into a typed expression tree with source spans.
 2. Validate fields, functions, operators, and values.

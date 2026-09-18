@@ -38,6 +38,14 @@ records resolved dependency versions.
 - `packages/common`: shared API contracts, Zod schemas, and inferred types.
 - `design`: product and technical documents, plus the map interaction prototype.
 
+## Filter engine
+
+The search grammar produces a source-located syntax tree. A shared filter engine
+prepares and resolves registered filters and functions, then composes predicates
+through host-provided boolean operations. Server registrations own Drizzle SQL
+and schema imports. See [Filter engine](filter-engine.md) for the architecture and
+initial retrieval scope.
+
 ## Schema and API direction
 
 Use shared Zod schemas to describe API inputs and outputs. Infer TypeScript types

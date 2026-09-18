@@ -119,9 +119,18 @@ export const parser = merge(
       }),
       {description: message`Remove a tag and its assignment note from a saved place.`},
     ),
-    command('list', object({action: constant('places-list')}), {
-      description: message`List saved places, newest first.`,
-    }),
+    command(
+      'list',
+      object({
+        action: constant('places-list'),
+        query: optional(
+          option('--query', string({metavar: 'QUERY'}), {
+            description: message`Filter places using tags, notes, and boolean expressions.`,
+          }),
+        ),
+      }),
+      {description: message`List saved places, newest first.`},
+    ),
     command(
       'import-status',
       object({
@@ -185,7 +194,9 @@ export function execute(args: InferValue<typeof parser>, client: Client) {
     case 'place-untag':
       return client.places.untag({placeId: args.placeId, tag: args.tag});
     case 'places-list':
-      return client.places.list();
+      return args.query === undefined
+        ? client.places.list()
+        : client.places.list({query: args.query});
     case 'import-status':
       return client.places.importStatus({jobId: args.jobId});
     case 'list':
