@@ -145,6 +145,15 @@ are errors, including under negation. Wildcard patterns may match zero definitio
 Default tag matching covers the full name. `=` performs literal matching. Use
 `!` around a predicate for exclusion, including predicates with note constraints.
 
+## Presence filtering
+
+`has[notes]` matches places with a nonempty general note. `!has[notes]` matches
+places without one. `has[tag]` checks whether any tag assignment exists.
+
+The `has` registration discovers presence handlers through the invoking engine's
+registry. It validates literal property names during preparation and resolved
+names during compilation. The selected registration defines presence semantics.
+
 ## Semantic validation
 
 Registrations define the accepted query surface and its implementations. The PEG

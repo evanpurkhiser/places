@@ -98,12 +98,14 @@ describe.skipIf(!testUrl)('filter engine with PostgreSQL', () => {
     expect(await names('notes[""]')).toEqual(['Cafe']);
     expect(await names('notes[=""]')).toEqual([]);
     expect(await names('!notes[*]')).toEqual(['Bar', 'Empty']);
+    expect(await names('!has[notes]')).toEqual(['Bar', 'Empty']);
     expect(await names('!notes[=missing]')).toEqual(['Bar', 'Cafe', 'Empty']);
   });
 
   it('keeps SQL wildcards literal and scopes notes to the place', async () => {
     expect(await names('notes["%_good"]')).toEqual(['Cafe']);
     expect(await names('notes[outlet]')).toEqual([]);
+    expect(await names('!has[tag]')).toEqual(['Empty']);
   });
   it('distinguishes literal pattern characters from wildcard matches in PostgreSQL', async () => {
     const fixtures = [

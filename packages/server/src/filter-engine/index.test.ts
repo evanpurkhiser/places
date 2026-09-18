@@ -89,10 +89,21 @@ describe('Places SQL predicates', () => {
     expect((await compile('notes[="*outlet*"]')).params).toEqual(['*outlet*']);
   });
 
-  it('rejects unsupported filters, functions, and operators', async () => {
+  it('supports boolean composition, presence hooks', async () => {
+    const result = await compile('(tag[type:cafe] OR !has[tag]) AND !has[notes]');
+
+    expect(result.sql).toContain(' or ');
+    expect(result.sql).toContain(' and ');
+    expect(result.sql).toContain('not (');
+    expect(result.sql).toContain('"places"."user_note" is not null');
+    expect((await compile('')).sql).toBe('true');
+  });
+
+  it('rejects unsupported filters, functions, presence, and operators', async () => {
     for (const query of [
       'location[radius(@home, 1mi)]',
       'notes[nope()]',
+      'has[hours]',
       'notes[>a]',
       'tag[type:cafe, other:x]',
     ]) {
