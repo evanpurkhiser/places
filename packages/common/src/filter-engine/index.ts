@@ -14,3 +14,5 @@ export type {
   Signature,
   ValueType,
 } from './definitions.ts';
+export {createFilterEngine} from './engine.ts';
+export type {EngineOptions, PreparedQuery} from './engine.ts';
