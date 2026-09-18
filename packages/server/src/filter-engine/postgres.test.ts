@@ -134,6 +134,82 @@ describe.skipIf(!testUrl)('filter engine with PostgreSQL', () => {
     expect(await names('!tag[type:cafe, notes:outlet]')).toEqual(['Cafe', 'Empty']);
   });
 
+  it('matches rectangle interiors and edges, wrapped bounds, and degenerate bounds', async () => {
+    const fixtures = [
+      ['RectCenter', 0, 0],
+      ['RectNorthwest', -10, 10],
+      ['RectSoutheast', 10, -10],
+      ['RectNorth', 0, 10],
+      ['RectSouth', 0, -10],
+      ['RectWest', -10, 0],
+      ['RectEast', 10, 0],
+      ['RectOutside', 10.001, 0],
+      ['RectAbove', 0, 10.001],
+      ['RectWrappedEast', 175, 0],
+      ['RectWrappedWest', -175, 0],
+    ] as const;
+    const inserted = await db
+      .insert(places)
+      .values(
+        fixtures.map(([name, lng, lat]) => ({
+          googlePlaceId: randomUUID(),
+          name,
+          formattedAddress: '',
+          coordinates: `SRID=4326;POINT(${lng} ${lat})`,
+        })),
+      )
+      .returning({id: places.id});
+    const rectangle = 'location[rect(point(-10, 10), point(10, -10))]';
+
+    try {
+      expect(await names(rectangle)).toEqual([
+        'RectCenter',
+        'RectEast',
+        'RectNorth',
+        'RectNorthwest',
+        'RectSouth',
+        'RectSoutheast',
+        'RectWest',
+      ]);
+      expect(await names(`name[Rect*] !${rectangle}`)).toEqual([
+        'RectAbove',
+        'RectOutside',
+        'RectWrappedEast',
+        'RectWrappedWest',
+      ]);
+      expect(await names('location[rect(point(170, 10), point(-170, -10))]')).toEqual([
+        'RectWrappedEast',
+        'RectWrappedWest',
+      ]);
+      expect(await names('location[rect(point(0, 0), point(0, 0))]')).toEqual([
+        'RectCenter',
+      ]);
+      expect(await names('location[rect(point(0, 10), point(0, -10))]')).toEqual([
+        'RectCenter',
+        'RectNorth',
+        'RectSouth',
+      ]);
+      expect(
+        await names('name[Rect*] location[rect(point(-180, 90), point(180, -90))]'),
+      ).toEqual(fixtures.map(([name]) => name).sort());
+      expect(
+        await names('name[Rect*] location[rect(point(-170, 90), point(170, -90))]'),
+      ).toEqual(
+        fixtures
+          .map(([name]) => name)
+          .filter(name => !name.startsWith('RectWrapped'))
+          .sort(),
+      );
+    } finally {
+      await db.delete(places).where(
+        inArray(
+          places.id,
+          inserted.map(row => row.id),
+        ),
+      );
+    }
+  });
+
   it('treats absent or empty notes as false and negation as their complement', async () => {
     expect(await names('notes[*]')).toEqual(['Cafe']);
     expect(await names('notes[""]')).toEqual(['Cafe']);

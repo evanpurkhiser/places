@@ -14,6 +14,40 @@ async function compile(query: string, names = ['type:cafe', 'type:bar', 'star:*'
 }
 
 describe('Places SQL predicates', () => {
+  it('compiles rectangle bounds as parameterized degree comparisons', async () => {
+    const result = await compile(
+      'name[cafe] location[rect(point(-74.03, 40.76), point(-73.95, 40.70))]',
+    );
+
+    expect(result.params).toEqual(['%cafe%', 40.7, 40.76, -74.03, -73.95]);
+    expect(result.sql).toContain('ST_Y("places"."coordinates"::geometry) between');
+    expect(result.sql).toContain('ST_X("places"."coordinates"::geometry) between');
+  });
+
+  it('compiles antimeridian crossings as either longitude interval', async () => {
+    const result = await compile('location[rect(point(170, 10), point(-170, -10))]');
+
+    expect(result.params).toEqual([-10, 10, 170, -170]);
+    expect(result.sql).toContain('>= $3 or ST_X("places"."coordinates"::geometry) <= $4');
+  });
+
+  it.each([
+    'point(181, 0), point(0, 0)',
+    'point(0, 0), point(0, -91)',
+    'point(0, 0)',
+    '"NYC", point(0, 0)',
+    'point(0, -10), point(1, 10)',
+  ])('rejects invalid rect arguments: %s', async arguments_ => {
+    await expect(compile(`location[rect(${arguments_})]`)).rejects.toThrow(SearchError);
+  });
+
+  it.each(['point(-180, 90), point(180, -90)', 'point(0, 0), point(0, 0)'])(
+    'accepts full-world and zero-size rectangles: %s',
+    async arguments_ => {
+      await expect(compile(`location[rect(${arguments_})]`)).resolves.toBeDefined();
+    },
+  );
+
   it.each([
     ['800m', 800],
     ['1.5km', 1500],

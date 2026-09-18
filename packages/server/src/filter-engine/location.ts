@@ -39,7 +39,7 @@ const geographicPoint = valueType<{longitude: number; latitude: number}>({
 });
 const geographicPredicate = valueType<SQL>({
   name: 'geographic predicate',
-  description: 'A geographic condition produced by radius.',
+  description: 'A geographic condition produced by radius or rect.',
 });
 
 export const point = defineFunction({
@@ -65,6 +65,37 @@ export const radius = defineFunction({
     sql`ST_DWithin(${places.coordinates}, ST_SetSRID(ST_MakePoint(${origin.value.longitude}, ${origin.value.latitude}), 4326)::geography, ${distance.value})`,
 });
 
+export const rect = defineFunction({
+  name: 'rect',
+  description:
+    'Match places inside a longitude/latitude rectangle, including its edges. A west longitude greater than east crosses the antimeridian.',
+  positional: [
+    {name: 'topLeft', description: 'Northwest corner.', type: geographicPoint},
+    {name: 'bottomRight', description: 'Southeast corner.', type: geographicPoint},
+  ],
+  returns: geographicPredicate,
+  resolve: ({positional: [topLeft, bottomRight]}) => {
+    const {longitude: west, latitude: north} = topLeft.value;
+    const {longitude: east, latitude: south} = bottomRight.value;
+
+    if (north < south) {
+      throw new InvalidValueError(
+        'rect topLeft latitude must be at least bottomRight latitude',
+      );
+    }
+
+    // Compare degrees directly so edges follow map bounds, including wide viewports.
+    const lng = sql`ST_X(${places.coordinates}::geometry)`;
+    const lat = sql`ST_Y(${places.coordinates}::geometry)`;
+    const longitudeRange =
+      west > east
+        ? sql`(${lng} >= ${west} or ${lng} <= ${east})`
+        : sql`${lng} between ${west} and ${east}`;
+
+    return sql`(${lat} between ${south} and ${north} and ${longitudeRange})`;
+  },
+});
+
 export const location = defineFilter({
   name: 'location',
   description: 'Match places using a geographic condition.',
@@ -72,6 +103,10 @@ export const location = defineFilter({
     {
       query: 'location[radius(point(-73.985, 40.726), 800m)]',
       description: 'Places within 800 meters of the given point.',
+    },
+    {
+      query: 'location[rect(point(-74.03, 40.76), point(-73.95, 40.70))]',
+      description: 'Places inside the given map bounds, including edges.',
     },
   ],
   positional: [
