@@ -3,5 +3,5 @@ import {defineConfig} from 'oxlint';
 
 export default defineConfig({
   extends: [common],
-  ignorePatterns: ['design/map-prototype/**'],
+  ignorePatterns: ['design/map-prototype/**', 'packages/common/src/search/generated.js'],
 });

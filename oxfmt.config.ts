@@ -1,4 +1,7 @@
 import {oxfmt} from '@evanpurkhiser/oxc-config/oxfmt';
 import {defineConfig} from 'oxfmt';
 
-export default defineConfig({...oxfmt, ignorePatterns: ['design/map-prototype/**']});
+export default defineConfig({
+  ...oxfmt,
+  ignorePatterns: ['design/map-prototype/**', 'packages/common/src/search/generated.js'],
+});

@@ -7,13 +7,20 @@
   "exports": {
     "./contract": "./src/contract/index.ts",
     "./contract/tag": "./src/contract/tag.ts",
-    "./contract/place": "./src/contract/place.ts"
+    "./contract/place": "./src/contract/place.ts",
+    "./search": "./src/search/index.ts"
   },
   "scripts": {
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "generate:search": "node scripts/generate-search.ts",
+    "check:search": "node scripts/generate-search.ts --check"
   },
   "dependencies": {
     "@orpc/contract": "1.15.1",
     "zod": "4.6.5"
+  },
+  "devDependencies": {
+    "@types/node": "^24.13.4",
+    "peggy": "5.0.6"
   }
 }

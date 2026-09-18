@@ -85,6 +85,9 @@ Outcome: daily capture is low-friction.
 
 ### V1.5 - Filter Foundations
 
+- Define a shared query language for API and CLI retrieval. See
+  [Search grammar](search-grammar.md) for boolean expressions, explicit tag filters,
+  strings and wildcards, geographic functions, and opening-hours predicates.
 - Add structured tag support and basic filter primitives.
 - Support combinations like type/tag OR queries.
 - Support context hides (for example hide food/drink).
