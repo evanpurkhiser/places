@@ -7,25 +7,38 @@ export class InvalidValueError extends Error {}
 
 /**
  * A semantic value type. Decoding is synchronous; resolution may use external data.
+ * Decoded literals may differ from T; functions, references, and consumers use T.
  */
-export interface ValueType<T, Context = unknown> {
+export interface ValueType<T, Context = unknown, Decoded = T> {
   name: string;
   description: string;
-  decode?(literal: StringValue): T;
+  decode?(literal: StringValue): Decoded;
   /**
    * Resolves values from literals, functions, and references before their consumer runs.
    */
-  resolve?(value: T, context: Context, source: Argument): T | Promise<T>;
+  resolve?(value: Decoded | T, context: Context, source: Argument): T | Promise<T>;
   resolveReference?(name: string, context: Context): T | Promise<T>;
 }
 
-export function valueType<T, Context = unknown>(definition: ValueType<T, Context>) {
+export function valueType<T, Context = unknown>(
+  definition: ValueType<T, Context>,
+): ValueType<T, Context>;
+export function valueType<T, Context, Decoded>(
+  definition: ValueType<T, Context, Decoded> &
+    ([Decoded] extends [T]
+      ? unknown
+      : {resolve: NonNullable<ValueType<T, Context, Decoded>['resolve']>}),
+): ValueType<T, Context, Decoded>;
+export function valueType<T, Context, Decoded>(
+  definition: ValueType<T, Context, Decoded>,
+): ValueType<T, Context, Decoded> {
   return definition;
 }
 
 export interface Parameter<T = unknown, Context = unknown> {
   description: string;
-  type: ValueType<T, Context>;
+  // Decoding is internal to the value type; consumers receive its resolved value.
+  type: ValueType<T, Context, unknown>;
   operators?: readonly Operator[];
   optional?: boolean;
 }
@@ -159,7 +172,7 @@ export function defineFunction<
     arguments_: readonly Argument[],
     registry: FilterRegistry<unknown, Context>,
   ): string | undefined;
-  returns: ValueType<T, Context>;
+  returns: ValueType<T, Context, unknown>;
   resolve(
     arguments_: ResolvedArguments<{positional: P; named: N}>,
     context: Context,
