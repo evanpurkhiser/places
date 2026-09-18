@@ -30,7 +30,12 @@ it('serves serializable documentation for the registered query capabilities', as
     'has',
     'location',
   ]);
-  expect(documentation.functions.map(fn => fn.name)).toEqual(['point', 'radius', 'rect']);
+  expect(documentation.functions.map(fn => fn.name)).toEqual([
+    'point',
+    'radius',
+    'rect',
+    'sector',
+  ]);
 
   for (const filter of documentation.filters) {
     expect(filter.description).not.toBe('');
