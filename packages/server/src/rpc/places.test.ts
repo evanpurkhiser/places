@@ -27,6 +27,12 @@ const details = {
   formattedAddress: 'New York, NY',
   googleMapsUri: 'https://maps.google.com/?q=place_id:ChIJtest',
   location: {latitude: 40.72, longitude: -73.98},
+  timeZone: 'America/New_York',
+  hoursWeeklyOpen: [
+    [1980, 2160],
+    [2220, 2460],
+  ] as Array<[number, number]>,
+  businessStatus: 'OPERATIONAL',
 };
 
 describe.skipIf(!testUrl)('place import with PostgreSQL and pg-boss', () => {
@@ -39,7 +45,10 @@ describe.skipIf(!testUrl)('place import with PostgreSQL and pg-boss', () => {
   const db = createDatabase(url.href);
   const jobs = new PgBoss(url.href);
   const config = configSchema.parse({database: {url: url.href}});
-  const google = {...createGooglePlaces(), get: vi.fn().mockResolvedValue(details)};
+  const google = {
+    ...createGooglePlaces(),
+    getMetadata: vi.fn().mockResolvedValue(details),
+  };
   const app = createApp({db, jobs, google, config});
   const client: Client = createORPCClient(
     new RPCLink({
@@ -61,7 +70,7 @@ describe.skipIf(!testUrl)('place import with PostgreSQL and pg-boss', () => {
   beforeEach(async () => {
     await db.delete(places);
     await db.delete(tags);
-    google.get.mockReset().mockResolvedValue(details);
+    google.getMetadata.mockReset().mockResolvedValue(details);
   });
 
   afterAll(async () => {
@@ -99,8 +108,34 @@ describe.skipIf(!testUrl)('place import with PostgreSQL and pg-boss', () => {
       formattedAddress: 'New York, NY',
       googleMapsUrl: details.googleMapsUri,
       coordinates: details.location,
+      timeZone: details.timeZone,
+      hoursWeeklyOpen: details.hoursWeeklyOpen,
+      businessStatus: details.businessStatus,
+      lastSync: expect.any(Date),
     });
   }, 20000);
+
+  it('imports missing hours and refreshes canonical IDs without duplicate places', async () => {
+    google.getMetadata.mockResolvedValue({
+      ...details,
+      id: 'canonical',
+      timeZone: null,
+      hoursWeeklyOpen: null,
+      businessStatus: null,
+    });
+    const first = await importPlace(db, google, 'oldId');
+    const repeated = await importPlace(db, google, 'anotherOldId');
+    expect(repeated).toEqual(first);
+    const saved = await client.places.list();
+    expect(saved).toHaveLength(1);
+    expect(saved[0]).toMatchObject({
+      googlePlaceId: 'canonical',
+      timeZone: null,
+      hoursWeeklyOpen: null,
+      businessStatus: null,
+      lastSync: expect.any(Date),
+    });
+  });
 
   it('reuses existing places and handles concurrent imports without duplicate rows', async () => {
     const [first, second] = await Promise.all([
@@ -110,13 +145,13 @@ describe.skipIf(!testUrl)('place import with PostgreSQL and pg-boss', () => {
 
     expect(first).toEqual(second);
     expect(await client.places.list()).toHaveLength(1);
-    google.get.mockClear();
+    google.getMetadata.mockClear();
 
     const submitted = await client.places.import({input: 'gmaps:ChIJtest'});
 
     const completed = await waitForState(submitted.jobId, 'completed');
     expect(completed.placeIds).toEqual(first.placeIds);
-    expect(google.get).not.toHaveBeenCalled();
+    expect(google.getMetadata).not.toHaveBeenCalled();
   }, 20000);
 
   it('resolves names and IDs, deduplicates tags, and adds tags on reimport', async () => {
@@ -132,7 +167,7 @@ describe.skipIf(!testUrl)('place import with PostgreSQL and pg-boss', () => {
       {placeId: result.placeIds[0], tagId: cafe.id},
     ]);
 
-    google.get.mockClear();
+    google.getMetadata.mockClear();
     const repeated = await client.places.import({
       input: 'gmaps:ChIJtest',
       tags: [{tag: cafe.id}, {tag: favorite.id}],
@@ -141,7 +176,7 @@ describe.skipIf(!testUrl)('place import with PostgreSQL and pg-boss', () => {
     await waitForState(repeated.jobId, 'completed');
     const savedTags = await db.select().from(placeTags);
     expect(savedTags.map(row => row.tagId).sort()).toEqual([cafe.id, favorite.id].sort());
-    expect(google.get).not.toHaveBeenCalled();
+    expect(google.getMetadata).not.toHaveBeenCalled();
   }, 20000);
 
   it('applies tag notes, resolves aliases, and preserves, replaces, and clears them', async () => {
@@ -294,16 +329,16 @@ describe.skipIf(!testUrl)('place import with PostgreSQL and pg-boss', () => {
   });
 
   it('retries transient metadata failures and eventually creates the place', async () => {
-    google.get.mockRejectedValueOnce(new Error('temporary failure'));
+    google.getMetadata.mockRejectedValueOnce(new Error('temporary failure'));
     const submitted = await client.places.import({input: 'gmaps:ChIJtest'});
 
     await waitForState(submitted.jobId, 'completed');
-    expect(google.get).toHaveBeenCalledTimes(2);
+    expect(google.getMetadata).toHaveBeenCalledTimes(2);
     expect(await client.places.list()).toHaveLength(1);
   }, 20000);
 
   it('leaves no partial place after permanent metadata failure', async () => {
-    google.get.mockRejectedValue(new Error('provider unavailable'));
+    google.getMetadata.mockRejectedValue(new Error('provider unavailable'));
     const submitted = await client.places.import({input: 'gmaps:ChIJtest'});
     const result = await waitForState(submitted.jobId, 'failed');
 

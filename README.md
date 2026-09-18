@@ -125,8 +125,8 @@ note independently.
 
 Import resolves the input to a Google Place ID in the RPC request and returns a
 job ID and provider type (`gmaps`). Import status returns the resulting place IDs.
-The worker fetches name, formatted address, Maps URL, and coordinates,
-then inserts the complete place. Existing places are reused. Failed attempts
+The worker fetches name, formatted address, Maps URL, coordinates, time zone,
+business status, and weekly hours, then inserts the place with `lastSync` set. Existing places are reused. Failed attempts
 leave no partial place; pg-boss retries three times with backoff. Status comes
 from pg-boss and is temporary (completed jobs are retained for seven days).
 

@@ -40,13 +40,17 @@ async function savePlace(
     return {placeIds: [existing.id]};
   }
 
-  const details = await google.get(googlePlaceId);
+  const details = await google.getMetadata(googlePlaceId);
   const [inserted] = await db
     .insert(places)
     .values({
       googlePlaceId: details.id,
       name: details.displayName.text,
       formattedAddress: details.formattedAddress,
+      timeZone: details.timeZone,
+      hoursWeeklyOpen: details.hoursWeeklyOpen,
+      businessStatus: details.businessStatus,
+      lastSync: new Date(),
       googleMapsUrl: details.googleMapsUri,
       coordinates: `SRID=4326;POINT(${details.location.longitude} ${details.location.latitude})`,
     })
