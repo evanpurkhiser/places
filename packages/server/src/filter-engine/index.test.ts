@@ -2,11 +2,16 @@ import {SearchError} from '@places/common/search';
 import {PgDialect} from 'drizzle-orm/pg-core';
 import {describe, expect, it} from 'vitest';
 
+import {createGooglePlaces} from '../services/google/index.ts';
+
 import {placeFilterEngine} from './index.ts';
 
 const dialect = new PgDialect();
 async function compile(query: string, names = ['type:cafe', 'type:bar', 'star:*']) {
-  const context = {tagExists: (name: string) => Promise.resolve(names.includes(name))};
+  const context = {
+    google: createGooglePlaces(),
+    tagExists: (name: string) => Promise.resolve(names.includes(name)),
+  };
   const prepared = placeFilterEngine.prepare(query);
   const resolved = await placeFilterEngine.resolve(prepared, context);
 

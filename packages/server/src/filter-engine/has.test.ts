@@ -3,6 +3,8 @@ import {sql, type SQL} from 'drizzle-orm';
 import {PgDialect} from 'drizzle-orm/pg-core';
 import {expect, it, vi} from 'vitest';
 
+import {createGooglePlaces} from '../services/google/index.ts';
+
 import type {Context} from './context.ts';
 import {has, property} from './has.ts';
 
@@ -35,7 +37,7 @@ it('uses the invoking engine registry and passes context to presence handlers', 
   const secondPresence = vi.fn((_context: Context) => sql`false`);
   const first = makeEngine('custom', firstPresence);
   const second = makeEngine('custom', secondPresence);
-  const context = {tagExists: vi.fn()};
+  const context = {google: createGooglePlaces(), tagExists: vi.fn()};
 
   for (const [engine, expected] of [
     [first, 'true'],

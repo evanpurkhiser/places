@@ -48,17 +48,19 @@ export const placeRouter = api.router({
       return {placeId: input.placeId, tagId, removed: removed.length > 0};
     }),
   ),
-  list: api.list.handler(async ({input, context: {db}}) => {
-    const predicate = await compilePlaceQuery(input?.query ?? '', {db}).catch(error => {
-      if (error instanceof SearchError) {
-        throw new ORPCError('BAD_REQUEST', {
-          message: error.message,
-          data: {diagnostics: error.diagnostics},
-        });
-      }
+  list: api.list.handler(async ({input, context: {db, google}}) => {
+    const predicate = await compilePlaceQuery(input?.query ?? '', {db, google}).catch(
+      error => {
+        if (error instanceof SearchError) {
+          throw new ORPCError('BAD_REQUEST', {
+            message: error.message,
+            data: {diagnostics: error.diagnostics},
+          });
+        }
 
-      throw error;
-    });
+        throw error;
+      },
+    );
     const rows = await db
       .select({
         ...getTableColumns(places),
