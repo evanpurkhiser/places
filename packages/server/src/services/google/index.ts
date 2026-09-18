@@ -1,7 +1,7 @@
 import {PlacesClient} from '@googlemaps/places';
-import {ORPCError} from '@orpc/server';
 import {z} from 'zod';
 
+import {GoogleInputError, GoogleUnavailableError} from './errors.ts';
 import {featureIdToPlaceId, placeIdFromData} from './place-id.ts';
 
 const placeId = z
@@ -22,7 +22,7 @@ const details = z.object({
 });
 
 function invalid(message: string): never {
-  throw new ORPCError('BAD_REQUEST', {message});
+  throw new GoogleInputError(message);
 }
 
 function mapsUrl(input: string): URL {
@@ -87,9 +87,7 @@ export function createGooglePlaces(apiKey?: string, fetcher: typeof fetch = fetc
         signal: AbortSignal.timeout(10000),
       });
     } catch {
-      throw new ORPCError('SERVICE_UNAVAILABLE', {
-        message: 'Could not reach Google Maps. Try again.',
-      });
+      throw new GoogleUnavailableError('Could not reach Google Maps. Try again.');
     }
   }
 
@@ -150,9 +148,7 @@ export function createGooglePlaces(apiKey?: string, fetcher: typeof fetch = fetc
   async function get(googlePlaceId: string) {
     const id = parseId(googlePlaceId);
     if (!client) {
-      throw new ORPCError('SERVICE_UNAVAILABLE', {
-        message: 'Configure google.apiKey to import places.',
-      });
+      throw new GoogleUnavailableError('Configure google.apiKey to fetch place details.');
     }
 
     const [result] = await client
@@ -171,12 +167,18 @@ export function createGooglePlaces(apiKey?: string, fetcher: typeof fetch = fetc
       )
       .catch(() => {
         // SDK errors can include request credentials and upstream response content.
-        throw new ORPCError('SERVICE_UNAVAILABLE', {
-          message: 'Google Places request failed. Try again.',
-        });
+        throw new GoogleUnavailableError('Google Places request failed. Try again.');
       });
 
-    return details.parse(result);
+    const parsed = details.safeParse(result);
+
+    if (!parsed.success) {
+      throw new GoogleUnavailableError(
+        'Google Places returned invalid place details. Try again.',
+      );
+    }
+
+    return parsed.data;
   }
 
   return {resolve, get};

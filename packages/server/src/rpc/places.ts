@@ -10,6 +10,7 @@ import {compilePlaceQuery} from '../filter-engine/index.ts';
 import {enqueueImport, getImportStatus} from '../imports/index.ts';
 
 import type {Context} from './context.ts';
+import {rethrowGoogleError} from './google-errors.ts';
 
 const api = implement(contract.places).$context<Context>();
 
@@ -74,7 +75,9 @@ export const placeRouter = api.router({
     }));
   }),
   import: api.import.handler(({input, context}) =>
-    enqueueImport(input.input, context, input.tags, input.notes),
+    enqueueImport(input.input, context, input.tags, input.notes).catch(
+      rethrowGoogleError,
+    ),
   ),
   importStatus: api.importStatus.handler(({input, context}) =>
     getImportStatus(input.jobId, context),

@@ -1,5 +1,6 @@
 import {beforeEach, describe, expect, it, vi} from 'vitest';
 
+import {GoogleInputError, GoogleUnavailableError} from './errors.ts';
 import {createGooglePlaces} from './index.ts';
 
 const sdk = vi.hoisted(() => ({
@@ -92,7 +93,7 @@ describe('Google Places', () => {
 
     await expect(
       createGooglePlaces('test-key', fetcher).resolve(input),
-    ).rejects.toMatchObject({code: 'BAD_REQUEST'});
+    ).rejects.toBeInstanceOf(GoogleInputError);
     expect(fetcher).not.toHaveBeenCalled();
     expect(sdk.searchText).not.toHaveBeenCalled();
     expect(sdk.getPlace).not.toHaveBeenCalled();
@@ -108,7 +109,7 @@ describe('Google Places', () => {
 
     await expect(
       createGooglePlaces('test-key', fetcher).resolve('https://maps.app.goo.gl/example'),
-    ).rejects.toMatchObject({code: 'BAD_REQUEST'});
+    ).rejects.toBeInstanceOf(GoogleInputError);
     expect(fetcher).toHaveBeenCalledTimes(1);
   });
 
@@ -124,7 +125,7 @@ describe('Google Places', () => {
 
     await expect(
       createGooglePlaces('test-key', fetcher).resolve('https://maps.app.goo.gl/loop'),
-    ).rejects.toMatchObject({code: 'BAD_REQUEST'});
+    ).rejects.toBeInstanceOf(GoogleInputError);
     expect(fetcher).toHaveBeenCalledTimes(6);
   });
 
@@ -158,14 +159,14 @@ describe('Google Places', () => {
 
     await expect(
       createGooglePlaces('test-key', fetcher).resolve('https://maps.app.goo.gl/example'),
-    ).rejects.toMatchObject({code: 'SERVICE_UNAVAILABLE'});
+    ).rejects.toBeInstanceOf(GoogleUnavailableError);
     expect(sdk.searchText).not.toHaveBeenCalled();
   });
 
   it('reports missing configuration and upstream failures without exposing response content', async () => {
-    await expect(createGooglePlaces().get('ChIJtest')).rejects.toMatchObject({
-      code: 'SERVICE_UNAVAILABLE',
-    });
+    await expect(createGooglePlaces().get('ChIJtest')).rejects.toBeInstanceOf(
+      GoogleUnavailableError,
+    );
     expect(sdk.getPlace).not.toHaveBeenCalled();
     sdk.getPlace.mockRejectedValue(new Error('sensitive body with test-key'));
     const google = createGooglePlaces('test-key');
