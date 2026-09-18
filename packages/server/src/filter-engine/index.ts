@@ -1,8 +1,11 @@
 import {createFilterEngine, defineFilter} from '@places/common/filter-engine';
 import {sql, type SQL} from 'drizzle-orm';
 
+import type {Database} from '../db/index.ts';
 import {places} from '../db/schema.ts';
 
+import {createContext, type Context} from './context.ts';
+import {tag, tagName} from './tag.ts';
 import {matchText, present} from './text.ts';
 import {equality, text} from './values.ts';
 
@@ -65,9 +68,9 @@ const textFilters = (
   }),
 );
 
-export const placeFilterEngine = createFilterEngine<SQL, unknown>({
-  types: [text],
-  filters: textFilters,
+export const placeFilterEngine = createFilterEngine<SQL, Context>({
+  types: [text, tagName],
+  filters: [tag, ...textFilters],
   boolean: {
     all: () => sql`true`,
     and: predicates => sql`(${sql.join(predicates, sql` and `)})`,
@@ -75,3 +78,14 @@ export const placeFilterEngine = createFilterEngine<SQL, unknown>({
     not: predicate => sql`not (${predicate})`,
   },
 });
+
+export async function compilePlaceQuery(
+  query: string,
+  {db}: {db: Database},
+): Promise<SQL> {
+  const prepared = placeFilterEngine.prepare(query);
+  const context = createContext(db);
+  const resolved = await placeFilterEngine.resolve(prepared, context);
+
+  return placeFilterEngine.compile(resolved, context);
+}

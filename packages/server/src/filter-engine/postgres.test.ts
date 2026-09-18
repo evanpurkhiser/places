@@ -1,4 +1,4 @@
-import {inArray} from 'drizzle-orm';
+import {eq, inArray} from 'drizzle-orm';
 import {migrate} from 'drizzle-orm/node-postgres/migrator';
 import {Pool} from 'pg';
 import {afterAll, beforeAll, describe, expect, it} from 'vitest';
@@ -7,9 +7,9 @@ import {randomUUID} from 'node:crypto';
 import {fileURLToPath} from 'node:url';
 
 import {createDatabase} from '../db/index.ts';
-import {places} from '../db/schema.ts';
+import {places, placeTags, tags} from '../db/schema.ts';
 
-import {placeFilterEngine} from './index.ts';
+import {compilePlaceQuery} from './index.ts';
 
 const testUrl = process.env.TEST_DATABASE_URL;
 
@@ -27,28 +27,41 @@ describe.skipIf(!testUrl)('filter engine with PostgreSQL', () => {
     await migrate(db, {
       migrationsFolder: fileURLToPath(new URL('../../drizzle', import.meta.url)),
     });
-    await db.insert(places).values([
-      {
-        googlePlaceId: 'a',
-        name: 'Cafe',
-        formattedAddress: 'NYC',
-        coordinates: 'SRID=4326;POINT(-74 40)',
-        userNote: '100%_good',
-      },
-      {
-        googlePlaceId: 'b',
-        name: 'Bar',
-        formattedAddress: 'NYC',
-        coordinates: 'SRID=4326;POINT(-74 40)',
-        userNote: '',
-      },
-      {
-        googlePlaceId: 'c',
-        name: 'Empty',
-        formattedAddress: 'NYC',
-        coordinates: 'SRID=4326;POINT(-74 40)',
-        userNote: null,
-      },
+    const saved = await db
+      .insert(places)
+      .values([
+        {
+          googlePlaceId: 'a',
+          name: 'Cafe',
+          formattedAddress: 'NYC',
+          coordinates: 'SRID=4326;POINT(-74 40)',
+          userNote: '100%_good',
+        },
+        {
+          googlePlaceId: 'b',
+          name: 'Bar',
+          formattedAddress: 'NYC',
+          coordinates: 'SRID=4326;POINT(-74 40)',
+          userNote: '',
+        },
+        {
+          googlePlaceId: 'c',
+          name: 'Empty',
+          formattedAddress: 'NYC',
+          coordinates: 'SRID=4326;POINT(-74 40)',
+          userNote: null,
+        },
+      ])
+      .returning();
+    const assigned = await db
+      .insert(tags)
+      .values([{name: 'type:cafe'}, {name: 'attr:laptop-friendly'}])
+      .returning();
+
+    await db.insert(placeTags).values([
+      {placeId: saved[0]!.id, tagId: assigned[0]!.id, note: 'upstairs'},
+      {placeId: saved[0]!.id, tagId: assigned[1]!.id, note: 'outlets'},
+      {placeId: saved[1]!.id, tagId: assigned[0]!.id, note: 'outlets'},
     ]);
   }, 30000);
 
@@ -59,9 +72,7 @@ describe.skipIf(!testUrl)('filter engine with PostgreSQL', () => {
   });
 
   async function names(query: string) {
-    const prepared = placeFilterEngine.prepare(query);
-    const resolved = await placeFilterEngine.resolve(prepared, null);
-    const predicate = placeFilterEngine.compile(resolved, null);
+    const predicate = await compilePlaceQuery(query, {db});
     const rows = await db
       .select({name: places.name})
       .from(places)
@@ -70,6 +81,17 @@ describe.skipIf(!testUrl)('filter engine with PostgreSQL', () => {
 
     return rows.map(row => row.name);
   }
+
+  it('matches whole-place tag negation and avoids duplicate results', async () => {
+    expect(await names('tag[type:*] OR tag[attr:*]')).toEqual(['Bar', 'Cafe']);
+    expect(await names('!tag[type:cafe]')).toEqual(['Empty']);
+    expect(await names('!tag[=type:cafe]')).toEqual(['Empty']);
+  });
+
+  it('correlates tag assignment notes', async () => {
+    expect(await names('tag[type:cafe, notes:outlet]')).toEqual(['Bar']);
+    expect(await names('!tag[type:cafe, notes:outlet]')).toEqual(['Cafe', 'Empty']);
+  });
 
   it('treats absent or empty notes as false and negation as their complement', async () => {
     expect(await names('notes[*]')).toEqual(['Cafe']);
@@ -118,6 +140,40 @@ describe.skipIf(!testUrl)('filter engine with PostgreSQL', () => {
           inserted.map(row => row.id),
         ),
       );
+    }
+  });
+
+  it('validates exact tags across every boolean branch before selecting places', async () => {
+    await expect(names('name[*] OR !tag[missing]')).rejects.toThrow(
+      'Unknown tag: missing',
+    );
+    expect(await names('tag[missing:*]')).toEqual([]);
+  });
+  it('combines membership and note exclusion when assignment notes are absent', async () => {
+    const [place] = await db
+      .insert(places)
+      .values({
+        googlePlaceId: randomUUID(),
+        name: 'NoNote',
+        formattedAddress: 'NYC',
+        coordinates: 'SRID=4326;POINT(-74 40)',
+      })
+      .returning();
+    const [tag] = await db.select().from(tags).where(eq(tags.name, 'type:cafe'));
+
+    try {
+      await db.insert(placeTags).values({placeId: place!.id, tagId: tag!.id});
+      expect(await names('tag[type:cafe] AND !tag[type:cafe, notes:=outlets]')).toEqual([
+        'Cafe',
+        'NoNote',
+      ]);
+      expect(await names('!tag[type:cafe, notes:=outlets]')).toEqual([
+        'Cafe',
+        'Empty',
+        'NoNote',
+      ]);
+    } finally {
+      await db.delete(places).where(eq(places.id, place!.id));
     }
   });
 });

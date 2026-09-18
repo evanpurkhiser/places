@@ -6,7 +6,8 @@ Execute the search language through registered filters and functions, with clean
 boundaries between syntax, meaning, resolution, and database queries. The shared
 engine supplies registration, preparation, resolution, compilation, and capability
 descriptions. Places registrations provide SQL predicates for name, address, and
-notes. API/CLI integration follows separately.
+notes, plus tag membership and assignment-note constraints. API/CLI integration
+follows separately.
 
 The [search grammar](search-grammar.md) defines the language. Its parser produces
 source-located syntax nodes for generic filters, functions, arguments, values,
@@ -124,6 +125,25 @@ remain literal user data, and every value is parameterized.
 
 Absent or empty fields fail positive matches. Negation includes places whose
 field is absent. Registrations expose presence handlers for other filters to use.
+
+## Places tag filter
+
+```text
+tag[favorite]
+tag["date night"]
+tag[type:*]
+tag[laptop-friendly, notes:outlet]
+!tag[visited]
+```
+
+Use correlated EXISTS predicates to test assignment membership. A tag name and
+its note constraint apply to the same assignment. A place with several matching
+tags appears once. Negation applies to the whole membership predicate.
+
+Exact tag names are normalized and resolved before execution. Unknown exact names
+are errors, including under negation. Wildcard patterns may match zero definitions.
+Default tag matching covers the full name. `=` performs literal matching. Use
+`!` around a predicate for exclusion, including predicates with note constraints.
 
 ## Semantic validation
 
