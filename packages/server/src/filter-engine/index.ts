@@ -6,9 +6,10 @@ import {places} from '../db/schema.ts';
 
 import {createContext, type Context} from './context.ts';
 import {has, property} from './has.ts';
+import {location, locationTypes, point, radius} from './location.ts';
 import {tag, tagName} from './tag.ts';
 import {matchText, present} from './text.ts';
-import {equality, text} from './values.ts';
+import {distance, equality, text} from './values.ts';
 
 const textFilters = (
   [
@@ -70,8 +71,9 @@ const textFilters = (
 );
 
 export const placeFilterEngine = createFilterEngine<SQL, Context>({
-  types: [text, tagName, property],
-  filters: [tag, ...textFilters, has],
+  types: [text, tagName, property, distance, ...locationTypes],
+  filters: [tag, ...textFilters, has, location],
+  functions: [point, radius],
   boolean: {
     all: () => sql`true`,
     and: predicates => sql`(${sql.join(predicates, sql` and `)})`,

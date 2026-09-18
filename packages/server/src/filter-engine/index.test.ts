@@ -15,6 +15,52 @@ async function compile(query: string, names = ['type:cafe', 'type:bar', 'star:*'
 
 describe('Places SQL predicates', () => {
   it.each([
+    ['800m', 800],
+    ['1.5km', 1500],
+    ['100ft', 30.48],
+    ['.5mi', 804.672],
+  ])(
+    'compiles radius with %s to parameterized geography SQL',
+    async (distance, meters) => {
+      const result = await compile(
+        `location[radius(point(-73.985, 40.726), ${distance})]`,
+      );
+
+      expect(result.sql).toContain(
+        'ST_DWithin("places"."coordinates", ST_SetSRID(ST_MakePoint(',
+      );
+      expect(result.sql).toContain('4326)::geography');
+      expect(result.params).toEqual([-73.985, 40.726, meters]);
+    },
+  );
+
+  it.each([
+    'point(181, 0), 1m',
+    'point(0, -91), 1m',
+    'point(NaN, 0), 1m',
+    'point("", 0), 1m',
+    'point(0x10, 0), 1m',
+    'point(0, 0), 0m',
+    'point(0, 0), -1m',
+    'point(0, 0), 1',
+    'point(0, 0), 1yd',
+    'point(0, 0), NaNkm',
+    '"New York", 1mi',
+  ])('rejects invalid radius arguments: %s', arguments_ => {
+    expect(() => placeFilterEngine.prepare(`location[radius(${arguments_})]`)).toThrow(
+      SearchError,
+    );
+  });
+
+  it('accepts coordinate boundaries and composes radius with other filters', async () => {
+    const result = await compile('name[cafe] !location[radius(point(-180, 90), 1km)]');
+
+    expect(result.params).toEqual(['%cafe%', -180, 90, 1000]);
+    expect(result.sql).toContain('and not (ST_DWithin(');
+    await expect(compile('location[radius(point(180, -90), 1m)]')).resolves.toBeDefined();
+  });
+
+  it.each([
     ['unknown[x]', 'unknown_filter'],
     ['text[coffee]', 'unknown_filter'],
     ['coffee', 'syntax'],

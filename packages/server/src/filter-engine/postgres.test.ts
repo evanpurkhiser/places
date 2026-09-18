@@ -88,6 +88,47 @@ describe.skipIf(!testUrl)('filter engine with PostgreSQL', () => {
     expect(await names('!tag[=type:cafe]')).toEqual(['Empty']);
   });
 
+  it('measures radius in meters across the antimeridian and supports negation', async () => {
+    const inserted = await db
+      .insert(places)
+      .values([
+        {
+          googlePlaceId: 'radius-near',
+          name: 'RadiusNear',
+          formattedAddress: '',
+          coordinates: 'SRID=4326;POINT(-179.999 0)',
+        },
+        {
+          googlePlaceId: 'radius-far',
+          name: 'RadiusFar',
+          formattedAddress: '',
+          coordinates: 'SRID=4326;POINT(-179.98 0)',
+        },
+      ])
+      .returning({id: places.id});
+
+    try {
+      expect(await names('location[radius(point(179.999, 0), 300m)]')).toEqual([
+        'RadiusNear',
+      ]);
+      expect(
+        await names('name[Radius*] !location[radius(point(179.999, 0), 300m)]'),
+      ).toEqual(['RadiusFar']);
+      expect(await names('location[radius(point(-74, 40), 1ft)]')).toEqual([
+        'Bar',
+        'Cafe',
+        'Empty',
+      ]);
+    } finally {
+      await db.delete(places).where(
+        inArray(
+          places.id,
+          inserted.map(row => row.id),
+        ),
+      );
+    }
+  });
+
   it('correlates tag assignment notes', async () => {
     expect(await names('tag[type:cafe, notes:outlet]')).toEqual(['Bar']);
     expect(await names('!tag[type:cafe, notes:outlet]')).toEqual(['Cafe', 'Empty']);
