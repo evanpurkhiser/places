@@ -181,7 +181,40 @@ export function createGooglePlaces(apiKey?: string, fetcher: typeof fetch = fetc
     return parsed.data;
   }
 
-  return {resolve, get};
+  async function search(text: string) {
+    if (!client) {
+      throw new GoogleUnavailableError('Configure google.apiKey to search for places.');
+    }
+
+    const [result] = await client
+      .searchText(
+        {textQuery: text, maxResultCount: 1, includePureServiceAreaBusinesses: false},
+        {
+          timeout: 10000,
+          retry: null,
+          otherArgs: {
+            headers: {
+              'X-Goog-FieldMask':
+                'places.id,places.displayName,places.formattedAddress,places.googleMapsUri,places.location',
+            },
+          },
+        },
+      )
+      .catch(() => {
+        throw new GoogleUnavailableError('Google Places search failed. Try again.');
+      });
+    const parsed = z.array(details).safeParse(result.places ?? []);
+
+    if (!parsed.success) {
+      throw new GoogleUnavailableError(
+        'Google Places returned invalid search results. Try again.',
+      );
+    }
+
+    return parsed.data;
+  }
+
+  return {resolve, get, search};
 }
 
 export type GooglePlaces = ReturnType<typeof createGooglePlaces>;

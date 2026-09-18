@@ -26,6 +26,56 @@ const candidate = {
 };
 
 describe('Google Places', () => {
+  it('searches for point candidates in one request with a bounded field mask', async () => {
+    const place = {...candidate, formattedAddress: 'New York, NY', googleMapsUri: mapUrl};
+    sdk.searchText.mockResolvedValue([{places: [place]}]);
+
+    expect(await createGooglePlaces('test-key').search('Carnitas Ramirez, NYC')).toEqual([
+      place,
+    ]);
+    expect(sdk.searchText).toHaveBeenCalledExactlyOnceWith(
+      {
+        textQuery: 'Carnitas Ramirez, NYC',
+        maxResultCount: 1,
+        includePureServiceAreaBusinesses: false,
+      },
+      {
+        timeout: 10000,
+        retry: null,
+        otherArgs: {
+          headers: {
+            'X-Goog-FieldMask':
+              'places.id,places.displayName,places.formattedAddress,places.googleMapsUri,places.location',
+          },
+        },
+      },
+    );
+    expect(sdk.getPlace).not.toHaveBeenCalled();
+  });
+
+  it('distinguishes empty results from malformed results', async () => {
+    sdk.searchText
+      .mockResolvedValueOnce([{}])
+      .mockResolvedValueOnce([{places: [candidate]}]);
+    const google = createGooglePlaces('test-key');
+
+    expect(await google.search('unknown')).toEqual([]);
+    await expect(google.search('malformed')).rejects.toBeInstanceOf(
+      GoogleUnavailableError,
+    );
+  });
+
+  it('reports missing search configuration and sanitizes upstream errors', async () => {
+    await expect(createGooglePlaces().search('NYC')).rejects.toBeInstanceOf(
+      GoogleUnavailableError,
+    );
+    expect(sdk.searchText).not.toHaveBeenCalled();
+    sdk.searchText.mockRejectedValue(new Error('sensitive body with test-key'));
+    await expect(createGooglePlaces('test-key').search('NYC')).rejects.toMatchObject({
+      message: 'Google Places search failed. Try again.',
+    });
+  });
+
   it('accepts explicit IDs without making network requests', async () => {
     const fetcher = vi.fn<typeof fetch>();
     const google = createGooglePlaces(undefined, fetcher);
