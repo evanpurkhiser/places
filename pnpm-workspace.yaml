@@ -4,6 +4,7 @@ allowBuilds:
   esbuild: true
   protobufjs: false
 minimumReleaseAgeExclude:
+  - '@evanpurkhiser/*'
   - '@orpc/client@1.15.1'
   - '@orpc/contract@1.15.1'
   - '@orpc/shared@1.15.1'
