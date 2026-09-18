@@ -49,7 +49,8 @@ pnpm places tags delete <id>
 ```
 
 Use `--server https://5188.prk.network` to override the CLI's default local server.
-Commands print JSON to stdout, errors to stderr, and exit nonzero on failure.
+Data commands print JSON and documentation commands print text to stdout. Errors
+print to stderr, with a nonzero exit status on failure.
 Run `pnpm places --help` for argument help.
 
 The CLI and web use typed oRPC calls at `/rpc`. Shared contracts are available
@@ -141,6 +142,16 @@ The initial listing returns all saved places newest first, with named
 display constraints are documented in [place metadata](design/place-metadata.md).
 
 ## Search and filter engine
+
+Discover the running server's supported filters, functions, value types, and examples:
+
+```sh
+pnpm places docs filter
+```
+
+The command renders documentation from `query.describe` as plain text. Parameter descriptions include
+expected types, supported operators, and optionality. Filters indicate whether
+`has[...]` can check their presence.
 
 Filter saved places through the API or CLI:
 

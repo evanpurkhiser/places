@@ -12,6 +12,8 @@ import {importInput, place} from '@places/common/contract/place';
 import {tag, tagIcon} from '@places/common/contract/tag';
 import {z} from 'zod';
 
+import {formatFilterDocs} from './filter-docs.ts';
+
 const id = argument(zod(tag.shape.id, {metavar: 'ID', placeholder: ''}), {
   description: message`Tag UUID, shown by tags list or tags create.`,
 });
@@ -62,6 +64,13 @@ export const parser = merge(
     ),
   }),
   or(
+    command(
+      'docs',
+      command('filter', object({action: constant('docs-filter')}), {
+        description: message`Print the server's available filters, functions, types, and examples.`,
+      }),
+      {description: message`Read documentation from the Places server.`},
+    ),
     command(
       'import',
       object({
@@ -180,6 +189,8 @@ export function createClient(server: string): Client {
 
 export function execute(args: InferValue<typeof parser>, client: Client) {
   switch (args.action) {
+    case 'docs-filter':
+      return client.query.describe().then(formatFilterDocs);
     case 'import':
       return client.places.import({
         input: args.input,

@@ -320,3 +320,19 @@ describe('place query arguments', () => {
     expect(parse(parser, ['list', '--query'])).toMatchObject({success: false});
   });
 });
+
+describe('query documentation', () => {
+  it('fetches documentation from the server', async () => {
+    const result = parse(parser, ['docs', 'filter']);
+
+    if (!result.success) {
+      throw new Error('Expected valid arguments');
+    }
+
+    const documentation = {filters: [], functions: [], types: []};
+    const describe = vi.fn().mockResolvedValue(documentation);
+    const client = {query: {describe}} as unknown as Client;
+    expect(await execute(result.value, client)).toContain('Filter language\n');
+    expect(describe).toHaveBeenCalledExactlyOnceWith();
+  });
+});

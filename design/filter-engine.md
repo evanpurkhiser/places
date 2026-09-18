@@ -91,8 +91,10 @@ registration keys. Filters and functions may include complete query examples as
 `engine.describe()` returns a serializable description of registered capabilities,
 including parameter types, optionality, operators, presence support, function
 return types, and whether value types accept literals or named references.
-Consumers can render this description for capability discovery. Examples are
-checked during preparation in tests, without invoking external resolution.
+`query.describe` exposes the Places engine's description over RPC, and
+`places docs filter` renders it as plain text. This output reflects the running server's
+registrations. Examples are checked during preparation in tests, without invoking
+external resolution.
 
 ## Execution stages
 

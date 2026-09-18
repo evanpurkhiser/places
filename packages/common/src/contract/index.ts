@@ -1,8 +1,9 @@
 import type {ContractRouterClient} from '@orpc/contract';
 
 import {placeContract} from './place.ts';
+import {queryContract} from './query.ts';
 import {tagContract} from './tag.ts';
 
-export const contract = {tags: tagContract, places: placeContract};
+export const contract = {tags: tagContract, places: placeContract, query: queryContract};
 
 export type Client = ContractRouterClient<typeof contract>;

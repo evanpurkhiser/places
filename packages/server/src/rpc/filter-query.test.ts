@@ -138,6 +138,10 @@ describe.skipIf(!testUrl)('place filtering through API and CLI', () => {
         ]);
       const {stdout} = await cli('list', '--query', 'tag[type:cafe]');
       expect(JSON.parse(stdout).map((place: {id: string}) => place.id)).toEqual([cafeId]);
+      const {stdout: documentation} = await cli('docs', 'filter');
+      expect(documentation).toMatch(/^Filter language\n/);
+      expect(documentation).toContain('Example: tag[favorite]');
+      expect(documentation).not.toMatch(/^"/);
 
       try {
         await cli('list', '--query', 'tag[');
