@@ -1,7 +1,7 @@
 import {implement, ORPCError} from '@orpc/server';
 import {contract} from '@places/common/contract';
 import {SearchError} from '@places/common/search';
-import {and, desc, eq, getTableColumns, or, sql} from 'drizzle-orm';
+import {and, desc, eq, getTableColumns, inArray, or, sql} from 'drizzle-orm';
 import {z} from 'zod';
 
 import type {Database} from '../db/index.ts';
@@ -61,9 +61,27 @@ export const placeRouter = api.router({
       .where(predicate)
       .orderBy(desc(places.createdAt), desc(places.id));
 
+    if (!rows.length) {
+      return [];
+    }
+
+    const assignments = await db
+      .select({...getTableColumns(placeTags), tag: getTableColumns(tags)})
+      .from(placeTags)
+      .innerJoin(tags, eq(placeTags.tagId, tags.id))
+      .where(
+        inArray(
+          placeTags.placeId,
+          rows.map(place => place.id),
+        ),
+      )
+      .orderBy(tags.name, tags.id);
+    const tagsByPlace = Map.groupBy(assignments, assignment => assignment.placeId);
+
     return rows.map(({latitude, longitude, ...place}) => ({
       ...place,
       coordinates: {latitude, longitude},
+      tags: tagsByPlace.get(place.id) ?? [],
     }));
   }),
   sync: api.sync.handler(async ({input, context: {db, google, jobs, config}}) => {

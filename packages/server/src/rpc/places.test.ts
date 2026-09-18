@@ -154,6 +154,57 @@ describe.skipIf(!testUrl)('place import with PostgreSQL and pg-boss', () => {
     expect(google.getMetadata).not.toHaveBeenCalled();
   }, 20000);
 
+  it('lists every tag association with metadata and notes, including on filtered places', async () => {
+    const {
+      placeIds: [placeId],
+    } = await importPlace(db, google, 'ChIJtest');
+    const [untagged] = await db
+      .insert(places)
+      .values({
+        googlePlaceId: 'untagged',
+        name: 'Untagged',
+        formattedAddress: '',
+        coordinates: 'SRID=4326;POINT(-74 40)',
+      })
+      .returning();
+    const cafe = await client.tags.create({
+      name: 'type:cafe',
+      icon: {emoji: '☕'},
+      description: 'Coffee shops',
+    });
+    const favorite = await client.tags.create({name: 'favorite', icon: {emoji: '⭐'}});
+    const cafeAssignment = await client.places.tag({
+      placeId: placeId!,
+      tag: cafe.id,
+      notes: 'Order the espresso',
+    });
+    const favoriteAssignment = await client.places.tag({
+      placeId: placeId!,
+      tag: favorite.id,
+    });
+
+    const all = await client.places.list();
+    expect(all).toHaveLength(2);
+    expect(all.find(place => place.id === untagged!.id)?.tags).toEqual([]);
+
+    const filtered = await client.places.list({query: 'tag[type:cafe]'});
+    expect(filtered).toHaveLength(1);
+    expect(filtered[0]?.tags).toEqual([
+      {...favoriteAssignment, tag: favorite},
+      {...cafeAssignment, tag: cafe},
+    ]);
+    expect(await client.places.list({query: 'name[missing]'})).toEqual([]);
+
+    await client.tags.update({id: cafe.id, icon: {emoji: '🫖'}});
+    const updatedPlaces = await client.places.list({query: 'tag[type:cafe]'});
+
+    expect(updatedPlaces[0]?.tags[1]?.tag.icon).toEqual({emoji: '🫖'});
+    await client.places.untag({placeId: placeId!, tag: favorite.id});
+    const untaggedPlaces = await client.places.list({query: 'tag[type:cafe]'});
+
+    expect(untaggedPlaces[0]?.tags).toHaveLength(1);
+  });
+
   it('resolves names and IDs, deduplicates tags, and adds tags on reimport', async () => {
     const cafe = await client.tags.create({name: 'type:cafe'});
     const favorite = await client.tags.create({name: 'favorite'});

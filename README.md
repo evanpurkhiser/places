@@ -68,6 +68,12 @@ at least one change.
 
 ## Place tags
 
+`places.list` includes a `tags` array on each place. Each association contains
+`placeId`, `tagId`, `note`, `createdAt`, and the complete nested `tag` metadata
+(including `name` and `icon`). Associations are ordered by tag name. Filtering by
+a tag returns all associations on each matching place; untagged places have an
+empty array.
+
 Apply existing tags to saved places using the place UUID from `list` or
 `import-status` and a tag name or UUID:
 

@@ -3,6 +3,14 @@ import {z} from 'zod';
 
 import {tag} from './tag.ts';
 
+export const placeTag = z.object({
+  placeId: z.uuid(),
+  tagId: tag.shape.id,
+  note: z.string().nullable(),
+  createdAt: z.date(),
+});
+export type PlaceTag = z.infer<typeof placeTag>;
+
 export const place = z.object({
   id: z.uuid(),
   googlePlaceId: z.string(),
@@ -17,6 +25,7 @@ export const place = z.object({
   lastSync: z.date().nullable(),
   createdAt: z.date(),
   updatedAt: z.date(),
+  tags: z.array(placeTag.extend({tag})),
 });
 
 export const importInput = z.string().trim().min(1).max(4096);
@@ -24,14 +33,6 @@ export const importType = z.enum(['gmaps']);
 export const importResult = z.object({placeIds: z.array(z.uuid())});
 
 const assignmentInput = z.object({placeId: place.shape.id, tag: tag.shape.name});
-export const placeTag = z.object({
-  placeId: place.shape.id,
-  tagId: tag.shape.id,
-  note: z.string().nullable(),
-  createdAt: z.date(),
-});
-export type PlaceTag = z.infer<typeof placeTag>;
-
 export const importTag = z.object({
   tag: tag.shape.name,
   note: placeTag.shape.note.unwrap().optional(),
