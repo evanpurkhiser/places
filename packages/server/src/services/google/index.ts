@@ -2,6 +2,7 @@ import {PlacesClient} from '@googlemaps/places';
 import {z} from 'zod';
 
 import {GoogleInputError, GoogleUnavailableError} from './errors.ts';
+import {normalizeHours, openingHours} from './hours.ts';
 import {featureIdToPlaceId, placeIdFromData} from './place-id.ts';
 
 const placeId = z
@@ -19,6 +20,28 @@ const details = z.object({
   formattedAddress: z.string().trim().min(1),
   googleMapsUri: z.url(),
   location,
+});
+
+const metadataDetails = details.extend({
+  timeZone: z
+    .object({
+      id: z
+        .string()
+        .min(1)
+        .refine(value => {
+          try {
+            new Intl.DateTimeFormat('en', {timeZone: value});
+            return true;
+          } catch {
+            return false;
+          }
+        }),
+    })
+    .optional(),
+  businessStatus: z
+    .enum(['OPERATIONAL', 'CLOSED_TEMPORARILY', 'CLOSED_PERMANENTLY', 'FUTURE_OPENING'])
+    .optional(),
+  regularOpeningHours: openingHours.optional(),
 });
 
 function invalid(message: string): never {
@@ -181,6 +204,46 @@ export function createGooglePlaces(apiKey?: string, fetcher: typeof fetch = fetc
     return parsed.data;
   }
 
+  async function getMetadata(googlePlaceId: string) {
+    const id = parseId(googlePlaceId);
+
+    if (!apiKey) {
+      throw new GoogleUnavailableError(
+        'Configure google.apiKey to fetch place metadata.',
+      );
+    }
+
+    // REST preserves absent versus empty periods; protobuf decoding conflates them.
+    try {
+      const response = await fetcher(`https://places.googleapis.com/v1/places/${id}`, {
+        headers: {
+          'X-Goog-Api-Key': apiKey,
+          'X-Goog-FieldMask':
+            'id,displayName,formattedAddress,googleMapsUri,location,timeZone,businessStatus,regularOpeningHours',
+        },
+        redirect: 'error',
+        signal: AbortSignal.timeout(10000),
+      });
+
+      if (!response.ok) {
+        throw new Error('Place request failed.');
+      }
+
+      const result = metadataDetails.parse(await response.json());
+
+      return {
+        ...result,
+        timeZone: result.timeZone?.id ?? null,
+        businessStatus: result.businessStatus ?? null,
+        hoursWeeklyOpen: normalizeHours(result.regularOpeningHours),
+      };
+    } catch {
+      throw new GoogleUnavailableError(
+        'Google Places metadata request failed. Try again.',
+      );
+    }
+  }
+
   async function search(text: string) {
     if (!client) {
       throw new GoogleUnavailableError('Configure google.apiKey to search for places.');
@@ -214,7 +277,7 @@ export function createGooglePlaces(apiKey?: string, fetcher: typeof fetch = fetc
     return parsed.data;
   }
 
-  return {resolve, get, search};
+  return {resolve, get, getMetadata, search};
 }
 
 export type GooglePlaces = ReturnType<typeof createGooglePlaces>;
