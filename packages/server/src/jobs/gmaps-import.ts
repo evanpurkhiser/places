@@ -3,9 +3,12 @@ import {eq, sql} from 'drizzle-orm';
 import type {PgBoss} from 'pg-boss';
 import {z} from 'zod';
 
+import {workersConfig, type WorkerQueueConfig} from '../config.ts';
 import type {Database} from '../db/index.ts';
 import {places, placeTags} from '../db/schema.ts';
 import type {GooglePlaces} from '../services/google/index.ts';
+
+import {registerWorker} from './worker.ts';
 
 export const importQueue = 'gmaps-import';
 export const queueOptions = {
@@ -120,9 +123,14 @@ export function importPlace(
   });
 }
 
-export function registerImportWorker(boss: PgBoss, db: Database, google: GooglePlaces) {
-  return boss.work(importQueue, {batchSize: 1}, ([job]) => {
-    const {googlePlaceId, tags, notes} = importPayload.parse(job!.data);
+export function registerImportWorker(
+  boss: PgBoss,
+  db: Database,
+  google: GooglePlaces,
+  options: WorkerQueueConfig = workersConfig.parse({})[importQueue],
+) {
+  return registerWorker(boss, importQueue, options, data => {
+    const {googlePlaceId, tags, notes} = importPayload.parse(data);
 
     return importPlace(db, google, googlePlaceId, tags, notes);
   });

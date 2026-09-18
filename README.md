@@ -162,6 +162,25 @@ deduplicated per place. Run the worker to process them; transient failures retry
 three times with backoff. Sync status reports the queue state and an `updated`,
 `unchanged`, `missing`, or `superseded` result after completion.
 
+Worker throughput is configured per queue in the server YAML:
+
+```yaml
+workers:
+  gmaps-import:
+    batchSize: 1
+    concurrency: 1
+  gmaps-sync:
+    batchSize: 1
+    concurrency: 8
+```
+
+These are the defaults. `concurrency` is the number of polling workers for that
+queue per process; each claims up to `batchSize` jobs and runs them concurrently.
+The maximum number of in-flight jobs per queue per process is their product.
+Every job retains its own result and retries independently of other batch members.
+Restart the worker after changing configuration. Additional worker processes each
+apply these limits independently.
+
 Each job refreshes Google's place ID, name, address, Maps URL, coordinates, IANA time zone,
 business status, and regular weekly hours. Notes, tags, and source associations
 are preserved. `lastSync` records successful refreshes, including unchanged

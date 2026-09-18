@@ -4,6 +4,32 @@ import {z} from 'zod';
 import {readFile} from 'node:fs/promises';
 import {parseArgs} from 'node:util';
 
+const workerQueue = (concurrency: number) =>
+  z
+    .strictObject({
+      batchSize: z
+        .number()
+        .int()
+        .positive()
+        .default(1)
+        .describe('Jobs claimed per polling worker; jobs in a batch run concurrently.'),
+      concurrency: z
+        .number()
+        .int()
+        .positive()
+        .default(concurrency)
+        .describe('Independent polling workers for this queue in each process.'),
+    })
+    .prefault({});
+
+export const workersConfig = z
+  .strictObject({
+    'gmaps-import': workerQueue(1),
+    'gmaps-sync': workerQueue(8),
+  })
+  .prefault({});
+export type WorkerQueueConfig = z.infer<typeof workersConfig>['gmaps-sync'];
+
 export const configSchema = z.strictObject({
   google: z
     .strictObject({
@@ -18,6 +44,7 @@ export const configSchema = z.strictObject({
     })
     .prefault({})
     .describe('Google Places integration.'),
+  workers: workersConfig,
   server: z
     .strictObject({
       host: z.string().default('127.0.0.1').describe('Network address to listen on.'),

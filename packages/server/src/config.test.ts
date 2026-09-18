@@ -48,3 +48,30 @@ it('defaults to a loopback server and requires a PostgreSQL URL', () => {
       .success,
   ).toBe(false);
 });
+
+it('defaults worker settings independently and supports partial overrides', () => {
+  const database = {url: 'postgres://localhost/places'};
+  expect(configSchema.parse({database}).workers).toEqual({
+    'gmaps-import': {batchSize: 1, concurrency: 1},
+    'gmaps-sync': {batchSize: 1, concurrency: 8},
+  });
+  expect(
+    configSchema.parse({database, workers: {'gmaps-sync': {batchSize: 3}}}).workers,
+  ).toEqual({
+    'gmaps-import': {batchSize: 1, concurrency: 1},
+    'gmaps-sync': {batchSize: 3, concurrency: 8},
+  });
+});
+
+it.each([0, -1, 1.5, '8'])('rejects invalid worker size %s', value => {
+  for (const queue of ['gmaps-import', 'gmaps-sync']) {
+    for (const field of ['batchSize', 'concurrency']) {
+      expect(
+        configSchema.safeParse({
+          database: {url: 'postgres://localhost/places'},
+          workers: {[queue]: {[field]: value}},
+        }).success,
+      ).toBe(false);
+    }
+  }
+});

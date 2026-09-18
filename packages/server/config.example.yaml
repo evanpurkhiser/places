@@ -8,3 +8,12 @@ database:
 # Required for importing places and running the worker.
 # google:
 #   apiKey: your-google-places-api-key
+
+# Per-queue settings; jobs in each batch run concurrently.
+workers:
+  gmaps-import:
+    batchSize: 1
+    concurrency: 1
+  gmaps-sync:
+    batchSize: 1
+    concurrency: 8

@@ -1,7 +1,7 @@
 import {loadConfig} from './config.ts';
 import {createDatabase} from './db/index.ts';
-import {registerImportWorker} from './jobs/gmaps-import.ts';
-import {registerSyncWorker} from './jobs/gmaps-sync.ts';
+import {importQueue, registerImportWorker} from './jobs/gmaps-import.ts';
+import {registerSyncWorker, syncQueue} from './jobs/gmaps-sync.ts';
 import {startJobs} from './jobs/index.ts';
 import {createGooglePlaces} from './services/google/index.ts';
 
@@ -14,8 +14,10 @@ if (!config.google.apiKey) {
 const db = createDatabase(config.database.url);
 const jobs = await startJobs(config.database.url);
 
-await registerImportWorker(jobs, db, createGooglePlaces(config.google.apiKey));
-await registerSyncWorker(jobs, db, createGooglePlaces(config.google.apiKey));
+const google = createGooglePlaces(config.google.apiKey);
+
+await registerImportWorker(jobs, db, google, config.workers[importQueue]);
+await registerSyncWorker(jobs, db, google, config.workers[syncQueue]);
 console.log('Places import and sync worker started.');
 
 async function shutdown() {
