@@ -5,7 +5,8 @@
 Execute the search language through registered filters and functions, with clean
 boundaries between syntax, meaning, resolution, and database queries. The shared
 engine supplies registration, preparation, resolution, compilation, and capability
-descriptions. Places-specific SQL filters and API/CLI integration follow separately.
+descriptions. Places registrations provide SQL predicates for name, address, and
+notes. API/CLI integration follows separately.
 
 The [search grammar](search-grammar.md) defines the language. Its parser produces
 source-located syntax nodes for generic filters, functions, arguments, values,
@@ -113,6 +114,16 @@ Registration errors, such as duplicate names or references to unregistered types
 are programming errors detected when building the engine. User queries produce
 structured diagnostics. Known language features without executable registrations
 must fail explicitly rather than silently broadening the selection.
+
+## Places text filters
+
+`name`, `address`, and `notes` match saved place fields. Default text matching is
+case-insensitive substring matching; `=` matches the complete literal field.
+Unescaped stars provide wildcard matching. SQL `%`, `_`, and escape characters
+remain literal user data, and every value is parameterized.
+
+Absent or empty fields fail positive matches. Negation includes places whose
+field is absent. Registrations expose presence handlers for other filters to use.
 
 ## Semantic validation
 
