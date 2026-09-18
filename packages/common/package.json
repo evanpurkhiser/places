@@ -8,7 +8,8 @@
     "./contract": "./src/contract/index.ts",
     "./contract/tag": "./src/contract/tag.ts",
     "./contract/place": "./src/contract/place.ts",
-    "./search": "./src/search/index.ts"
+    "./search": "./src/search/index.ts",
+    "./filter-engine": "./src/filter-engine/index.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
