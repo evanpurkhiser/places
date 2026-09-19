@@ -168,7 +168,7 @@ describe.skipIf(!testUrl)('place import with PostgreSQL and pg-boss', () => {
       })
       .returning();
     const cafe = await client.tags.create({
-      name: 'type:cafe',
+      name: 'cafe',
       icon: {emoji: '☕'},
       description: 'Coffee shops',
     });
@@ -187,30 +187,30 @@ describe.skipIf(!testUrl)('place import with PostgreSQL and pg-boss', () => {
     expect(all).toHaveLength(2);
     expect(all.find(place => place.id === untagged!.id)?.tags).toEqual([]);
 
-    const filtered = await client.places.list({query: 'tag[type:cafe]'});
+    const filtered = await client.places.list({query: 'tag[cafe]'});
     expect(filtered).toHaveLength(1);
     expect(filtered[0]?.tags).toEqual([
-      {...favoriteAssignment, tag: favorite},
       {...cafeAssignment, tag: cafe},
+      {...favoriteAssignment, tag: favorite},
     ]);
     expect(await client.places.list({query: 'name[missing]'})).toEqual([]);
 
     await client.tags.update({id: cafe.id, icon: {emoji: '🫖'}});
-    const updatedPlaces = await client.places.list({query: 'tag[type:cafe]'});
+    const updatedPlaces = await client.places.list({query: 'tag[cafe]'});
 
-    expect(updatedPlaces[0]?.tags[1]?.tag.icon).toEqual({emoji: '🫖'});
+    expect(updatedPlaces[0]?.tags[0]?.tag.icon).toEqual({emoji: '🫖'});
     await client.places.untag({placeId: placeId!, tag: favorite.id});
-    const untaggedPlaces = await client.places.list({query: 'tag[type:cafe]'});
+    const untaggedPlaces = await client.places.list({query: 'tag[cafe]'});
 
     expect(untaggedPlaces[0]?.tags).toHaveLength(1);
   });
 
   it('resolves names and IDs, deduplicates tags, and adds tags on reimport', async () => {
-    const cafe = await client.tags.create({name: 'type:cafe'});
+    const cafe = await client.tags.create({name: 'cafe'});
     const favorite = await client.tags.create({name: 'favorite'});
     const submitted = await client.places.import({
       input: 'gmaps:ChIJtest',
-      tags: [{tag: ' Type:CAFE '}, {tag: cafe.id}, {tag: cafe.id}],
+      tags: [{tag: ' CAFE '}, {tag: cafe.id}, {tag: cafe.id}],
     });
     const result = await waitForState(submitted.jobId, 'completed');
 
@@ -231,13 +231,13 @@ describe.skipIf(!testUrl)('place import with PostgreSQL and pg-boss', () => {
   }, 20000);
 
   it('applies tag notes, resolves aliases, and preserves, replaces, and clears them', async () => {
-    const bathroom = await client.tags.create({name: 'attr:nice-bathroom'});
-    const cafe = await client.tags.create({name: 'type:cafe'});
+    const bathroom = await client.tags.create({name: 'nice-bathroom'});
+    const cafe = await client.tags.create({name: 'cafe'});
 
     for (const [tagNotes, expected] of [
       [
         [
-          {tag: ' Attr:Nice-Bathroom ', note: 'Old'},
+          {tag: ' Nice-Bathroom ', note: 'Old'},
           {tag: bathroom.id, note: '  Code 1234\nDownstairs  '},
         ],
         '  Code 1234\nDownstairs  ',
@@ -272,9 +272,9 @@ describe.skipIf(!testUrl)('place import with PostgreSQL and pg-boss', () => {
     const {
       placeIds: [placeId],
     } = await importPlace(db, google, 'ChIJtest');
-    const tag = await client.tags.create({name: 'attr:nice-bathroom'});
+    const tag = await client.tags.create({name: 'nice-bathroom'});
     const input = {placeId: placeId!, tag: tag.id};
-    const first = await client.places.tag({...input, tag: ' Attr:Nice-Bathroom '});
+    const first = await client.places.tag({...input, tag: ' Nice-Bathroom '});
 
     expect(first).toMatchObject({placeId, tagId: tag.id, note: null});
 

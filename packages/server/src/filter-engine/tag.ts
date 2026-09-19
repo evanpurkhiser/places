@@ -22,7 +22,7 @@ export const tag = defineFilter({
     {query: 'tag[type:cafe]', description: 'Places assigned the type:cafe tag.'},
     {
       query: 'tag[type:*]',
-      description: 'Places with a tag whose name starts with type:.',
+      description: 'Places with a tag in the type namespace.',
     },
     {
       query: 'tag[laptop-friendly, notes:outlet]',

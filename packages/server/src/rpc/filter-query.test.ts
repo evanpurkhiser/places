@@ -69,7 +69,7 @@ describe.skipIf(!testUrl)('place filtering through API and CLI', () => {
         coordinates: 'SRID=4326;POINT(-74 40)',
       },
     ]);
-    const [tag] = await db.insert(tags).values({name: 'type:cafe'}).returning();
+    const [tag] = await db.insert(tags).values({name: 'cafe'}).returning();
     await db
       .insert(placeTags)
       .values({placeId: cafeId, tagId: tag!.id, note: 'Outlets upstairs'});
@@ -93,10 +93,10 @@ describe.skipIf(!testUrl)('place filtering through API and CLI', () => {
 
   it('combines tag assignment notes, boolean groups, and missing data', async () => {
     const result = await client.places.list({
-      query: '(tag[type:cafe, notes:outlets] AND notes[coffee]) OR !has[notes]',
+      query: '(tag[cafe, notes:outlets] AND notes[coffee]) OR !has[notes]',
     });
     expect(result.map(place => place.id).sort()).toEqual([cafeId, bakeryId].sort());
-    const nonCafes = await client.places.list({query: '!tag[type:cafe]'});
+    const nonCafes = await client.places.list({query: '!tag[cafe]'});
     expect(nonCafes.map(place => place.id)).toEqual([bakeryId]);
   });
 
@@ -138,7 +138,7 @@ describe.skipIf(!testUrl)('place filtering through API and CLI', () => {
       },
     ]);
     const result = await client.places.list({
-      query: 'tag[type:cafe] location[radius("Origin, NYC", 1mi)]',
+      query: 'tag[cafe] location[radius("Origin, NYC", 1mi)]',
     });
     expect(result.map(place => place.id)).toEqual([cafeId]);
     expect(google.search).toHaveBeenCalledWith('Origin, NYC');
@@ -239,7 +239,7 @@ describe.skipIf(!testUrl)('place filtering through API and CLI', () => {
           'http://127.0.0.1:15190',
           ...args,
         ]);
-      const {stdout} = await cli('list', '--query', 'tag[type:cafe]');
+      const {stdout} = await cli('list', '--query', 'tag[cafe]');
       expect(JSON.parse(stdout).map((place: {id: string}) => place.id)).toEqual([cafeId]);
       const {stdout: openPlaces} = await cli(
         'list',

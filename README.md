@@ -38,6 +38,7 @@ extension. The server defaults to `127.0.0.1:5188`, available on the tailnet at
 `https://5188.prk.network`.
 
 ```sh
+pnpm places ns create type
 pnpm places tags create 'type:cafe'
 pnpm places tags create 'type:bar' --icon '🍸' --description 'Primarily visited for drinks'
 pnpm places tags list
@@ -56,10 +57,18 @@ Run `pnpm places --help` for argument help.
 The CLI and web use typed oRPC calls at `/rpc`. Shared contracts are available
 from `@places/common/contract` and tag schemas from `@places/common/contract/tag`.
 
-Names are trimmed and lowercased. Empty names are rejected; duplicate names return
-409, and missing IDs return 404. Listing returns all tags sorted by name. Renaming
-preserves the tag ID and place associations; deleting removes those associations
-while preserving places. Create, get, update, and delete return the tag record.
+Tag names are stored as globally unique qualified names, such as `type:cafe`,
+and normalized by trimming and lowercasing. A qualified name has one colon and
+nonempty, trimmed namespace and local-name parts. Bare names such as `favorite`
+have a null `namespaceId`. Namespaces must exist before creating or renaming tags
+into them; an unknown namespace returns 404. Duplicate names return 409.
+
+Renaming a tag can move it to another namespace or to no namespace while
+preserving its ID, metadata, and place associations. For example,
+`places tags update <id> cuisine:coffee` moves it into an existing `cuisine`
+namespace, and `places tags update <id> coffee` removes namespace membership.
+Listing returns tags sorted by their qualified name. Deleting a tag removes its
+place associations while preserving places.
 
 Create and update accept `--icon EMOJI` and `--description TEXT`. Update accepts
 an optional name and preserves omitted fields. Pass an empty string with
@@ -83,7 +92,9 @@ pnpm places ns delete <id>
 Namespace names are unique, trimmed, lowercase, and nonempty. Colons are reserved
 as separators. Icons use the same `{emoji: string}` format as tags. Updates
 preserve omitted fields and accept a name, icon, description, or a combination;
-empty CLI metadata values clear those fields. Renaming preserves the UUID.
+empty CLI metadata values clear those fields. Renaming preserves the UUID and
+rewrites all member tags' prefixes in the same transaction. A namespace containing
+tags cannot be deleted; move or delete its tags first.
 
 The `namespaces` RPC exposes `list`, `get`, `create`, `update`, and `delete`.
 Listing returns namespaces sorted by name; duplicate names return 409 and

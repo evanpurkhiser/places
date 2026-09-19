@@ -1,7 +1,7 @@
 import {oc} from '@orpc/contract';
 import {z} from 'zod';
 
-import {tag} from './tag.ts';
+import {tag, tagReference} from './tag.ts';
 
 export const placeTag = z.object({
   placeId: z.uuid(),
@@ -35,9 +35,9 @@ export const importInput = z.string().trim().min(1).max(4096);
 export const importType = z.enum(['gmaps']);
 export const importResult = z.object({placeIds: z.array(z.uuid())});
 
-const assignmentInput = z.object({placeId: place.shape.id, tag: tag.shape.name});
+const assignmentInput = z.object({placeId: place.shape.id, tag: tagReference});
 export const importTag = z.object({
-  tag: tag.shape.name,
+  tag: tagReference,
   note: placeTag.shape.note.unwrap().optional(),
 });
 export type ImportTag = z.infer<typeof importTag>;

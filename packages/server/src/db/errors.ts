@@ -9,3 +9,12 @@ export function isUniqueViolation(error: unknown, constraint: string): boolean {
     error.cause.constraint === constraint
   );
 }
+
+export function isForeignKeyViolation(error: unknown, constraint: string): boolean {
+  return (
+    error instanceof DrizzleQueryError &&
+    error.cause instanceof DatabaseError &&
+    error.cause.code === '23503' &&
+    error.cause.constraint === constraint
+  );
+}

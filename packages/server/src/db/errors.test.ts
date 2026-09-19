@@ -2,7 +2,7 @@ import {DrizzleQueryError} from 'drizzle-orm';
 import {DatabaseError} from 'pg';
 import {expect, it} from 'vitest';
 
-import {isUniqueViolation} from './errors.ts';
+import {isForeignKeyViolation, isUniqueViolation} from './errors.ts';
 
 it('matches only the requested unique constraint on a database query failure', () => {
   const cause = new DatabaseError('duplicate key', 0, 'error');
@@ -27,4 +27,19 @@ it('matches only the requested unique constraint on a database query failure', (
   cause.code = '23503';
 
   expect(isUniqueViolation(error, 'tags_name_unique')).toBe(false);
+});
+
+it('matches only the requested foreign key constraint', () => {
+  const cause = new DatabaseError('foreign key violation', 0, 'error');
+  cause.code = '23503';
+  cause.constraint = 'tags_namespace_id_namespaces_id_fk';
+  const error = new DrizzleQueryError('delete', [], cause);
+
+  expect(isForeignKeyViolation(error, cause.constraint)).toBe(true);
+  expect(isForeignKeyViolation(error, 'other_fk')).toBe(false);
+  expect(isForeignKeyViolation(new Error('connection failed'), cause.constraint)).toBe(
+    false,
+  );
+  cause.code = '23505';
+  expect(isForeignKeyViolation(error, cause.constraint)).toBe(false);
 });

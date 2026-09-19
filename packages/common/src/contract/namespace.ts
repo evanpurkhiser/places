@@ -49,5 +49,8 @@ export const namespaceContract = {
         ),
     )
     .output(namespace),
-  delete: existingNamespace.input(namespace.pick({id: true})).output(namespace),
+  delete: existingNamespace
+    .errors({CONFLICT: {message: 'Namespace contains tags'}})
+    .input(namespace.pick({id: true}))
+    .output(namespace),
 };

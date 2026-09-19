@@ -6,7 +6,7 @@ import type {Context} from '../context.ts';
 export const tagName = valueType<StringValue, Context>({
   name: 'tag name',
   description:
-    'Tag names are arbitrary labels, normalized by trimming and lowercasing. Colons are ordinary characters. Matches the complete tag name; use * for patterns. Unknown exact names produce an error, including under !. = treats stars literally.',
+    'Tag names are normalized by trimming and lowercasing. Namespaced tags use namespace:tag. Matches the complete stored name; use * for patterns. Unknown exact names produce an error, including under !. = treats stars literally.',
   decode: (value: StringValue) => {
     if (!value.value.trim()) {
       throw new InvalidValueError('Expected a nonempty tag name');

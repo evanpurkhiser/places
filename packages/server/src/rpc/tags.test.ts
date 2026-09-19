@@ -79,10 +79,10 @@ describe.skipIf(!testUrl)('tag API and CLI against PostgreSQL', () => {
   });
 
   it('normalizes, lists, reads, renames, and deletes tags through RPC', async () => {
-    const cafe = await client.tags.create({name: '  Type:CAFE\t'});
+    const cafe = await client.tags.create({name: '  CAFE\t'});
     const bakery = await client.tags.create({name: 'bakery'});
 
-    expect(cafe.name).toBe('type:cafe');
+    expect(cafe.name).toBe('cafe');
     expect(cafe.icon).toBeNull();
     expect(cafe.description).toBeNull();
     expect(cafe.createdAt).toBeInstanceOf(Date);
@@ -237,10 +237,10 @@ describe.skipIf(!testUrl)('tag API and CLI against PostgreSQL', () => {
       ]);
 
     try {
-      const createdOutput = await cli('create', ' Type:CAFE ');
+      const createdOutput = await cli('create', ' CAFE ');
       const tag = JSON.parse(createdOutput.stdout);
 
-      expect(tag.name).toBe('type:cafe');
+      expect(tag.name).toBe('cafe');
       const listOutput = await cli('list');
       expect(JSON.parse(listOutput.stdout)).toEqual([tag]);
       const getOutput = await cli('get', tag.id);

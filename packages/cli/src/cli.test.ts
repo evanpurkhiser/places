@@ -6,9 +6,9 @@ import {execute, parser} from './cli.ts';
 
 describe('tag arguments', () => {
   it('normalizes names using the shared schema', () => {
-    expect(parse(parser, ['tags', 'create', ' Type:CAFE '])).toMatchObject({
+    expect(parse(parser, ['tags', 'create', ' CAFE '])).toMatchObject({
       success: true,
-      value: {action: 'create', name: 'type:cafe'},
+      value: {action: 'create', name: 'cafe'},
     });
   });
 
@@ -26,6 +26,8 @@ describe('tag arguments', () => {
 
   it.each([
     ['tags', 'create', '  '],
+    ['tags', 'create', ':cafe'],
+    ['tags', 'update', '9a53fa46-9d9d-4dac-b0b2-f3a8334900ef', 'type:'],
     ['tags', 'create'],
     ['tags', 'get', 'bad-id'],
     ['tags', 'list', '--unknown'],
@@ -163,7 +165,7 @@ describe('tag metadata', () => {
   it('creates tags with normalized emoji and verbatim descriptions', () => {
     const {tags, run} = setup([
       'create',
-      ' Type:CAFE ',
+      ' CAFE ',
       '--icon',
       ' ☕ ',
       '--description',
@@ -172,7 +174,7 @@ describe('tag metadata', () => {
     run();
 
     expect(tags.create).toHaveBeenCalledWith({
-      name: 'type:cafe',
+      name: 'cafe',
       icon: {emoji: '☕'},
       description: 'Cafe or coffee shop.',
     });
@@ -191,12 +193,12 @@ describe('tag metadata', () => {
   });
 
   it('preserves omitted metadata when renaming', () => {
-    const {tags, run} = setup(['update', id, ' Type:Coffee ']);
+    const {tags, run} = setup(['update', id, ' Coffee ']);
     run();
 
     expect(tags.update).toHaveBeenCalledWith({
       id,
-      name: 'type:coffee',
+      name: 'coffee',
       icon: undefined,
       description: undefined,
     });
@@ -214,11 +216,11 @@ describe('tag metadata', () => {
   });
 
   it('creates tags with null metadata for empty strings', () => {
-    const {tags, run} = setup(['create', 'type:cafe', '--icon', '', '--description', '']);
+    const {tags, run} = setup(['create', 'cafe', '--icon', '', '--description', '']);
     run();
 
     expect(tags.create).toHaveBeenCalledWith({
-      name: 'type:cafe',
+      name: 'cafe',
       icon: null,
       description: null,
     });
@@ -232,8 +234,8 @@ describe('tag metadata', () => {
   });
 
   it.each([
-    ['create', 'type:cafe', '--icon', '  '],
-    ['create', 'type:cafe', '--icon'],
+    ['create', 'cafe', '--icon', '  '],
+    ['create', 'cafe', '--icon'],
     ['update', id, '--icon', '  '],
     ['update', id, '--description'],
   ])('rejects invalid metadata arguments: %j', (...args) => {
@@ -477,5 +479,37 @@ describe.each(['namespace', 'ns'])('%s commands', command => {
     ['get', 'bad-id'],
   ])('rejects invalid arguments: %j', (...args) => {
     expect(parse(parser, [command, ...args])).toMatchObject({success: false});
+  });
+});
+
+describe('qualified tag commands', () => {
+  it('passes qualified names to creation and renaming', () => {
+    const tags = {create: vi.fn(), update: vi.fn()};
+    const client = {tags} as unknown as Client;
+    const id = '9a53fa46-9d9d-4dac-b0b2-f3a8334900ef';
+
+    for (const args of [
+      ['create', ' TYPE:CAFE '],
+      ['update', id, ' Cuisine:Coffee '],
+    ]) {
+      const result = parse(parser, ['tags', ...args]);
+      expect(result.success).toBe(true);
+
+      if (result.success) {
+        execute(result.value, client);
+      }
+    }
+
+    expect(tags.create).toHaveBeenCalledWith({
+      name: 'type:cafe',
+      icon: undefined,
+      description: undefined,
+    });
+    expect(tags.update).toHaveBeenCalledWith({
+      id,
+      name: 'cuisine:coffee',
+      icon: undefined,
+      description: undefined,
+    });
   });
 });

@@ -93,15 +93,23 @@ export const tags = pgTable(
   {
     id: uuid('id').defaultRandom().primaryKey(),
     name: text('name').notNull().unique(),
+    namespaceId: uuid('namespace_id').references(() => namespaces.id, {
+      onDelete: 'restrict',
+    }),
     icon: jsonb('icon').$type<TagIcon>(),
     description: text('description'),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
   table => [
+    index('tags_namespace_id_idx').on(table.namespaceId),
+    check(
+      'tags_namespace_name',
+      sql`(${table.namespaceId} IS NULL AND position(':' in ${table.name}) = 0) OR (${table.namespaceId} IS NOT NULL AND ${table.name} ~ '^[^:]+:[^:]+$')`,
+    ),
     check(
       'tags_name_normalized',
-      sql`${table.name} <> '' AND ${table.name} = lower(btrim(${table.name}))`,
+      sql`${table.name} <> '' AND ${table.name} = lower(btrim(${table.name})) AND split_part(${table.name}, ':', 1) = btrim(split_part(${table.name}, ':', 1)) AND split_part(${table.name}, ':', 2) = btrim(split_part(${table.name}, ':', 2))`,
     ),
   ],
 );

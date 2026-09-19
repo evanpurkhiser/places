@@ -10,7 +10,7 @@ import {RPCLink} from '@orpc/client/fetch';
 import type {Client} from '@places/common/contract';
 import {namespace} from '@places/common/contract/namespace';
 import {importInput, place} from '@places/common/contract/place';
-import {tag, tagIcon} from '@places/common/contract/tag';
+import {tag, tagIcon, tagReference} from '@places/common/contract/tag';
 import {z} from 'zod';
 
 import {formatFilterDocs} from './filter-docs.ts';
@@ -19,14 +19,14 @@ const id = argument(zod(tag.shape.id, {metavar: 'ID', placeholder: ''}), {
   description: message`Tag UUID, shown by tags list or tags create.`,
 });
 const name = argument(zod(tag.shape.name, {metavar: 'NAME', placeholder: ''}), {
-  description: message`Tag name; trimmed and lowercased. Namespaces such as type:cafe are optional.`,
+  description: message`Tag name or namespace:tag; trimmed and lowercased. The namespace must exist.`,
 });
 
 const assignmentArguments = {
   placeId: argument(zod(place.shape.id, {metavar: 'PLACE_ID', placeholder: ''}), {
     description: message`Saved place UUID, shown by list or import-status.`,
   }),
-  tag: argument(zod(tag.shape.name, {metavar: 'NAME_OR_ID', placeholder: ''}), {
+  tag: argument(zod(tagReference, {metavar: 'NAME_OR_ID', placeholder: ''}), {
     description: message`Existing tag name or UUID.`,
   }),
 };
@@ -112,7 +112,7 @@ export const parser = merge(
           }),
         ),
         tags: multiple(
-          option('--tag', zod(tag.shape.name, {metavar: 'NAME_OR_ID', placeholder: ''}), {
+          option('--tag', zod(tagReference, {metavar: 'NAME_OR_ID', placeholder: ''}), {
             description: message`Existing tag name or UUID. Repeat to apply multiple tags.`,
           }),
         ),
@@ -120,7 +120,7 @@ export const parser = merge(
           seq(
             option(
               '--tag-note',
-              zod(tag.shape.name, {metavar: 'NAME_OR_ID', placeholder: ''}),
+              zod(tagReference, {metavar: 'NAME_OR_ID', placeholder: ''}),
               {
                 description: message`Apply an existing tag with a note. Repeat for multiple tags; an empty note clears it.`,
               },

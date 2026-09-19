@@ -7,9 +7,20 @@ export const tagIcon = z.strictObject({
 
 export type TagIcon = z.infer<typeof tagIcon>;
 
+export const tagReference = z.string().trim().toLowerCase().min(1);
+
 export const tag = z.object({
   id: z.uuid(),
-  name: z.string().trim().toLowerCase().min(1),
+  name: tagReference.refine(
+    name => {
+      const parts = name.split(':');
+      return (
+        parts.length <= 2 && parts.every(part => part.length > 0 && part === part.trim())
+      );
+    },
+    {message: 'Use a tag name or namespace:tag with nonempty, trimmed parts'},
+  ),
+  namespaceId: z.uuid().nullable(),
   icon: tagIcon.nullable(),
   description: z.string().nullable(),
   createdAt: z.date(),
@@ -19,6 +30,7 @@ export const tag = z.object({
 const existingTag = oc.errors({NOT_FOUND: {message: 'Tag not found'}});
 const writableTag = oc.errors({
   CONFLICT: {message: 'A tag with this name already exists'},
+  NAMESPACE_NOT_FOUND: {status: 404, message: 'Namespace not found'},
 });
 
 export const tagContract = {

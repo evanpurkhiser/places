@@ -1,9 +1,9 @@
 import {implement} from '@orpc/server';
 import {contract} from '@places/common/contract';
-import {asc, eq} from 'drizzle-orm';
+import {asc, eq, sql} from 'drizzle-orm';
 
-import {isUniqueViolation} from '../db/errors.ts';
-import {namespaces} from '../db/schema.ts';
+import {isForeignKeyViolation, isUniqueViolation} from '../db/errors.ts';
+import {namespaces, tags} from '../db/schema.ts';
 
 import type {Context} from './context.ts';
 
@@ -47,29 +47,50 @@ export const namespaceRouter = api.router({
 
     return namespace!;
   }),
-  update: namespaceWrite.update.handler(async ({input, context: {db}, errors}) => {
-    const [namespace] = await db
-      .update(namespaces)
-      .set({name: input.name, icon: input.icon, description: input.description})
-      .where(eq(namespaces.id, input.id))
-      .returning();
+  update: namespaceWrite.update.handler(({input, context: {db}, errors}) =>
+    db.transaction(async tx => {
+      const [namespace] = await tx
+        .update(namespaces)
+        .set({name: input.name, icon: input.icon, description: input.description})
+        .where(eq(namespaces.id, input.id))
+        .returning();
 
-    if (!namespace) {
-      throw errors.NOT_FOUND();
-    }
+      if (!namespace) {
+        throw errors.NOT_FOUND();
+      }
 
-    return namespace;
-  }),
-  delete: api.delete.handler(async ({input, context: {db}, errors}) => {
-    const [namespace] = await db
-      .delete(namespaces)
-      .where(eq(namespaces.id, input.id))
-      .returning();
+      if (input.name !== undefined) {
+        await tx
+          .update(tags)
+          .set({name: sql`${namespace.name} || ':' || split_part(${tags.name}, ':', 2)`})
+          .where(eq(tags.namespaceId, namespace.id));
+      }
 
-    if (!namespace) {
-      throw errors.NOT_FOUND();
-    }
+      return namespace;
+    }),
+  ),
+  delete: api.delete
+    .use(async ({next, errors}) => {
+      try {
+        return await next();
+      } catch (error) {
+        if (isForeignKeyViolation(error, 'tags_namespace_id_namespaces_id_fk')) {
+          throw errors.CONFLICT();
+        }
 
-    return namespace;
-  }),
+        throw error;
+      }
+    })
+    .handler(async ({input, context: {db}, errors}) => {
+      const [namespace] = await db
+        .delete(namespaces)
+        .where(eq(namespaces.id, input.id))
+        .returning();
+
+      if (!namespace) {
+        throw errors.NOT_FOUND();
+      }
+
+      return namespace;
+    }),
 });

@@ -55,7 +55,7 @@ describe.skipIf(!testUrl)('filter engine with PostgreSQL', () => {
       .returning();
     const assigned = await db
       .insert(tags)
-      .values([{name: 'type:cafe'}, {name: 'attr:laptop-friendly'}])
+      .values([{name: 'cafe'}, {name: 'laptop-friendly'}])
       .returning();
 
     await db.insert(placeTags).values([
@@ -83,9 +83,9 @@ describe.skipIf(!testUrl)('filter engine with PostgreSQL', () => {
   }
 
   it('matches whole-place tag negation and avoids duplicate results', async () => {
-    expect(await names('tag[type:*] OR tag[attr:*]')).toEqual(['Bar', 'Cafe']);
-    expect(await names('!tag[type:cafe]')).toEqual(['Empty']);
-    expect(await names('!tag[=type:cafe]')).toEqual(['Empty']);
+    expect(await names('tag[cafe*] OR tag[laptop-*]')).toEqual(['Bar', 'Cafe']);
+    expect(await names('!tag[cafe]')).toEqual(['Empty']);
+    expect(await names('!tag[=cafe]')).toEqual(['Empty']);
   });
 
   it('measures radius in meters across the antimeridian and supports negation', async () => {
@@ -238,8 +238,8 @@ describe.skipIf(!testUrl)('filter engine with PostgreSQL', () => {
   });
 
   it('correlates tag assignment notes', async () => {
-    expect(await names('tag[type:cafe, notes:outlet]')).toEqual(['Bar']);
-    expect(await names('!tag[type:cafe, notes:outlet]')).toEqual(['Cafe', 'Empty']);
+    expect(await names('tag[cafe, notes:outlet]')).toEqual(['Bar']);
+    expect(await names('!tag[cafe, notes:outlet]')).toEqual(['Cafe', 'Empty']);
   });
 
   it('matches rectangle interiors and edges, wrapped bounds, and degenerate bounds', async () => {
@@ -386,15 +386,15 @@ describe.skipIf(!testUrl)('filter engine with PostgreSQL', () => {
         coordinates: 'SRID=4326;POINT(-74 40)',
       })
       .returning();
-    const [tag] = await db.select().from(tags).where(eq(tags.name, 'type:cafe'));
+    const [tag] = await db.select().from(tags).where(eq(tags.name, 'cafe'));
 
     try {
       await db.insert(placeTags).values({placeId: place!.id, tagId: tag!.id});
-      expect(await names('tag[type:cafe] AND !tag[type:cafe, notes:=outlets]')).toEqual([
+      expect(await names('tag[cafe] AND !tag[cafe, notes:=outlets]')).toEqual([
         'Cafe',
         'NoNote',
       ]);
-      expect(await names('!tag[type:cafe, notes:=outlets]')).toEqual([
+      expect(await names('!tag[cafe, notes:=outlets]')).toEqual([
         'Cafe',
         'Empty',
         'NoNote',

@@ -6,7 +6,15 @@ properties use camelCase and PostgreSQL columns use snake_case.
 - Deleting a place, tag, or source cascades to its join-table associations.
 - Deleting a place preserves its source and tag records.
 - Source types and JSON payloads remain open-ended pending capture contracts.
-- Tag names must be nonempty, lowercase, and trimmed; normalize inputs before writing.
+- Namespaces have unique, nonempty, lowercase, trimmed names without colons,
+  optional descriptions, and icons in the tag icon format.
+- Tags have a nullable `namespace_id` referencing namespaces; deleting a namespace
+  containing tags is restricted.
+- Tags store globally unique qualified names (`type:cafe`). Names are lowercase
+  and trimmed; namespaced tags have exactly one colon with nonempty parts.
+- Application writes resolve and lock the namespace before writing a qualified
+  tag name. Namespace renames rewrite member prefixes in the same transaction.
+  Direct SQL writers must keep the prefix and `namespace_id` consistent.
 - `updated_at` is maintained by Drizzle's `$onUpdate` for Drizzle updates. Direct
   SQL writers must set it explicitly.
 
@@ -35,6 +43,12 @@ Review generated SQL and change `"geography(Point, 4326)"` to
 migration emits that type. Use reviewed migration files for schema changes.
 
 ## Review
+
+Migration `0005_namespaces` creates the namespace table. Migration
+`0006_tag_namespaces` adds tag membership and qualified-name constraints.
+For existing qualified tags, manually create their namespaces and backfill
+`namespace_id` after adding the column and before applying the constraints.
+Preserve tag names, IDs, and place associations during this conversion.
 
 From the server package:
 
