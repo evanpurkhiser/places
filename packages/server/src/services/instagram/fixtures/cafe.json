@@ -1,0 +1,95 @@
+{
+  "content": {
+    "caption": "Coffee at Example Cafe on Orchard Street in Manhattan. Small, casual spot for a flat white.",
+    "location": "Lower East Side, New York",
+    "transcript": "I stopped at Example Cafe on Orchard Street. Try the flat white."
+  },
+  "catalog": {
+    "namespaces": [
+      {
+        "id": "10000000-0000-4000-8000-000000000001",
+        "name": "type",
+        "description": "What kind of place this is"
+      },
+      {
+        "id": "10000000-0000-4000-8000-000000000002",
+        "name": "vibe",
+        "description": "Atmosphere supported by the post"
+      },
+      {
+        "id": "10000000-0000-4000-8000-000000000003",
+        "name": "rating",
+        "description": "My personal rating"
+      }
+    ],
+    "tags": [
+      {
+        "id": "20000000-0000-4000-8000-000000000001",
+        "name": "type:cafe",
+        "namespaceId": "10000000-0000-4000-8000-000000000001",
+        "description": "Coffee shops and cafes"
+      },
+      {
+        "id": "20000000-0000-4000-8000-000000000002",
+        "name": "type:restaurant",
+        "namespaceId": "10000000-0000-4000-8000-000000000001",
+        "description": "Places serving meals"
+      },
+      {
+        "id": "20000000-0000-4000-8000-000000000003",
+        "name": "vibe:casual",
+        "namespaceId": "10000000-0000-4000-8000-000000000002",
+        "description": "Relaxed and informal"
+      },
+      {
+        "id": "20000000-0000-4000-8000-000000000004",
+        "name": "rating:favorite",
+        "namespaceId": "10000000-0000-4000-8000-000000000003",
+        "description": null
+      },
+      {
+        "id": "20000000-0000-4000-8000-000000000005",
+        "name": "needs-review",
+        "namespaceId": null,
+        "description": "Awaiting my review"
+      }
+    ]
+  },
+  "options": {
+    "model": "o4-mini",
+    "instructions": "Assign at least one type tag. Use vibe tags only when obvious. Never assign my personal ratings.",
+    "excludedNamespaces": ["rating"],
+    "excludedTags": ["needs-review"],
+    "requiredNamespaces": ["type"]
+  },
+  "candidates": [
+    {
+      "id": "ChIJwrongBranch",
+      "displayName": {"text": "Example Cafe"},
+      "formattedAddress": "10 Example Street, Brooklyn, NY",
+      "location": {"latitude": 40.68, "longitude": -73.98},
+      "googleMapsUri": "https://maps.google.com/?q=place_id:ChIJwrongBranch",
+      "primaryTypeDisplayName": {"text": "Coffee shop"}
+    },
+    {
+      "id": "ChIJorchard",
+      "displayName": {"text": "Example Cafe"},
+      "formattedAddress": "100 Orchard Street, New York, NY",
+      "location": {"latitude": 40.72, "longitude": -73.99},
+      "googleMapsUri": "https://maps.google.com/?q=place_id:ChIJorchard",
+      "primaryTypeDisplayName": {"text": "Coffee shop"}
+    }
+  ],
+  "output": {
+    "places": [
+      {
+        "googlePlaceId": "ChIJorchard",
+        "tags": ["type:cafe", "vibe:casual"],
+        "description": "A casual cafe recommended for a flat white.",
+        "evidence": "Caption names Orchard Street in Manhattan and calls the cafe casual.",
+        "matchReason": "The Orchard Street address matches the post; the Brooklyn branch does not."
+      }
+    ],
+    "unresolved": []
+  }
+}

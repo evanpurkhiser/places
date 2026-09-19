@@ -22,7 +22,7 @@ const details = z.object({
   location,
 });
 
-const searchDetails = details.extend({
+export const searchDetails = details.extend({
   primaryTypeDisplayName: z.object({text: z.string()}).nullish(),
 });
 
