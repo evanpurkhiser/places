@@ -18,6 +18,10 @@ const geographyPoint = customType<{data: string; driverData: string}>({
   dataType: () => 'geography(Point, 4326)',
 });
 
+// Recurring opening hours as [start, end) minute offsets in the place's local
+// week: Sunday 00:00 = 0, the following Sunday 00:00 = 10080. Ranges are sorted
+// and merged; periods crossing the week boundary are split at 0/10080.
+// [[0, 10080]] means 24/7, [] means closed all week, and SQL NULL means unknown.
 const weeklyHours = customType<{data: Array<[number, number]>; driverData: string}>({
   dataType: () => 'int4multirange',
   toDriver: ranges => `{${ranges.map(([start, end]) => `[${start},${end})`).join(',')}}`,
@@ -48,6 +52,7 @@ export const places = pgTable(
     googleMapsUrl: text('google_maps_url'),
     coordinates: geographyPoint('coordinates').notNull(),
     userNote: text('user_note'),
+    // IANA zone used to map instants to the local weekly schedule.
     timeZone: text('time_zone'),
     hoursWeeklyOpen: weeklyHours('hours_weekly_open'),
     businessStatus: text('business_status'),

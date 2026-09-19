@@ -325,50 +325,33 @@ tag[type:cafe] location[within("Manhattan, NYC")] !location[within("East Village
 (location[within("Manhattan, NYC")] OR location[within("Brooklyn, NYC")]) tag[type:museum]
 ```
 
-## Opening hours and aliases
+## Opening hours
 
-Hours require a dedicated design pass. The forms and semantics in this section
-are working proposals to review individually before implementation. That review
-should cover instant queries, intervals, aliases, unknown data, time zones, and
-freshness. Longer-stay, opening-soon, and open-on-arrival predicates are future
-discussion topics; their syntax and routing dependencies remain to be designed.
-
-Use `hours[...]` as the canonical field with typed temporal functions:
+Use the `open` filter with typed time and duration values:
 
 ```text
-hours[open(now)]
-hours[open("2026-09-17T15:00:00-04:00")]
-hours[openDuring("2026-09-17T15:00:00-04:00", "2026-09-17T17:00:00-04:00")]
-hours[closed(now)]
-hours[known(now)]
+open[@now]
+open[6pm, for:2h]
+open["MON 6pm", until:"tue 2am"]
+open["2026-09-21T18:00:00-04:00", for:2h]
+!open[@now]
 ```
 
-`open` tests one instant. `openDuring` requires continuous opening throughout the
-half-open interval `[start, end)`, with start before end. Resolve `now` once per
-request. Explicit timestamps require a UTC offset or `Z`; evaluation uses each
-place's time zone and applicable hours, including overnight periods and dated
-exceptions. General phrases such as "today at 3" need an explicit date/time-zone
-policy before they enter the grammar.
+Time literals accept local clock times, recurring weekdays, and ISO timestamps
+with an explicit UTC offset or `Z`. `@now` resolves once per query. Bare clock
+times use today's date in each place's time zone. Duration literals use `m` or
+`h`. See [time values](time-values.md) for supported spellings, endpoint rules,
+daylight-saving behavior, and interval limits.
 
-Propose `hours[open]` as an alias for `hours[open(now)]`, and `hours[closed]` for
-`hours[closed(now)]`. Aliases expand to canonical expressions before execution and
-appear in explanations.
+`for` and `until` require continuous opening throughout the half-open interval.
+Missing hours produce unknown, preserved by negation. `!open[@now]` therefore
+selects known-closed places. Boolean composition uses SQL three-valued logic:
+`false AND unknown` is false and `true OR unknown` is true. Return places whose
+complete expression is true.
 
-Missing or insufficient hours produce an unknown result. Use three-valued logic
-for predicates dependent on unavailable data: `!unknown` is unknown;
-`false AND unknown` is false; `true OR unknown` is true; other combinations with
-unknown remain unknown. Return places whose complete expression is true.
-Consequently, `!hours[open(now)]` selects known closed places, and
-`!hours[known(now)]` selects places whose open status cannot be established.
-
-Absent optional text matches false; use `has[notes]` to inspect its presence.
-Unknown semantics apply to unavailable contextual metadata such as hours, rather
-than to expected absence of user-authored data. Provider request failures remain
-errors, distinct from a successful response with unavailable hours.
-
-The current database has coordinates and basic place metadata. Hours, time zones,
-boundary resolution, and routing require additional data and integrations. See
-[Place metadata](place-metadata.md) for the enrichment direction.
+The filter evaluates the saved recurring primary schedule and recorded business
+closure status. Results reflect the last sync; holiday exceptions and dated
+schedules require additional data.
 
 ## Saved queries: future implementation
 

@@ -29,6 +29,7 @@ it('serves serializable documentation for the registered query capabilities', as
     'notes',
     'has',
     'location',
+    'open',
   ]);
   expect(documentation.functions.map(fn => fn.name)).toEqual([
     'point',

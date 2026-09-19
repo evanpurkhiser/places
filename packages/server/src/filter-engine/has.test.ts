@@ -39,6 +39,7 @@ it('uses the invoking engine registry and passes context to presence handlers', 
   const first = makeEngine('custom', firstPresence);
   const second = makeEngine('custom', secondPresence);
   const context = {
+    now: Date.now(),
     google: createGooglePlaces(),
     tagExists: vi.fn(),
     resolvePoint: vi.fn(),

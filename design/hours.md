@@ -151,29 +151,28 @@ See [PostgreSQL range types](https://www.postgresql.org/docs/17/rangetypes.html)
 ## Query behavior
 
 Keep the temporal syntax and three-valued semantics in
-[the search grammar](search-grammar.md#opening-hours-and-aliases):
+[the search grammar](search-grammar.md#opening-hours):
 
 ```text
-hours[open(now)]
-hours[open("2026-09-19T00:30:00-04:00")]
-hours[openDuring("2026-09-19T18:00:00-04:00", "2026-09-19T20:00:00-04:00")]
-hours[closed(now)]
-hours[known(now)]
+open[@now]
+open["2026-09-19T00:30:00-04:00"]
+open["mon 6pm", until:"tue 2am"]
+open[@now, for:2h]
+!open[@now]
 ```
 
-`openDuring` means continuously open for the entire half-open interval. Being
+Intervals require continuous opening throughout the half-open interval. Being
 open at both endpoints is insufficient: L’Échaudé's lunch-to-dinner gap must
-cause a spanning request to fail. An overlap predicate can be added separately
-when needed. Resolve `now` once per query and require explicit offsets for
-timestamp literals.
+cause a spanning request to fail. Resolve `@now` once per query. Literal formats
+and endpoint semantics are documented in [time values](time-values.md).
 
 Results describe the saved weekly schedule as of `last_sync`. Holiday exceptions
 and temporary schedule changes may differ from that schedule. Occasional syncs
 refresh the saved hours; filtering evaluates them locally.
 
-A nullable SQL predicate preserves unknown through `NOT`, `AND`, and `OR`;
-`known` explicitly returns a non-null boolean. Missing hours or a missing time
-zone make time-based evaluation unknown.
+A nullable SQL predicate preserves unknown through `NOT`, `AND`, and `OR`.
+Missing hours produce unknown. Clock and instant evaluation also require the
+place's time zone; recurring weekly values can use the schedule directly.
 
 For regular instant evaluation, convert the instant to each place's local minute
 of week and test `hours_weekly_open @> minute`. Group candidates by time zone so the
@@ -219,8 +218,7 @@ investigation does not establish query latency.
    to be checked, but some responses will still legitimately have unknown hours.
    Exclude unavailable-hours rows from repeated initial-backfill selection;
    include them in subsequent explicit syncs.
-6. Register a temporal-predicate data type, `open`/`openDuring`/`closed`/`known`
-   functions, and the `hours` filter. Keep temporal logic in reusable helpers and
+6. Register time and duration value types and the `open` filter. Keep temporal logic in reusable helpers and
    publish signatures through the existing filter documentation registry.
 
 Change detection happens after fetching provider details. It saves database

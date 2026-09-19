@@ -20,6 +20,9 @@ export const place = z.object({
   coordinates: z.object({latitude: z.number(), longitude: z.number()}),
   userNote: z.string().nullable(),
   timeZone: z.string().nullable(),
+  // Sorted, merged [start, end) minute offsets in the place's local week, with
+  // Sunday 00:00 = 0 and week end = 10080. Week-crossing periods are split.
+  // [[0, 10080]] means 24/7; [] means closed all week; null means unknown.
   hoursWeeklyOpen: z.array(z.tuple([z.number().int(), z.number().int()])).nullable(),
   businessStatus: z.string().nullable(),
   lastSync: z.date().nullable(),

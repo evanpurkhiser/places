@@ -58,6 +58,8 @@ describe.skipIf(!testUrl)('place filtering through API and CLI', () => {
         formattedAddress: 'New York',
         coordinates: 'SRID=4326;POINT(-74 40)',
         userNote: 'Great coffee',
+        timeZone: 'America/New_York',
+        hoursWeeklyOpen: [[2520, 2640]],
       },
       {
         id: bakeryId,
@@ -96,6 +98,33 @@ describe.skipIf(!testUrl)('place filtering through API and CLI', () => {
     expect(result.map(place => place.id).sort()).toEqual([cafeId, bakeryId].sort());
     const nonCafes = await client.places.list({query: '!tag[type:cafe]'});
     expect(nonCafes.map(place => place.id)).toEqual([bakeryId]);
+  });
+
+  it.each([
+    ['open["mon 6 pm", for:2h]', [cafeId]],
+    ['open["MON 6PM", until:"mon 8 pm"]', [cafeId]],
+    ['open["2026-09-21T18:00:00-04:00", for:2h]', [cafeId]],
+    ['open["mon 6pm", for:3h]', []],
+    ['!open["mon 6pm"]', []],
+    ['!open["mon 9pm"]', [cafeId]],
+  ])('filters hours through the API: %s', async (query, expected) => {
+    const result = await client.places.list({query});
+    expect(result.map(place => place.id)).toEqual(expected);
+  });
+
+  it('resolves @now and today through the API', async () => {
+    const clock = vi
+      .spyOn(Date, 'now')
+      .mockReturnValue(Date.parse('2026-09-21T22:00:00Z'));
+
+    try {
+      for (const query of ['open[@now, for:2h]', 'open["6 pm", for:2h]']) {
+        const result = await client.places.list({query});
+        expect(result.map(place => place.id)).toEqual([cafeId]);
+      }
+    } finally {
+      clock.mockRestore();
+    }
   });
 
   it('resolves named origins through the API before filtering saved places', async () => {
@@ -174,6 +203,9 @@ describe.skipIf(!testUrl)('place filtering through API and CLI', () => {
     'location[within("Manhattan, NYC")]',
     'tag[custom()]',
     'tag[missing]',
+    'open["6 p.m."]',
+    'open[@now, for:2h, until:@now]',
+    'open[@now, until:"mon 6pm"]',
   ])('returns structured diagnostics for %s', async query => {
     await expect(client.places.list({query})).rejects.toMatchObject({
       code: 'BAD_REQUEST',
@@ -209,6 +241,14 @@ describe.skipIf(!testUrl)('place filtering through API and CLI', () => {
         ]);
       const {stdout} = await cli('list', '--query', 'tag[type:cafe]');
       expect(JSON.parse(stdout).map((place: {id: string}) => place.id)).toEqual([cafeId]);
+      const {stdout: openPlaces} = await cli(
+        'list',
+        '--query',
+        'open["mon 6 pm", for:2h]',
+      );
+      expect(JSON.parse(openPlaces).map((place: {id: string}) => place.id)).toEqual([
+        cafeId,
+      ]);
       const {stdout: documentation} = await cli('docs', 'filter');
       expect(documentation).toMatch(/^Filter language\n/);
       expect(documentation).toContain('Example: tag[favorite]');

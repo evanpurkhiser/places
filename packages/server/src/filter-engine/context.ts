@@ -13,6 +13,7 @@ import {
 export type Point = {longitude: number; latitude: number};
 
 export interface Context {
+  readonly now: number;
   google: GooglePlaces;
   tagExists(name: string): Promise<boolean>;
   resolvePoint(name: string): Promise<Point>;
@@ -50,6 +51,7 @@ export function createContext(
   }
 
   const context: Context = {
+    now: Date.now(),
     google,
     resolvePoint(name) {
       const existing = points.get(name);

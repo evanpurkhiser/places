@@ -9,6 +9,7 @@ import {placeFilterEngine} from './index.ts';
 const dialect = new PgDialect();
 async function compile(query: string, names = ['type:cafe', 'type:bar', 'star:*']) {
   const context = {
+    now: Date.now(),
     google: createGooglePlaces(),
     tagExists: (name: string) => Promise.resolve(names.includes(name)),
     resolvePoint: vi.fn(),

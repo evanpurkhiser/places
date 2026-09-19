@@ -194,8 +194,8 @@ saved place owns that ID, the refresh fails atomically and preserves both places
 `hoursWeeklyOpen`. Hours are pairs of inclusive-start/exclusive-end minute offsets
 from Sunday midnight, between 0 and 10,080. For example, Monday 09:00–12:00 is
 `[[1980,2160]]`; 24/7 is `[[0,10080]]`. Null means unknown and an empty array means
-known closed throughout the week. Queries for opening hours are planned; the
-saved weekly schedule reflects the last sync and may differ on holidays.
+known closed throughout the week. The `open` filter evaluates this saved weekly
+schedule, which reflects the last sync and may differ on holidays.
 
 ## Search and filter engine
 
@@ -216,9 +216,11 @@ pnpm places list --query 'tag[favorite] AND !tag[visited]'
 pnpm places list --query 'tag[laptop-friendly, notes:outlet]'
 pnpm places list --query '(name[coffee] OR tag[type:bakery]) !has[notes]'
 pnpm places list --query 'location[radius("East Village, NY", 1mi)]'
+pnpm places list --query 'open[@now, for:2h]'
+pnpm places list --query 'open["mon 6pm", until:"tue 2am"]'
 ```
 
-Supported filters are `tag`, `name`, `address`, `notes`, `has`, and `location`.
+Supported filters are `tag`, `name`, `address`, `notes`, `has`, `location`, and `open`.
 Tags support exact
 names and wildcard patterns; `notes:` within a tag predicate matches that same
 assignment's note. Exact unknown tags return errors, including under negation.
@@ -233,9 +235,16 @@ provides the origin point. Independent
 lookups run concurrently, and repeated names share one lookup per query.
 Radius distances support `m`, `km`, `ft`, and `mi`.
 
+`open` accepts `@now`, clock times such as `6pm` or `22:00`, weekday times such
+as `"MON 6pm"`, and ISO timestamps such as `"2026-09-21T18:00:00-04:00"`.
+Clock times mean today in each place's time zone. Add `for:2h` or an `until:`
+endpoint to require continuous opening. Duration units are `m` and `h`.
+Missing hours remain unknown under negation, so `!open[@now]` selects known-closed
+places. See [time values](design/time-values.md) for interval and time-zone rules.
+
 Listing accepts an optional query and returns the existing array of places, newest
 first. Query failures print JSON diagnostics with source locations to stderr and
-exit nonzero. Area boundaries, hours, saved-query, and date filters require future server
+exit nonzero. Area boundaries and saved-query filters require future server
 implementations.
 
 The shared package exports a PEG-based query parser at `@places/common/search`:
