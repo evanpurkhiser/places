@@ -6,6 +6,7 @@
   "type": "module",
   "exports": {
     "./contract": "./src/contract/index.ts",
+    "./contract/namespace": "./src/contract/namespace.ts",
     "./contract/tag": "./src/contract/tag.ts",
     "./contract/place": "./src/contract/place.ts",
     "./search": "./src/search/index.ts",

@@ -70,6 +70,24 @@ export const places = pgTable(
   ],
 );
 
+export const namespaces = pgTable(
+  'namespaces',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    name: text('name').notNull().unique(),
+    icon: jsonb('icon').$type<TagIcon>(),
+    description: text('description'),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  table => [
+    check(
+      'namespaces_name_normalized',
+      sql`${table.name} <> '' AND position(':' in ${table.name}) = 0 AND ${table.name} = lower(btrim(${table.name}))`,
+    ),
+  ],
+);
+
 export const tags = pgTable(
   'tags',
   {

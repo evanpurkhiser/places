@@ -66,6 +66,30 @@ an optional name and preserves omitted fields. Pass an empty string with
 `--icon ''` or `--description ''` to set that field to null. Updates require
 at least one change.
 
+## Namespaces
+
+Manage namespaces with `namespace` or its alias `ns`:
+
+```sh
+pnpm places namespace create type --icon '🏷️' --description 'What kind of establishment this is'
+pnpm places ns list
+pnpm places ns get <id>
+pnpm places ns update <id> category
+pnpm places ns update <id> --icon '📍' --description 'Place categories'
+pnpm places ns update <id> --icon '' --description ''
+pnpm places ns delete <id>
+```
+
+Namespace names are unique, trimmed, lowercase, and nonempty. Colons are reserved
+as separators. Icons use the same `{emoji: string}` format as tags. Updates
+preserve omitted fields and accept a name, icon, description, or a combination;
+empty CLI metadata values clear those fields. Renaming preserves the UUID.
+
+The `namespaces` RPC exposes `list`, `get`, `create`, `update`, and `delete`.
+Listing returns namespaces sorted by name; duplicate names return 409 and
+missing IDs return 404. Schemas are exported from
+`@places/common/contract/namespace`.
+
 ## Place tags
 
 `places.list` includes a `tags` array on each place. Each association contains
@@ -286,7 +310,7 @@ Database integration tests run when `TEST_DATABASE_URL` points to a PostgreSQL
 instance with PostGIS available. They create and drop a separate randomly named
 database; the supplied role needs database creation and extension permissions.
 Use a development instance. CLI integration tests bind `127.0.0.1` on ports
-15188, 15189, and 15190.
+15188, 15189, 15190, and 15191.
 
 ```sh
 TEST_DATABASE_URL=postgres://places:places@127.0.0.1:5432/places pnpm test

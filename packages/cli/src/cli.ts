@@ -8,6 +8,7 @@ import {zod} from '@optique/zod';
 import {createORPCClient} from '@orpc/client';
 import {RPCLink} from '@orpc/client/fetch';
 import type {Client} from '@places/common/contract';
+import {namespace} from '@places/common/contract/namespace';
 import {importInput, place} from '@places/common/contract/place';
 import {tag, tagIcon} from '@places/common/contract/tag';
 import {z} from 'zod';
@@ -46,6 +47,36 @@ const tagMetadata = {
   description: optional(
     option('--description', string({metavar: 'TEXT'}), {
       description: message`Description of the tag. An empty string clears it.`,
+    }),
+  ),
+};
+
+const namespaceId = argument(zod(namespace.shape.id, {metavar: 'ID', placeholder: ''}), {
+  description: message`Namespace UUID, shown by namespace list or namespace create.`,
+});
+const namespaceName = argument(
+  zod(namespace.shape.name, {metavar: 'NAME', placeholder: ''}),
+  {
+    description: message`Namespace name; trimmed and lowercased. Colons are reserved.`,
+  },
+);
+
+const namespaceMetadata = {
+  icon: optional(
+    option(
+      '--icon',
+      zod(z.union([z.literal(''), tagIcon.shape.emoji]), {
+        metavar: 'EMOJI',
+        placeholder: '',
+      }),
+      {
+        description: message`Emoji icon for the namespace. An empty string clears it.`,
+      },
+    ),
+  ),
+  description: optional(
+    option('--description', string({metavar: 'TEXT'}), {
+      description: message`Description of the namespace. An empty string clears it.`,
     }),
   ),
 };
@@ -173,6 +204,51 @@ export const parser = merge(
       },
     ),
     command(
+      'namespace',
+      or(
+        command('list', object({action: constant('namespace-list')}), {
+          description: message`List all namespaces sorted by name.`,
+        }),
+        command('get', object({action: constant('namespace-get'), id: namespaceId}), {
+          description: message`Show a namespace by ID.`,
+        }),
+        command(
+          'create',
+          object({
+            action: constant('namespace-create'),
+            name: namespaceName,
+            ...namespaceMetadata,
+          }),
+          {
+            description: message`Create a namespace. Duplicate names are rejected.`,
+          },
+        ),
+        command(
+          'update',
+          object({
+            action: constant('namespace-update'),
+            id: namespaceId,
+            name: optional(namespaceName),
+            ...namespaceMetadata,
+          }),
+          {
+            description: message`Update a namespace's name, icon, or description, preserving its ID.`,
+          },
+        ),
+        command(
+          'delete',
+          object({action: constant('namespace-delete'), id: namespaceId}),
+          {
+            description: message`Delete a namespace.`,
+          },
+        ),
+      ),
+      {
+        aliases: ['ns'],
+        description: message`Create, browse, update, and delete tag namespaces.`,
+      },
+    ),
+    command(
       'tags',
       or(
         command('list', object({action: constant('list')}), {
@@ -236,6 +312,20 @@ export function execute(args: InferValue<typeof parser>, client: Client) {
       return client.places.syncStatus({jobId: args.jobId});
     case 'import-status':
       return client.places.importStatus({jobId: args.jobId});
+    case 'namespace-list':
+      return client.namespaces.list();
+    case 'namespace-get':
+      return client.namespaces.get({id: args.id});
+    case 'namespace-create':
+      return client.namespaces.create({
+        name: args.name,
+        icon: iconPayload(args.icon),
+        description: args.description === '' ? null : args.description,
+      });
+    case 'namespace-update':
+      return updateNamespace(args, client);
+    case 'namespace-delete':
+      return client.namespaces.delete({id: args.id});
     case 'list':
       return client.tags.list();
     case 'get':
@@ -266,6 +356,26 @@ function updateTag(
   }
 
   return client.tags.update({
+    id: args.id,
+    name: args.name,
+    icon: iconPayload(args.icon),
+    description: args.description === '' ? null : args.description,
+  });
+}
+
+function updateNamespace(
+  args: Extract<InferValue<typeof parser>, {action: 'namespace-update'}>,
+  client: Client,
+) {
+  if (
+    args.name === undefined &&
+    args.icon === undefined &&
+    args.description === undefined
+  ) {
+    throw new Error('Provide a name, --icon, or --description.');
+  }
+
+  return client.namespaces.update({
     id: args.id,
     name: args.name,
     icon: iconPayload(args.icon),

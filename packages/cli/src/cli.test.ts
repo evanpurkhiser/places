@@ -363,3 +363,119 @@ describe('place sync commands', () => {
     expect(parse(parser, ['sync-status', 'invalid'])).toMatchObject({success: false});
   });
 });
+
+describe.each(['namespace', 'ns'])('%s commands', command => {
+  const id = '9a53fa46-9d9d-4dac-b0b2-f3a8334900ef';
+
+  function setup(args: string[]) {
+    const result = parse(parser, [command, ...args]);
+
+    if (!result.success) {
+      throw new Error('Expected valid arguments');
+    }
+
+    const tags = {
+      create: vi.fn(),
+      update: vi.fn(),
+      list: vi.fn(),
+      get: vi.fn(),
+      delete: vi.fn(),
+    };
+    const client = {namespaces: tags} as unknown as Client;
+
+    return {tags, run: () => execute(result.value, client)};
+  }
+
+  it('creates tags with normalized emoji and verbatim descriptions', () => {
+    const {tags, run} = setup([
+      'create',
+      ' TYPE ',
+      '--icon',
+      ' ☕ ',
+      '--description',
+      'Cafe or coffee shop.',
+    ]);
+    run();
+
+    expect(tags.create).toHaveBeenCalledWith({
+      name: 'type',
+      icon: {emoji: '☕'},
+      description: 'Cafe or coffee shop.',
+    });
+  });
+
+  it('updates metadata without renaming the tag', () => {
+    const {tags, run} = setup(['update', id, '--icon', '☕', '--description', 'Coffee.']);
+    run();
+
+    expect(tags.update).toHaveBeenCalledWith({
+      id,
+      name: undefined,
+      icon: {emoji: '☕'},
+      description: 'Coffee.',
+    });
+  });
+
+  it('preserves omitted metadata when renaming', () => {
+    const {tags, run} = setup(['update', id, ' CATEGORY ']);
+    run();
+
+    expect(tags.update).toHaveBeenCalledWith({
+      id,
+      name: 'category',
+      icon: undefined,
+      description: undefined,
+    });
+  });
+
+  it.each([
+    [['--icon', ''], {icon: null, description: undefined}],
+    [['--description', ''], {icon: undefined, description: null}],
+    [['--icon', '', '--description', ''], {icon: null, description: null}],
+  ])('clears fields with empty strings: %j', (options, metadata) => {
+    const {tags, run} = setup(['update', id, ...options]);
+    run();
+
+    expect(tags.update).toHaveBeenCalledWith({id, name: undefined, ...metadata});
+  });
+
+  it('creates tags with null metadata for empty strings', () => {
+    const {tags, run} = setup(['create', 'type', '--icon', '', '--description', '']);
+    run();
+
+    expect(tags.create).toHaveBeenCalledWith({
+      name: 'type',
+      icon: null,
+      description: null,
+    });
+  });
+
+  it('rejects empty updates before calling the server', () => {
+    const {tags, run} = setup(['update', id]);
+
+    expect(run).toThrow('Provide a name, --icon, or --description.');
+    expect(tags.update).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['create', 'type', '--icon', '  '],
+    ['create', 'type', '--icon'],
+    ['update', id, '--icon', '  '],
+    ['update', id, '--description'],
+  ])('rejects invalid metadata arguments: %j', (...args) => {
+    expect(parse(parser, [command, ...args])).toMatchObject({success: false});
+  });
+  it.each(['list', 'get', 'delete'] as const)('dispatches %s', action => {
+    const {tags, run} = setup([action, ...(action === 'list' ? [] : [id])]);
+    run();
+    expect(tags[action].mock.calls).toEqual(action === 'list' ? [[]] : [[{id}]]);
+  });
+
+  it.each([
+    ['create', 'type:cafe'],
+    ['update', id, 'type:cafe'],
+    ['get', 'bad-id'],
+  ])('rejects invalid arguments: %j', (...args) => {
+    expect(parse(parser, [command, ...args])).toMatchObject({success: false});
+  });
+});

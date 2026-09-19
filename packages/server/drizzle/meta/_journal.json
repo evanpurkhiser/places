@@ -36,6 +36,13 @@
       "when": 1789738416857,
       "tag": "0004_place_hours",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1789786301059,
+      "tag": "0005_namespaces",
+      "breakpoints": true
     }
   ]
 }
