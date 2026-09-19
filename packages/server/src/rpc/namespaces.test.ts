@@ -256,6 +256,86 @@ describe.skipIf(!testUrl)('namespace API and CLI against PostgreSQL', () => {
     await client.namespaces.delete({id: type.id});
   });
 
+  it('force deletes a namespace while preserving tags and place associations', async () => {
+    const namespace = await client.namespaces.create({name: 'type'});
+    const cafe = await client.tags.create({
+      name: 'type:cafe',
+      icon: {emoji: '☕'},
+      description: 'Coffee',
+    });
+    const bakery = await client.tags.create({name: 'type:bakery'});
+    const other = await client.namespaces.create({name: 'other'});
+    const unrelated = await client.tags.create({name: 'other:cafe'});
+    const [place] = await db
+      .insert(places)
+      .values({
+        googlePlaceId: 'force-delete',
+        name: 'Cafe',
+        formattedAddress: 'NYC',
+        coordinates: 'SRID=4326;POINT(-74 40)',
+      })
+      .returning();
+    const assignment = await client.places.tag({
+      placeId: place!.id,
+      tag: cafe.name,
+      notes: 'Espresso',
+    });
+
+    expect(await client.namespaces.delete({id: namespace.id, force: true})).toEqual(
+      namespace,
+    );
+    await expect(client.namespaces.get({id: namespace.id})).rejects.toMatchObject({
+      code: 'NOT_FOUND',
+    });
+    expect(await client.tags.get({id: cafe.id})).toMatchObject({
+      ...cafe,
+      name: 'cafe',
+      namespaceId: null,
+      updatedAt: expect.any(Date),
+    });
+    expect(await client.tags.get({id: bakery.id})).toMatchObject({
+      name: 'bakery',
+      namespaceId: null,
+    });
+    expect(await client.tags.get({id: unrelated.id})).toEqual(unrelated);
+    expect(await client.namespaces.get({id: other.id})).toEqual(other);
+    const matches = await client.places.list({query: 'tag[cafe]'});
+    expect(matches[0]!.tags).toEqual([
+      expect.objectContaining({
+        ...assignment,
+        tag: expect.objectContaining({id: cafe.id, name: 'cafe'}),
+      }),
+    ]);
+  });
+
+  it('rolls back the entire force deletion when any bare tag name collides', async () => {
+    const namespace = await client.namespaces.create({name: 'type'});
+    await client.tags.create({name: 'type:bakery'});
+    await client.tags.create({name: 'type:cafe'});
+    await client.tags.create({name: 'cafe'});
+    const before = await client.tags.list();
+
+    await expect(
+      client.namespaces.delete({id: namespace.id, force: true}),
+    ).rejects.toMatchObject({
+      code: 'CONFLICT',
+      status: 409,
+      message: 'Cannot unlink tags: a bare tag name already exists',
+    });
+    expect(await client.namespaces.get({id: namespace.id})).toEqual(namespace);
+    expect(await client.tags.list()).toEqual(before);
+  });
+
+  it('force deletes empty namespaces and reports missing ones', async () => {
+    const namespace = await client.namespaces.create({name: 'empty'});
+    expect(await client.namespaces.delete({id: namespace.id, force: true})).toEqual(
+      namespace,
+    );
+    await expect(
+      client.namespaces.delete({id: namespace.id, force: true}),
+    ).rejects.toMatchObject({code: 'NOT_FOUND'});
+  });
+
   it('requires explicitly created namespaces', async () => {
     const tag = await client.tags.create({name: 'cafe'});
     await expect(client.tags.create({name: 'missing:cafe'})).rejects.toMatchObject({

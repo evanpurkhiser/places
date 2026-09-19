@@ -470,7 +470,18 @@ describe.each(['namespace', 'ns'])('%s commands', command => {
   it.each(['list', 'get', 'delete'] as const)('dispatches %s', action => {
     const {tags, run} = setup([action, ...(action === 'list' ? [] : [id])]);
     run();
-    expect(tags[action].mock.calls).toEqual(action === 'list' ? [[]] : [[{id}]]);
+    expect(tags[action].mock.calls).toEqual(
+      action === 'list' ? [[]] : [[action === 'delete' ? {id, force: false} : {id}]],
+    );
+  });
+
+  it.each([
+    ['delete', id, '--force'],
+    ['delete', '--force', id],
+  ])('forwards force deletion: %j', (...args) => {
+    const {tags, run} = setup(args);
+    run();
+    expect(tags.delete).toHaveBeenCalledWith({id, force: true});
   });
 
   it.each([

@@ -237,7 +237,13 @@ export const parser = merge(
         ),
         command(
           'delete',
-          object({action: constant('namespace-delete'), id: namespaceId}),
+          object({
+            action: constant('namespace-delete'),
+            id: namespaceId,
+            force: option('--force', {
+              description: message`Unlink tags and remove their namespace prefixes. Name collisions leave everything unchanged.`,
+            }),
+          }),
           {
             description: message`Delete a namespace.`,
           },
@@ -325,7 +331,7 @@ export function execute(args: InferValue<typeof parser>, client: Client) {
     case 'namespace-update':
       return updateNamespace(args, client);
     case 'namespace-delete':
-      return client.namespaces.delete({id: args.id});
+      return client.namespaces.delete({id: args.id, force: args.force});
     case 'list':
       return client.tags.list();
     case 'get':

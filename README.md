@@ -94,7 +94,10 @@ as separators. Icons use the same `{emoji: string}` format as tags. Updates
 preserve omitted fields and accept a name, icon, description, or a combination;
 empty CLI metadata values clear those fields. Renaming preserves the UUID and
 rewrites all member tags' prefixes in the same transaction. A namespace containing
-tags cannot be deleted; move or delete its tags first.
+tags requires `places ns delete <id> --force` to unlink its tags and strip their
+namespace prefixes before deletion. Tag IDs, metadata, and place associations
+are preserved. If any resulting bare name already exists, the command reports
+a conflict and leaves the namespace and all tags unchanged.
 
 The `namespaces` RPC exposes `list`, `get`, `create`, `update`, and `delete`.
 Listing returns namespaces sorted by name; duplicate names return 409 and

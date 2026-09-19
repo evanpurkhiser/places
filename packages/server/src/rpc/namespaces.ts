@@ -78,19 +78,36 @@ export const namespaceRouter = api.router({
           throw errors.CONFLICT();
         }
 
+        if (isUniqueViolation(error, 'tags_name_unique')) {
+          throw errors.CONFLICT({
+            message: 'Cannot unlink tags: a bare tag name already exists',
+          });
+        }
+
         throw error;
       }
     })
-    .handler(async ({input, context: {db}, errors}) => {
-      const [namespace] = await db
-        .delete(namespaces)
-        .where(eq(namespaces.id, input.id))
-        .returning();
+    .handler(({input, context: {db}, errors}) =>
+      db.transaction(async tx => {
+        const [namespace] = await tx
+          .select()
+          .from(namespaces)
+          .where(eq(namespaces.id, input.id))
+          .for('update');
 
-      if (!namespace) {
-        throw errors.NOT_FOUND();
-      }
+        if (!namespace) {
+          throw errors.NOT_FOUND();
+        }
 
-      return namespace;
-    }),
+        if (input.force) {
+          await tx
+            .update(tags)
+            .set({namespaceId: null, name: sql`split_part(${tags.name}, ':', 2)`})
+            .where(eq(tags.namespaceId, namespace.id));
+        }
+
+        await tx.delete(namespaces).where(eq(namespaces.id, namespace.id));
+        return namespace;
+      }),
+    ),
 });
