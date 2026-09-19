@@ -9,7 +9,7 @@ import {createORPCClient} from '@orpc/client';
 import {RPCLink} from '@orpc/client/fetch';
 import type {Client} from '@places/common/contract';
 import {namespace} from '@places/common/contract/namespace';
-import {importInput, place} from '@places/common/contract/place';
+import {googleSearchQuery, importInput, place} from '@places/common/contract/place';
 import {tag, tagIcon, tagReference} from '@places/common/contract/tag';
 import {z} from 'zod';
 
@@ -96,6 +96,16 @@ export const parser = merge(
     ),
   }),
   or(
+    command(
+      'search-gmaps',
+      object({
+        action: constant('search-gmaps'),
+        query: argument(zod(googleSearchQuery, {metavar: 'QUERY', placeholder: ''}), {
+          description: message`Keywords to search for; include a city or neighborhood.`,
+        }),
+      }),
+      {description: message`Search Google Maps for places to add to Places.`},
+    ),
     command(
       'docs',
       command('filter', object({action: constant('docs-filter')}), {
@@ -294,6 +304,8 @@ export function createClient(server: string): Client {
 
 export function execute(args: InferValue<typeof parser>, client: Client) {
   switch (args.action) {
+    case 'search-gmaps':
+      return client.places.searchGoogle({query: args.query});
     case 'docs-filter':
       return client.query.describe().then(formatFilterDocs);
     case 'import':

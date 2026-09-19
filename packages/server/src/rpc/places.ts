@@ -16,6 +16,17 @@ import {rethrowGoogleError} from './google-errors.ts';
 const api = implement(contract.places).$context<Context>();
 
 export const placeRouter = api.router({
+  searchGoogle: api.searchGoogle.handler(async ({input, context: {google}}) => {
+    const results = await google.search(input.query, 10).catch(rethrowGoogleError);
+
+    return results.map(result => ({
+      input: `gmaps:${result.id}`,
+      name: result.displayName.text,
+      formattedAddress: result.formattedAddress,
+      googleMapsUrl: result.googleMapsUri,
+      primaryTypeDisplayName: result.primaryTypeDisplayName?.text || null,
+    }));
+  }),
   tag: api.tag.handler(({input, context: {db}}) =>
     db.transaction(async tx => {
       const tagId = await resolvePlaceTag(tx, input.placeId, input.tag);

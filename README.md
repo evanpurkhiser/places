@@ -166,6 +166,7 @@ pg-boss creates and manages its own schema at startup.
 
 ```sh
 pnpm places import 'https://maps.app.goo.gl/jbJWNK3airzeACCC7'
+pnpm places search-gmaps 'coffee shops in East Village, NYC'
 pnpm places import 'gmaps:ChIJ...'
 pnpm places import 'gmaps:ChIJ...' --tag type:cafe --tag <tag-id>
 pnpm places import 'gmaps:ChIJ...' --notes 'Try the espresso tonic'

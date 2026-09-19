@@ -351,6 +351,30 @@ describe('query documentation', () => {
   });
 });
 
+describe('Google Maps search', () => {
+  it('searches by keyword and returns importable results', async () => {
+    const result = parse(parser, ['search-gmaps', ' coffee shops in NYC ']);
+
+    if (!result.success) {
+      throw new Error('Expected valid arguments');
+    }
+
+    const matches = [{input: 'gmaps:ChIJtest', name: 'Test Cafe'}];
+    const searchGoogle = vi.fn().mockResolvedValue(matches);
+    const client = {places: {searchGoogle}} as unknown as Client;
+
+    expect(await execute(result.value, client)).toEqual(matches);
+    expect(searchGoogle).toHaveBeenCalledExactlyOnceWith({query: 'coffee shops in NYC'});
+  });
+
+  it.each([['search-gmaps'], ['search-gmaps', '  ']])(
+    'rejects missing or blank queries: %j',
+    (...args) => {
+      expect(parse(parser, args)).toMatchObject({success: false});
+    },
+  );
+});
+
 describe('place sync commands', () => {
   it('queues all places or forwards a filter query', async () => {
     const sync = vi

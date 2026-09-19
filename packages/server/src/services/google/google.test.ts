@@ -45,12 +45,29 @@ describe('Google Places', () => {
         otherArgs: {
           headers: {
             'X-Goog-FieldMask':
-              'places.id,places.displayName,places.formattedAddress,places.googleMapsUri,places.location',
+              'places.id,places.displayName,places.formattedAddress,places.googleMapsUri,places.location,places.primaryTypeDisplayName',
           },
         },
       },
     );
     expect(sdk.getPlace).not.toHaveBeenCalled();
+  });
+
+  it('supports multiple search matches', async () => {
+    const place = {...candidate, formattedAddress: 'New York, NY', googleMapsUri: mapUrl};
+    const matches = [
+      {...place, primaryTypeDisplayName: {text: 'Mexican restaurant'}},
+      {...place, id: 'ChIJsecond', primaryTypeDisplayName: null},
+    ];
+    sdk.searchText.mockResolvedValue([{places: matches}]);
+
+    expect(await createGooglePlaces('test-key').search('tacos in NYC', 10)).toEqual(
+      matches,
+    );
+    expect(sdk.searchText).toHaveBeenCalledWith(
+      expect.objectContaining({textQuery: 'tacos in NYC', maxResultCount: 10}),
+      expect.anything(),
+    );
   });
 
   it('distinguishes empty results from malformed results', async () => {

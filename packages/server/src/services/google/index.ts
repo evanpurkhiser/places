@@ -22,6 +22,10 @@ const details = z.object({
   location,
 });
 
+const searchDetails = details.extend({
+  primaryTypeDisplayName: z.object({text: z.string()}).nullish(),
+});
+
 const metadataDetails = details.extend({
   timeZone: z
     .object({
@@ -244,21 +248,21 @@ export function createGooglePlaces(apiKey?: string, fetcher: typeof fetch = fetc
     }
   }
 
-  async function search(text: string) {
+  async function search(text: string, maxResultCount = 1) {
     if (!client) {
       throw new GoogleUnavailableError('Configure google.apiKey to search for places.');
     }
 
     const [result] = await client
       .searchText(
-        {textQuery: text, maxResultCount: 1, includePureServiceAreaBusinesses: false},
+        {textQuery: text, maxResultCount, includePureServiceAreaBusinesses: false},
         {
           timeout: 10000,
           retry: null,
           otherArgs: {
             headers: {
               'X-Goog-FieldMask':
-                'places.id,places.displayName,places.formattedAddress,places.googleMapsUri,places.location',
+                'places.id,places.displayName,places.formattedAddress,places.googleMapsUri,places.location,places.primaryTypeDisplayName',
             },
           },
         },
@@ -266,7 +270,7 @@ export function createGooglePlaces(apiKey?: string, fetcher: typeof fetch = fetc
       .catch(() => {
         throw new GoogleUnavailableError('Google Places search failed. Try again.');
       });
-    const parsed = z.array(details).safeParse(result.places ?? []);
+    const parsed = z.array(searchDetails).safeParse(result.places ?? []);
 
     if (!parsed.success) {
       throw new GoogleUnavailableError(

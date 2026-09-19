@@ -31,6 +31,8 @@ export const place = z.object({
   tags: z.array(placeTag.extend({tag})),
 });
 
+export const googleSearchQuery = z.string().trim().min(1).max(4096);
+
 export const importInput = z.string().trim().min(1).max(4096);
 export const importType = z.enum(['gmaps']);
 export const importResult = z.object({placeIds: z.array(z.uuid())});
@@ -61,6 +63,16 @@ export const queryErrorData = z.object({
 const assignmentAction = oc.errors({NOT_FOUND: {message: 'Place or tag not found'}});
 
 export const placeContract = {
+  searchGoogle: oc
+    .errors({SERVICE_UNAVAILABLE: {message: 'Google Places search is unavailable.'}})
+    .input(z.object({query: googleSearchQuery}))
+    .output(
+      z.array(
+        place
+          .pick({name: true, formattedAddress: true, googleMapsUrl: true})
+          .extend({input: z.string(), primaryTypeDisplayName: z.string().nullable()}),
+      ),
+    ),
   tag: assignmentAction
     .input(assignmentInput.extend({notes: z.string().optional()}))
     .output(placeTag),
