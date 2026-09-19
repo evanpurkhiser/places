@@ -49,10 +49,32 @@ pnpm places tags update <id> --icon '' --description ''
 pnpm places tags delete <id>
 ```
 
-Use `--server https://5188.prk.network` to override the CLI's default local server.
+The CLI reads `~/.config/places/config.yaml` (or
+`$XDG_CONFIG_HOME/places/config.yaml` when set):
+
+```yaml
+server: https://5188.prk.network
+```
+
+Use `--config PATH` to select another CLI config and `--server URL` to override
+the configured server. With no config file, the CLI defaults to
+`http://127.0.0.1:5188`. Explicit config paths must exist; invalid configs report
+an error.
 Data commands print JSON and documentation commands print text to stdout. Errors
 print to stderr, with a nonzero exit status on failure.
 Run `pnpm places --help` for argument help.
+
+To install the CLI globally from this checkout, run from the repository root:
+
+```sh
+pnpm add -g ./packages/cli --global-bin-dir="$HOME/.local/bin"
+places --help
+```
+
+Ensure `~/.local/bin` is on your PATH and Node 24 is available outside the
+repository. The command uses this checkout and its installed dependencies, so
+source edits take effect immediately. Keep the checkout in place and run
+`pnpm install` when dependencies change.
 
 The CLI and web use typed oRPC calls at `/rpc`. Shared contracts are available
 from `@places/common/contract` and tag schemas from `@places/common/contract/tag`.

@@ -1,6 +1,6 @@
 import {merge, object, or, seq} from '@optique/core/constructs';
 import {message} from '@optique/core/message';
-import {multiple, optional, withDefault} from '@optique/core/modifiers';
+import {multiple, optional} from '@optique/core/modifiers';
 import type {InferValue} from '@optique/core/parser';
 import {argument, command, constant, option} from '@optique/core/primitives';
 import {string} from '@optique/core/valueparser';
@@ -13,6 +13,7 @@ import {importInput, place} from '@places/common/contract/place';
 import {tag, tagIcon, tagReference} from '@places/common/contract/tag';
 import {z} from 'zod';
 
+import {serverUrl} from './config.ts';
 import {formatFilterDocs} from './filter-docs.ts';
 
 const id = argument(zod(tag.shape.id, {metavar: 'ID', placeholder: ''}), {
@@ -83,15 +84,15 @@ const namespaceMetadata = {
 
 export const parser = merge(
   object({
-    server: withDefault(
-      option(
-        '--server',
-        zod(z.url({protocol: /^https?$/}), {metavar: 'URL', placeholder: ''}),
-        {
-          description: message`Places server URL (default: http://127.0.0.1:5188).`,
-        },
-      ),
-      'http://127.0.0.1:5188',
+    config: optional(
+      option('--config', string({metavar: 'PATH'}), {
+        description: message`Path to the CLI YAML config.`,
+      }),
+    ),
+    server: optional(
+      option('--server', zod(serverUrl, {metavar: 'URL', placeholder: ''}), {
+        description: message`Places server URL; overrides the CLI config.`,
+      }),
     ),
   }),
   or(

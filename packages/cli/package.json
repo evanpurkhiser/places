@@ -3,6 +3,9 @@
   "version": "0.0.0",
   "private": true,
   "license": "MIT",
+  "bin": {
+    "places": "src/main.ts"
+  },
   "type": "module",
   "scripts": {
     "typecheck": "tsc --noEmit",
@@ -14,6 +17,8 @@
     "@optique/zod": "^1.2.7",
     "@orpc/client": "1.15.1",
     "@places/common": "workspace:*",
+    "xdg-basedir": "^5.1.0",
+    "yaml": "^2.9.1",
     "zod": "4.6.5"
   },
   "devDependencies": {

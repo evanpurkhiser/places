@@ -24,6 +24,18 @@ describe('tag arguments', () => {
     }
   });
 
+  it('accepts a config path before or after the subcommand', () => {
+    for (const args of [
+      ['--config', '/tmp/places.yaml', 'tags', 'list'],
+      ['tags', 'list', '--config', '/tmp/places.yaml'],
+    ]) {
+      expect(parse(parser, args)).toMatchObject({
+        success: true,
+        value: {action: 'list', config: '/tmp/places.yaml'},
+      });
+    }
+  });
+
   it.each([
     ['tags', 'create', '  '],
     ['tags', 'create', ':cafe'],
