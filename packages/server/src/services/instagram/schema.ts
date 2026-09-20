@@ -21,18 +21,14 @@ export type CaptureCatalog = z.infer<typeof captureCatalog>;
 export const captureContent = z.strictObject({
   caption: z.string().max(30000),
   location: z.string().max(1000).nullable().default(null),
-  transcript: z.string().max(100000).nullable().default(null),
+  transcript: transcriptSegments.max(5000).nullable().default(null),
   images: z
     .array(
       z.strictObject({
-        url: z
-          .string()
-          .regex(/^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/]+=*$/)
-          .max(15000000),
+        url: z.string().regex(/^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/]+=*$/),
         timestampSeconds: z.number().nonnegative().nullable().default(null),
       }),
     )
-    .max(20)
     .default([]),
 });
 export type CaptureContent = z.input<typeof captureContent>;

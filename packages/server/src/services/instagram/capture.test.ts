@@ -4,6 +4,7 @@ import {describe, expect, it, vi} from 'vitest';
 
 import {capture} from './capture.ts';
 import fixture from './fixtures/cafe.json' with {type: 'json'};
+import type {InstagramMedia} from './media.ts';
 import {buildCapturePrompt} from './prompt.ts';
 import type {CaptureContent} from './schema.ts';
 import {captureOptions} from './schema.ts';
@@ -65,6 +66,7 @@ function harness(outputs = [response([call()]), response([final()])]) {
     search: vi.fn().mockResolvedValue(fixture.candidates),
   };
 
+  const getFrames = vi.fn<Extract<InstagramMedia, {kind: 'video'}>['getFrames']>();
   /**
    * Run capture with fixture defaults and per-test overrides.
    */
@@ -74,9 +76,33 @@ function harness(outputs = [response([call()]), response([final()])]) {
     catalog = fixture.catalog,
     signal?: AbortSignal,
   ) =>
-    capture({openai, google}, content, catalog, {...fixture.options, ...options}, signal);
+    capture(
+      {openai, google},
+      {
+        caption: content.caption,
+        location: content.location,
+        [Symbol.asyncDispose]: async () => {},
+        ...(content.images?.length
+          ? {
+              kind: 'carousel' as const,
+              images: content.images.map(image => ({
+                ...image,
+                timestampSeconds: image.timestampSeconds ?? null,
+              })),
+            }
+          : {
+              kind: 'video' as const,
+              durationSeconds: 60,
+              transcript: content.transcript ?? [],
+              getFrames,
+            }),
+      },
+      catalog,
+      {...fixture.options, ...options},
+      signal,
+    );
 
-  return {run, google, requests, fetcher};
+  return {run, google, requests, fetcher, getFrames};
 }
 
 describe('Instagram capture', () => {

@@ -15,6 +15,7 @@ import type {z} from 'zod';
 import type {GooglePlaces} from '../google/index.ts';
 
 import {CaptureError} from './errors.ts';
+import type {InstagramMedia} from './media.ts';
 import {buildCapturePrompt} from './prompt.ts';
 import {
   assignableTags,
@@ -23,7 +24,6 @@ import {
   captureOptions,
   captureOutput,
   type CaptureCatalog,
-  type CaptureContent,
   type CaptureOptions,
   type ParsedCaptureOptions,
 } from './schema.ts';
@@ -59,15 +59,24 @@ function resolveAssignableTags(catalog: CaptureCatalog, options: ParsedCaptureOp
  * Package prepared text and images with labels the model can cite as evidence.
  */
 function contentInput(
-  content: z.output<typeof captureContent>,
+  media: InstagramMedia,
 ): Exclude<UserMessageItem['content'], string> {
+  const content = captureContent.parse({
+    caption: media.caption,
+    location: media.location,
+    transcript: media.kind === 'video' ? media.transcript : null,
+    images: media.kind === 'carousel' ? media.images : [],
+  });
+
   return [
     {
       type: 'input_text',
       text: JSON.stringify({
         caption: content.caption,
         location: content.location,
-        transcript: content.transcript,
+        ...(media.kind === 'video'
+          ? {durationSeconds: media.durationSeconds, transcript: content.transcript}
+          : {}),
       }),
     },
     ...content.images.flatMap(
@@ -144,7 +153,7 @@ function resolveResult(
  */
 export async function capture(
   dependencies: CaptureDependencies,
-  content: CaptureContent,
+  media: InstagramMedia,
   catalogInput: CaptureCatalog,
   optionsInput: CaptureOptions,
   signal?: AbortSignal,
@@ -172,7 +181,7 @@ export async function capture(
   });
   const runner = new Runner({tracingDisabled: true});
   const result = await runner
-    .run(agent, [user(contentInput(captureContent.parse(content)))], {
+    .run(agent, [user(contentInput(media))], {
       signal: requestSignal,
       maxTurns: options.maxTurns,
     })
