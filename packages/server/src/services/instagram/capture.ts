@@ -161,7 +161,7 @@ export async function capture(
   const options = captureOptions.parse(optionsInput);
   const catalog = captureCatalog.parse(catalogInput);
   const schema = captureOutput(resolveAssignableTags(catalog, options));
-  const tools = createCaptureTools(dependencies.google);
+  const tools = createCaptureTools(dependencies.google, media);
   const timeout = AbortSignal.timeout(options.timeoutMs);
   const requestSignal = signal ? AbortSignal.any([signal, timeout]) : timeout;
   requestSignal.throwIfAborted();

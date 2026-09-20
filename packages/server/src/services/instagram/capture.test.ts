@@ -128,7 +128,7 @@ describe('Instagram capture', () => {
       ]),
     );
     const format = JSON.stringify(requests[0]!.text?.format);
-    expect(requests[0]!.tools).toHaveLength(1);
+    expect(requests[0]!.tools).toHaveLength(2);
     expect(requests[0]!.tools![0]).toMatchObject({name: 'searchPlaces'});
     expect(format).toContain('type:cafe');
     expect(format).not.toContain('rating:favorite');
@@ -138,6 +138,32 @@ describe('Instagram capture', () => {
       parallel_tool_calls: true,
       model: 'o4-mini',
     });
+  });
+
+  it('starts videos with timestamps and retrieves images only through the frame tool', async () => {
+    const {run, requests, getFrames} = harness([
+      response([call('getVideoFrames', {timestamps: [2, 5]}, 'frames')]),
+      response([call()]),
+      response([final()]),
+    ]);
+    getFrames.mockResolvedValue([
+      {url: 'data:image/jpeg;base64,YQ==', timestampSeconds: 2},
+      {url: 'data:image/jpeg;base64,Yg==', timestampSeconds: 5},
+    ]);
+
+    await run();
+    expect(getFrames).toHaveBeenCalledWith([2, 5], expect.any(AbortSignal));
+    expect(JSON.stringify(requests[0]!.input)).not.toContain('input_image');
+    expect(JSON.stringify(requests[0]!.input)).toContain('durationSeconds');
+    const result = (requests[1]!.input as Array<{type: string; output?: unknown}>).find(
+      item => item.type === 'function_call_output',
+    );
+    expect(result?.output).toEqual([
+      {type: 'input_text', text: 'Video frame at 2s'},
+      {type: 'input_image', image_url: 'data:image/jpeg;base64,YQ==', detail: 'auto'},
+      {type: 'input_text', text: 'Video frame at 5s'},
+      {type: 'input_image', image_url: 'data:image/jpeg;base64,Yg==', detail: 'auto'},
+    ]);
   });
 
   it('groups assignable tags and omits excluded tags and empty groups', () => {
@@ -421,6 +447,7 @@ describe('Instagram capture', () => {
         images: [{url: 'data:image/jpeg;base64,YQ==', timestampSeconds: 3}],
       },
     );
+    expect(requests[0]!.tools).toHaveLength(1);
     expect(requests[0]!.input).toEqual([
       expect.objectContaining({
         content: expect.arrayContaining([

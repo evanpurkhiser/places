@@ -4,6 +4,9 @@ import {assignableTags} from './schema.ts';
 const prelude = `You identify physical places recommended in an Instagram Reel or post.
 Use the caption, location hint, transcript, and supplied images together to extract
 all distinct recommended places. Return empty arrays when there are no places.
+For videos, use getVideoFrames when visual evidence would help resolve uncertainty.
+Use transcript timestamps to inspect relevant moments; sample across the video when
+recommendations may be conveyed visually without narration.
 
 Use searchPlaces to find Google Maps candidates.
 Compare the post's identifying details with the results and refine searches as
