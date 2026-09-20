@@ -13,4 +13,4 @@ export type {
 } from './media.ts';
 export {createFFmpeg, type FFmpeg} from './ffmpeg.ts';
 export {createTranscriber, type TranscriptSegment} from './transcribing.ts';
-export {scrapeInstagramPost} from './scraper.ts';
+export {scrapeInstagramPost, instagramShortcode} from './scraper.ts';

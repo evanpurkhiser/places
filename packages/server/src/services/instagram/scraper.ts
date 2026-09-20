@@ -39,16 +39,7 @@ export async function scrapeInstagramPost(
   postUrl: string,
   options: {fetch?: typeof fetch; signal?: AbortSignal} = {},
 ): Promise<InstagramPostSource> {
-  const url = new URL(postUrl);
-  const shortcode = url.pathname.match(/^\/(?:p|reel|tv)\/([A-Za-z0-9_-]+)\/?$/)?.[1];
-
-  if (
-    url.protocol !== 'https:' ||
-    !['instagram.com', 'www.instagram.com'].includes(url.hostname) ||
-    !shortcode
-  ) {
-    throw new Error('Expected an Instagram post or reel URL.');
-  }
+  const shortcode = instagramShortcode(postUrl);
 
   const response = await (options.fetch ?? fetch)(
     `https://www.instagram.com/p/${shortcode}/`,
@@ -60,6 +51,24 @@ export async function scrapeInstagramPost(
   }
 
   return parseInstagramPost(await response.text(), shortcode);
+}
+
+/**
+ * Validate a post URL and extract its stable identity across Instagram URL forms.
+ */
+export function instagramShortcode(postUrl: string): string {
+  const url = new URL(postUrl);
+  const shortcode = url.pathname.match(/^\/(?:p|reel|tv)\/([A-Za-z0-9_-]+)\/?$/)?.[1];
+
+  if (
+    url.protocol !== 'https:' ||
+    !['instagram.com', 'www.instagram.com'].includes(url.hostname) ||
+    !shortcode
+  ) {
+    throw new Error('Expected an Instagram post or reel URL.');
+  }
+
+  return shortcode;
 }
 
 /**
