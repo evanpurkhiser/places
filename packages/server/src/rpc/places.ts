@@ -7,7 +7,7 @@ import {z} from 'zod';
 import type {Database} from '../db/index.ts';
 import {places, placeTags, tags} from '../db/schema.ts';
 import {compilePlaceQuery} from '../filter-engine/index.ts';
-import {enqueueImport, getImportStatus} from '../imports/index.ts';
+import {enqueueImport, getImportStatus} from '../importers/index.ts';
 import {syncQueue, syncPayload} from '../jobs/gmaps-sync.ts';
 
 import type {Context} from './context.ts';
