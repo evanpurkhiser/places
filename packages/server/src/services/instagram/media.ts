@@ -12,7 +12,17 @@ import type {TranscriptSegment} from './transcribing.ts';
  */
 export type VideoFrame = {url: string; timestampSeconds: number};
 
-type PostMetadata = {caption: string; location?: string | null};
+/**
+ * Post identity and display metadata supplied by Instagram.
+ */
+export type InstagramPostMetadata = {
+  externalId: string;
+  caption: string;
+  username: string | null;
+  postedAt: string | null;
+  thumbnailUrl: string | null;
+  location?: string | null;
+};
 
 /**
  * A downloadable image or video in an Instagram post.
@@ -22,13 +32,14 @@ export type InstagramMediaSource = {kind: 'image' | 'video'; url: string};
 /**
  * Resolved post metadata and media URLs in their original order.
  */
-export type InstagramPostSource = PostMetadata & {media: InstagramMediaSource[]};
+export type InstagramPostSource = InstagramPostMetadata & {media: InstagramMediaSource[]};
 
 /**
  * Prepared post consumed by capture. Keep its using scope open throughout capture
  * so video frames remain available; disposal releases all video resources.
  */
-export type InstagramPost = PostMetadata & AsyncDisposable & {media: InstagramMedia[]};
+export type InstagramPost = InstagramPostMetadata &
+  AsyncDisposable & {media: InstagramMedia[]};
 
 /**
  * An identified image or video within a prepared post.
@@ -79,6 +90,10 @@ export async function prepareInstagramPost(
     const media = await Promise.all(pending);
 
     return {
+      externalId: source.externalId,
+      username: source.username,
+      postedAt: source.postedAt,
+      thumbnailUrl: source.thumbnailUrl,
       caption: source.caption,
       location: source.location ?? null,
       media,

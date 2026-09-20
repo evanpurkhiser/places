@@ -7,6 +7,13 @@ import {join} from 'node:path';
 import type {FFmpeg} from './ffmpeg.ts';
 import {prepareInstagramPost, type InstagramPostSource} from './media.ts';
 
+const metadata = {
+  externalId: 'ExamplePost',
+  username: 'examplecreator',
+  postedAt: '2026-09-01T12:00:00.000Z',
+  thumbnailUrl: 'https://cdn.example/cover.jpg',
+};
+
 let root: string;
 beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), 'instagram-test-'));
@@ -35,7 +42,11 @@ function harness(hasAudio = true) {
   const dependencies = {ffmpeg, fetch: fetcher, transcribe};
   const prepare = (signal?: AbortSignal) =>
     prepareInstagramPost(
-      {caption: 'A cafe', media: [{kind: 'video', url: 'https://cdn.example/video'}]},
+      {
+        ...metadata,
+        caption: 'A cafe',
+        media: [{kind: 'video', url: 'https://cdn.example/video'}],
+      },
       dependencies,
       {temporaryRoot: root, signal},
     );
@@ -55,6 +66,7 @@ describe('Instagram post preparation', () => {
   it('keeps the video until disposal and extracts frames only when requested', async () => {
     const {prepare, ffmpeg, transcribe} = harness();
     const post = await prepare();
+    expect(post).toMatchObject(metadata);
     const media = post.media[0]!;
     expect(media.kind).toBe('video');
     if (media.kind !== 'video') {
@@ -122,6 +134,7 @@ describe('Instagram post preparation', () => {
     {
       await using post = await prepareInstagramPost(
         {
+          ...metadata,
           caption: 'Cafes',
           media: [
             {kind: 'image', url: 'https://cdn.example/1'},
@@ -153,6 +166,7 @@ describe('Instagram post preparation', () => {
   it('prepares mixed media with distinct video sources and cleans up both', async () => {
     const {dependencies, ffmpeg, fetcher, transcribe} = harness();
     const source: InstagramPostSource = {
+      ...metadata,
       caption: 'Mixed post',
       media: [
         {kind: 'video', url: 'https://cdn.example/first.mp4'},
@@ -197,6 +211,7 @@ describe('Instagram post preparation', () => {
       await expect(
         prepareInstagramPost(
           {
+            ...metadata,
             caption: '',
             media: [
               {kind: 'video', url: 'https://cdn.example/first'},
@@ -224,6 +239,7 @@ describe('Instagram post preparation', () => {
     );
     const pending = prepareInstagramPost(
       {
+        ...metadata,
         caption: '',
         media: [
           {kind: 'video', url: 'https://cdn.example/video'},

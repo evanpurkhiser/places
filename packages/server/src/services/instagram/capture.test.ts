@@ -35,7 +35,16 @@ const final = (result: unknown = fixture.output) => ({
   id: 'msg_1',
   role: 'assistant',
   status: 'completed',
-  content: [{type: 'output_text', text: JSON.stringify(result), annotations: []}],
+  content: [
+    {
+      type: 'output_text',
+      text: JSON.stringify({
+        description: fixture.output.description,
+        ...(result as object),
+      }),
+      annotations: [],
+    },
+  ],
 });
 
 /**
@@ -81,6 +90,7 @@ function harness(outputs = [response([call()]), response([final()])]) {
     capture(
       {openai, google},
       {
+        ...fixture.metadata,
         caption: content.caption,
         location: content.location,
         [Symbol.asyncDispose]: async () => {},
@@ -99,6 +109,26 @@ function harness(outputs = [response([call()]), response([final()])]) {
 }
 
 describe('Instagram capture', () => {
+  it('returns scraped source metadata with the generated post summary', async () => {
+    const {run} = harness();
+    const result = await run();
+
+    expect(result.source).toEqual({
+      ...fixture.metadata,
+      caption: fixture.content.caption,
+      description: fixture.output.description,
+    });
+    expect(result.places[0]!.description).toBe(fixture.output.places[0]!.description);
+  });
+
+  it('requires a nonempty post summary', async () => {
+    const {run} = harness([
+      response([final({description: '', places: [], unresolved: []})]),
+    ]);
+
+    await expect(run()).rejects.toMatchObject({code: 'invalid_output'});
+  });
+
   it('feeds candidates back and resolves selected tags and authoritative place metadata', async () => {
     const {run, google, requests} = harness();
     const result = await run();
@@ -183,6 +213,7 @@ describe('Instagram capture', () => {
     await capture(
       {openai, google},
       {
+        ...fixture.metadata,
         caption: 'Mixed post',
         media: [
           {
@@ -392,7 +423,7 @@ describe('Instagram capture', () => {
     },
   ])('preserves empty and unresolved outcomes', async result => {
     const {run} = harness([response([final(result)])]);
-    expect(await run()).toEqual(result);
+    expect(await run()).toMatchObject(result);
   });
 
   it.each([
@@ -438,7 +469,7 @@ describe('Instagram capture', () => {
       response([{...call(), arguments: '{'}]),
       response([final({places: [], unresolved: []})]),
     ]);
-    expect(await run()).toEqual({places: [], unresolved: []});
+    expect(await run()).toMatchObject({places: [], unresolved: []});
     expect(google.search).not.toHaveBeenCalled();
     expect(requests[1]!.input).toEqual(
       expect.arrayContaining([

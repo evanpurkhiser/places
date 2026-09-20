@@ -12,6 +12,16 @@ function fixture(kind: string) {
 }
 
 describe('Instagram scraper', () => {
+  it('extracts source identity and hovercard metadata from a captured post', async () => {
+    const result = parseInstagramPost(await fixture('metadata'), 'Dcw6FFrISub');
+    expect(result).toMatchObject({
+      externalId: 'Dcw6FFrISub',
+      username: 'vivecachow',
+      postedAt: '2026-09-02T00:07:48.000Z',
+      thumbnailUrl: expect.stringMatching(/^https:\/\//),
+      caption: expect.stringContaining('Thai French FUSION'),
+    });
+  });
   it('extracts video URLs and caption from the captured post', async () => {
     const result = parseInstagramPost(await fixture('video'), 'DbqWSEoBpPD');
     expect(result).toMatchObject({
@@ -66,6 +76,14 @@ describe('Instagram scraper', () => {
     });
   });
 
+  it('uses the first carousel item as a thumbnail when the post has no cover', () => {
+    const html =
+      '<script type="application/json">{"code":"Carousel","carousel_media":[{"display_uri":"https://cdn.example/first.jpg"},{"display_uri":"https://cdn.example/second.jpg"}]}</script>';
+    expect(parseInstagramPost(html, 'Carousel').thumbnailUrl).toBe(
+      'https://cdn.example/first.jpg',
+    );
+  });
+
   it('normalizes a single image into the same post shape', () => {
     expect(
       parseInstagramPost(
@@ -73,6 +91,10 @@ describe('Instagram scraper', () => {
         'Photo',
       ),
     ).toEqual({
+      externalId: 'Photo',
+      username: null,
+      postedAt: null,
+      thumbnailUrl: 'https://cdn.example/photo.jpg',
       caption: '',
       location: null,
       media: [{kind: 'image', url: 'https://cdn.example/photo.jpg'}],
@@ -89,6 +111,10 @@ describe('Instagram scraper', () => {
       media: [{kind: 'video', url: 'https://cdn.example/video'}],
       caption: '',
       location: 'New York',
+      externalId: 'Target',
+      username: null,
+      postedAt: null,
+      thumbnailUrl: null,
     });
   });
 

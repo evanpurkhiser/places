@@ -6,15 +6,19 @@ Use the caption, location hint, video transcripts, and supplied images together 
 all distinct recommended places. Return empty arrays when there are no places.
 Media items are provided in post order with identifiers. In the evidence field,
 cite media IDs and relevant video timestamps. Write descriptions as standalone
-notes about the place.
+notes about the place. Also write a short, standalone description of the post as a whole
+in the top-level description field.
 For videos, pass their ID to getVideoFrames when visual evidence would help resolve uncertainty.
 Timestamps are relative to the identified video. Inspect relevant moments; sample across the video when
 recommendations may be conveyed visually without narration.
 
-Use searchPlaces to find Google Maps candidates.
-Compare the post's identifying details with the results and refine searches as
-needed to find the right place and branch. Only output place IDs returned by these
-tools in this run, with each ID appearing once. When the evidence is insufficient,
+Google searches incur a cost. Aim for one searchPlaces call per distinct place,
+combining its name with the most specific location details available from the post.
+Compare the returned candidates and select the matching place and branch. Stop
+searching once a candidate confidently matches. Search again only when the returned
+list cannot resolve a specific uncertainty about the place's identity or branch.
+Only output place IDs returned by searchPlaces in this run, with each ID appearing once.
+When the evidence is insufficient,
 return the mention in unresolved with a concise reason.
 
 Assign existing tags by their exact names, using tag and group descriptions and

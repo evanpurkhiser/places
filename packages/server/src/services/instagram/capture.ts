@@ -217,12 +217,22 @@ export async function capture(
     );
   }
 
-  return resolveResult(
-    parsed.data,
-    collectSearchResults(result.newItems),
-    catalog,
-    options,
-  );
+  return {
+    source: {
+      externalId: post.externalId,
+      description: parsed.data.description,
+      caption: post.caption,
+      username: post.username,
+      postedAt: post.postedAt,
+      thumbnailUrl: post.thumbnailUrl,
+    },
+    ...resolveResult(
+      parsed.data,
+      collectSearchResults(result.newItems),
+      catalog,
+      options,
+    ),
+  };
 }
 
 export type CaptureResult = Awaited<ReturnType<typeof capture>>;

@@ -8,6 +8,8 @@ const mediaItem = z.object({
   video_versions: z.array(z.object({url: z.string()})).nullish(),
 });
 const post = mediaItem.extend({
+  user: z.object({username: z.string()}).nullish(),
+  taken_at: z.number().nullable().default(null),
   caption: z.object({text: z.string()}).nullish(),
   location: z.object({name: z.string()}).nullish(),
   carousel_media: z.array(mediaItem).nullish(),
@@ -78,6 +80,11 @@ export function parseInstagramPost(html: string, shortcode: string): InstagramPo
 
   const data = post.parse(item);
   const metadata = {
+    externalId: shortcode,
+    username: data.user?.username ?? null,
+    postedAt:
+      data.taken_at === null ? null : new Date(data.taken_at * 1000).toISOString(),
+    thumbnailUrl: data.display_uri ?? data.carousel_media?.[0]?.display_uri ?? null,
     caption: data.caption?.text ?? '',
     location: data.location?.name ?? null,
   };

@@ -9,6 +9,7 @@ export type {
   InstagramImage,
   InstagramPost,
   InstagramPostSource,
+  InstagramPostMetadata,
 } from './media.ts';
 export {createFFmpeg, type FFmpeg} from './ffmpeg.ts';
 export {createTranscriber, type TranscriptSegment} from './transcribing.ts';

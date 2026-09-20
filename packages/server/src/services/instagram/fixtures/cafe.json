@@ -103,6 +103,13 @@
         "matchReason": "The Orchard Street address matches the post; the Brooklyn branch does not."
       }
     ],
-    "unresolved": []
+    "unresolved": [],
+    "description": "A recommendation for a neighborhood cafe in New York."
+  },
+  "metadata": {
+    "externalId": "ExamplePost",
+    "username": "examplecreator",
+    "postedAt": "2026-09-01T12:00:00.000Z",
+    "thumbnailUrl": "https://cdn.example/cover.jpg"
   }
 }

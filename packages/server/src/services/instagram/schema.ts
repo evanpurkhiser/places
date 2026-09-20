@@ -73,6 +73,10 @@ export function captureOutput(tags: CaptureCatalog['tags']) {
       : z.array(z.string()).max(0);
 
   return z.strictObject({
+    description: z
+      .string()
+      .min(1)
+      .describe('A short, standalone summary of the post as a whole.'),
     places: z
       .array(
         z.strictObject({
