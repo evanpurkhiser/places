@@ -2,6 +2,8 @@ import {namespace} from '@places/common/contract/namespace';
 import {tag} from '@places/common/contract/tag';
 import {z} from 'zod';
 
+import {instagramCaptureConfig, instagramConfig} from '../../config/instagram.ts';
+
 import {transcriptSegments} from './transcribing.ts';
 
 export const captureCatalog = z.object({
@@ -31,16 +33,10 @@ export const captureContent = z.strictObject({
 });
 export type CaptureContent = z.input<typeof captureContent>;
 
-export const captureOptions = z.strictObject({
-  model: z.string().min(1),
-  reasoningEffort: z.enum(['none', 'low', 'medium', 'high']).optional(),
-  instructions: z.string().max(20000).default(''),
-  excludedNamespaces: z.array(z.string()),
-  excludedTags: z.array(z.string()),
-  requiredNamespaces: z.array(z.string()),
-  maxTurns: z.number().int().min(1).max(50).default(12),
-  maxOutputTokens: z.number().int().min(100).max(32000).default(8000),
-  timeoutMs: z.number().int().min(1).max(600000).default(180000),
+export const captureOptions = instagramCaptureConfig.extend({
+  excludedTags: instagramConfig.shape.excludedTags,
+  excludedNamespaces: instagramConfig.shape.excludedNamespaces,
+  requiredNamespaces: instagramConfig.shape.requiredNamespaces,
 });
 export type CaptureOptions = z.input<typeof captureOptions>;
 export type ParsedCaptureOptions = z.output<typeof captureOptions>;

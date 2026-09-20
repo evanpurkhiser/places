@@ -4,6 +4,11 @@ import {z} from 'zod';
 import {readFile} from 'node:fs/promises';
 import {parseArgs} from 'node:util';
 
+import {instagramConfig} from './config/instagram.ts';
+
+/**
+ * Define per-queue throughput with a queue-specific concurrency default.
+ */
 const workerQueue = (concurrency: number) =>
   z
     .strictObject({
@@ -26,6 +31,7 @@ export const workersConfig = z
   .strictObject({
     'gmaps-import': workerQueue(1),
     'gmaps-sync': workerQueue(1),
+    'instagram-import': workerQueue(1),
   })
   .prefault({});
 export type WorkerQueueConfig = z.infer<typeof workersConfig>['gmaps-sync'];
@@ -44,6 +50,18 @@ export const configSchema = z.strictObject({
     })
     .prefault({})
     .describe('Google Places integration.'),
+  openai: z
+    .strictObject({
+      key: z
+        .string()
+        .trim()
+        .min(1)
+        .describe(
+          'OpenAI API key shared by model integrations; required for Instagram ingestion.',
+        ),
+    })
+    .describe('OpenAI integration.'),
+  instagram: instagramConfig,
   workers: workersConfig,
   server: z
     .strictObject({

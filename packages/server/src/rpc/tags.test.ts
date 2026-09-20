@@ -17,6 +17,7 @@ import {createApp} from '../app.ts';
 import {configSchema} from '../config.ts';
 import {createDatabase} from '../db/index.ts';
 import {places, placeTags, tags} from '../db/schema.ts';
+import {testConfig} from '../fixtures/config.ts';
 import {createGooglePlaces} from '../services/google/index.ts';
 
 const exec = promisify(execFile);
@@ -30,7 +31,7 @@ describe.skipIf(!testUrl)('tag API and CLI against PostgreSQL', () => {
   url.pathname = `/${databaseName}`;
 
   const db = createDatabase(url.href);
-  const config = configSchema.parse({database: {url: url.href}});
+  const config = configSchema.parse({...testConfig, database: {url: url.href}});
   const app = createApp({
     db,
     config,

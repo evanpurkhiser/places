@@ -207,6 +207,20 @@ The initial listing returns all saved places newest first, with named
 `coordinates.latitude` and `coordinates.longitude`. Provider storage and map
 display constraints are documented in [place metadata](design/place-metadata.md).
 
+## Instagram ingestion worker
+
+Configure the required `instagram` settings in the server YAML; see
+[the example configuration](packages/server/config.example.yaml). Set `openai.key`,
+the capture model and tagging rules, and `alwaysApplyTags` containing existing
+tag names (or an empty list). These tags are combined with captured tags when
+creating a place. Existing places keep their tags and notes while gaining the
+source association. Automatic tags are excluded from model choices. Use
+`excludedTags` for additional exclusions, `excludedNamespaces` to exclude groups
+such as personal ratings, and `requiredNamespaces` to require a classification
+such as `type:cafe` or `type:restaurant`. All four tagging lists live directly
+under `instagram` and accept `[]`. For review before map display, include
+`status:needs-review` in `alwaysApplyTags` and exclude it from map queries.
+
 ## Sync Google place metadata
 
 ```sh

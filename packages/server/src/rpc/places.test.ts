@@ -16,6 +16,7 @@ import {createApp} from '../app.ts';
 import {configSchema} from '../config.ts';
 import {createDatabase} from '../db/index.ts';
 import {places, placeSources, placeTags, sources, tags} from '../db/schema.ts';
+import {testConfig} from '../fixtures/config.ts';
 import {importPlace, importQueue, registerImportWorker} from '../jobs/gmaps-import.ts';
 import {createGooglePlaces} from '../services/google/index.ts';
 
@@ -44,7 +45,7 @@ describe.skipIf(!testUrl)('place import with PostgreSQL and pg-boss', () => {
 
   const db = createDatabase(url.href);
   const jobs = new PgBoss(url.href);
-  const config = configSchema.parse({database: {url: url.href}});
+  const config = configSchema.parse({...testConfig, database: {url: url.href}});
   const google = {
     ...createGooglePlaces(),
     getMetadata: vi.fn().mockResolvedValue(details),

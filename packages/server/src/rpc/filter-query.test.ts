@@ -17,6 +17,7 @@ import {createApp} from '../app.ts';
 import {configSchema} from '../config.ts';
 import {createDatabase} from '../db/index.ts';
 import {places, placeTags, tags} from '../db/schema.ts';
+import {testConfig} from '../fixtures/config.ts';
 import {GoogleUnavailableError} from '../services/google/errors.ts';
 import {createGooglePlaces} from '../services/google/index.ts';
 
@@ -32,7 +33,7 @@ describe.skipIf(!testUrl)('place filtering through API and CLI', () => {
   const google = {...createGooglePlaces(), search: vi.fn()};
   const app = createApp({
     db,
-    config: configSchema.parse({database: {url: url.href}}),
+    config: configSchema.parse({...testConfig, database: {url: url.href}}),
     jobs: new PgBoss(url.href),
     google,
   });

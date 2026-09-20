@@ -11,9 +11,37 @@ database:
 
 # Per-queue settings; jobs in each batch run concurrently.
 workers:
+  instagram-import:
+    batchSize: 1
+    concurrency: 1
   gmaps-import:
     batchSize: 1
     concurrency: 1
   gmaps-sync:
     batchSize: 1
     concurrency: 1
+
+openai:
+  key: your-openai-api-key
+
+# Instagram ingestion settings; automatic tags must already exist.
+# FFmpeg and ffprobe must be available on the worker's PATH.
+instagram:
+  # Add these existing tags to every newly created place. They are automatically
+  # excluded from model choices. Existing places keep their tags. Use [] for none.
+  alwaysApplyTags: [status:needs-review]
+  # Additional tags the model must not assign, such as a personal favorite tag.
+  excludedTags: [favorite]
+  # Exclude whole namespaces: personal ratings should be assigned by you.
+  excludedNamespaces: [rating]
+  # Require at least one allowed tag per namespace for each captured place:
+  # type might include type:cafe, type:bakery, and type:restaurant.
+  requiredNamespaces: [type]
+  # The model receives all assignable tags grouped by namespace, including the
+  # descriptions of both tags and namespaces, alongside the post content.
+  capture:
+    model: gpt-5.6-luna
+    reasoningEffort: medium
+    # Additional instructions for interpreting the post and assigning tags.
+    # Describe when to use particular tags or which tags to prioritize.
+    instructions: Assign a type and evidence-supported atmosphere tags.

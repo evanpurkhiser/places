@@ -14,6 +14,7 @@ import {configSchema} from '../config.ts';
 import {isUniqueViolation} from '../db/errors.ts';
 import {createDatabase} from '../db/index.ts';
 import {places, placeTags, tags} from '../db/schema.ts';
+import {testConfig} from '../fixtures/config.ts';
 import {createGooglePlaces} from '../services/google/index.ts';
 
 import {registerSyncWorker, syncPlace, syncQueue} from './gmaps-sync.ts';
@@ -45,6 +46,7 @@ describe.skipIf(!testUrl)('place sync with PostgreSQL and pg-boss', () => {
     getMetadata: vi.fn().mockResolvedValue(details),
   };
   const config = configSchema.parse({
+    ...testConfig,
     database: {url: url.href},
     google: {apiKey: 'test'},
   });
