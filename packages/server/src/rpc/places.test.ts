@@ -15,7 +15,7 @@ import {promisify} from 'node:util';
 import {createApp} from '../app.ts';
 import {configSchema} from '../config.ts';
 import {createDatabase} from '../db/index.ts';
-import {places, placeTags, tags} from '../db/schema.ts';
+import {places, placeSources, placeTags, sources, tags} from '../db/schema.ts';
 import {importPlace, importQueue, registerImportWorker} from '../jobs/gmaps-import.ts';
 import {createGooglePlaces} from '../services/google/index.ts';
 
@@ -70,6 +70,7 @@ describe.skipIf(!testUrl)('place import with PostgreSQL and pg-boss', () => {
   beforeEach(async () => {
     await db.delete(places);
     await db.delete(tags);
+    await db.delete(sources);
     google.getMetadata.mockReset().mockResolvedValue(details);
   });
 
@@ -91,6 +92,111 @@ describe.skipIf(!testUrl)('place import with PostgreSQL and pg-boss', () => {
 
     return client.places.importStatus({jobId});
   }
+
+  it('attaches source details through the import worker', async () => {
+    const [source] = await db.insert(sources).values({type: 'instagram'}).returning();
+    const recommendation = {
+      sourceId: source!.id,
+      description: 'Recommended for the pastries.',
+      data: {evidence: 'Caption mentions pastries', timestamps: [2, 5]},
+    };
+    const jobId = await jobs.send(importQueue, {
+      googlePlaceId: 'ChIJtest',
+      notes: 'My own note',
+      source: recommendation,
+    });
+    const status = await waitForState(jobId!, 'completed');
+
+    expect(await db.select().from(placeSources)).toMatchObject([
+      {...recommendation, placeId: status.placeIds[0]},
+    ]);
+    expect(await db.select().from(places)).toMatchObject([{userNote: 'My own note'}]);
+  });
+
+  it('adds sources to an existing place and updates only supplied relation fields', async () => {
+    const [first, second] = await db
+      .insert(sources)
+      .values([{type: 'instagram'}, {type: 'instagram'}])
+      .returning();
+    const [original, review] = await db
+      .insert(tags)
+      .values([{name: 'favorite'}, {name: 'needs-review'}])
+      .returning();
+    const result = await importPlace(
+      db,
+      google,
+      'ChIJtest',
+      [{tagId: original!.id, note: 'My tag note'}],
+      'My place note',
+      {
+        sourceId: first!.id,
+        description: 'Original recommendation',
+        data: {evidence: 'Original caption'},
+      },
+    );
+    await importPlace(
+      db,
+      google,
+      'ChIJtest',
+      [{tagId: review!.id}, {tagId: original!.id, note: 'Replacement'}],
+      'Replacement',
+      {sourceId: second!.id},
+    );
+    expect(await db.select().from(placeTags)).toMatchObject([
+      {tagId: original!.id, note: 'My tag note'},
+    ]);
+    expect(await db.select().from(placeTags)).toHaveLength(1);
+    expect(await db.select().from(places)).toMatchObject([{userNote: 'My place note'}]);
+    await importPlace(db, google, 'ChIJtest', [], undefined, {
+      sourceId: first!.id,
+      description: 'Updated recommendation',
+    });
+    await importPlace(db, google, 'ChIJtest', [], undefined, {sourceId: first!.id});
+
+    const relations = await db.select().from(placeSources);
+    expect(relations).toHaveLength(2);
+    expect(relations.find(row => row.sourceId === first!.id)).toMatchObject({
+      placeId: result.placeIds[0],
+      description: 'Updated recommendation',
+      data: {evidence: 'Original caption'},
+    });
+    expect(google.getMetadata).toHaveBeenCalledTimes(1);
+
+    await importPlace(db, google, 'ChIJtest', [], undefined, {
+      sourceId: first!.id,
+      description: null,
+      data: null,
+    });
+    const cleared = await db.select().from(placeSources);
+    expect(cleared.find(row => row.sourceId === first!.id)).toMatchObject({
+      description: null,
+      data: null,
+    });
+  });
+
+  it('deduplicates source associations under concurrent imports', async () => {
+    const [source] = await db.insert(sources).values({type: 'instagram'}).returning();
+    const results = await Promise.all(
+      [1, 2].map(() =>
+        importPlace(db, google, 'ChIJtest', [], undefined, {
+          sourceId: source!.id,
+          description: 'A recommendation',
+        }),
+      ),
+    );
+    expect(results[0]).toEqual(results[1]);
+    expect(await db.select().from(placeSources)).toHaveLength(1);
+  });
+
+  it('rolls back a new place when its source does not exist', async () => {
+    await expect(
+      importPlace(db, google, 'ChIJtest', [], undefined, {
+        sourceId: randomUUID(),
+      }),
+    ).rejects.toThrow();
+    expect(await db.select().from(places)).toEqual([]);
+    expect(await db.select().from(placeSources)).toEqual([]);
+  });
 
   it('queues only the resolved ID, persists metadata, and exposes named coordinates', async () => {
     const submitted = await client.places.import({input: 'gmaps:ChIJtest'});
@@ -154,6 +260,25 @@ describe.skipIf(!testUrl)('place import with PostgreSQL and pg-boss', () => {
     expect(google.getMetadata).not.toHaveBeenCalled();
   }, 20000);
 
+  it('preserves the winning import assignments when concurrent imports create the same place', async () => {
+    const importedTags = await db
+      .insert(tags)
+      .values([{name: 'first'}, {name: 'second'}])
+      .returning();
+    const results = await Promise.all(
+      importedTags.map(tag =>
+        importPlace(db, google, 'ChIJtest', [{tagId: tag.id, note: tag.name}], tag.name),
+      ),
+    );
+    expect(results[0]).toEqual(results[1]);
+    const [saved] = await db.select().from(places);
+    const winner = importedTags.find(tag => tag.name === saved!.userNote)!;
+    expect(await db.select().from(placeTags)).toMatchObject([
+      {tagId: winner.id, note: winner.name},
+    ]);
+    expect(await db.select().from(placeTags)).toHaveLength(1);
+  });
+
   it('lists every tag association with metadata and notes, including on filtered places', async () => {
     const {
       placeIds: [placeId],
@@ -205,7 +330,7 @@ describe.skipIf(!testUrl)('place import with PostgreSQL and pg-boss', () => {
     expect(untaggedPlaces[0]?.tags).toHaveLength(1);
   });
 
-  it('resolves names and IDs, deduplicates tags, and adds tags on reimport', async () => {
+  it('resolves names and IDs, deduplicates tags, and preserves tags on reimport', async () => {
     const cafe = await client.tags.create({name: 'cafe'});
     const favorite = await client.tags.create({name: 'favorite'});
     const submitted = await client.places.import({
@@ -226,11 +351,11 @@ describe.skipIf(!testUrl)('place import with PostgreSQL and pg-boss', () => {
 
     await waitForState(repeated.jobId, 'completed');
     const savedTags = await db.select().from(placeTags);
-    expect(savedTags.map(row => row.tagId).sort()).toEqual([cafe.id, favorite.id].sort());
+    expect(savedTags.map(row => row.tagId)).toEqual([cafe.id]);
     expect(google.getMetadata).not.toHaveBeenCalled();
   }, 20000);
 
-  it('applies tag notes, resolves aliases, and preserves, replaces, and clears them', async () => {
+  it('applies initial tag notes, resolves aliases, and preserves them on reimport', async () => {
     const bathroom = await client.tags.create({name: 'nice-bathroom'});
     const cafe = await client.tags.create({name: 'cafe'});
 
@@ -243,8 +368,8 @@ describe.skipIf(!testUrl)('place import with PostgreSQL and pg-boss', () => {
         '  Code 1234\nDownstairs  ',
       ],
       [[], '  Code 1234\nDownstairs  '],
-      [[{tag: bathroom.name, note: 'Code 5678'}], 'Code 5678'],
-      [[{tag: bathroom.id, note: ''}], null],
+      [[{tag: bathroom.name, note: 'Code 5678'}], '  Code 1234\nDownstairs  '],
+      [[{tag: bathroom.id, note: ''}], '  Code 1234\nDownstairs  '],
     ] as const) {
       const submitted = await client.places.import({
         input: 'gmaps:ChIJtest',
@@ -355,12 +480,12 @@ describe.skipIf(!testUrl)('place import with PostgreSQL and pg-boss', () => {
     }
   });
 
-  it('saves, preserves, replaces, and clears notes on import', async () => {
+  it('saves initial notes and preserves them on reimport', async () => {
     for (const [notes, expected] of [
       ['  First note\nSecond line  ', '  First note\nSecond line  '],
       [undefined, '  First note\nSecond line  '],
-      ['Replacement note', 'Replacement note'],
-      ['', null],
+      ['Replacement note', '  First note\nSecond line  '],
+      ['', '  First note\nSecond line  '],
     ]) {
       const submitted = await client.places.import({
         input: 'gmaps:ChIJtest',

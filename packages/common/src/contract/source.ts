@@ -30,3 +30,13 @@ export const source = z.discriminatedUnion('type', [
   }),
 ]);
 export type Source = z.infer<typeof source>;
+
+/**
+ * Recommendation details attached to an existing source and a saved place.
+ */
+export const placeSourceInput = z.object({
+  sourceId: z.uuid(),
+  description: z.string().nullable().optional(),
+  data: z.record(z.string(), z.json()).nullable().optional(),
+});
+export type PlaceSourceInput = z.infer<typeof placeSourceInput>;

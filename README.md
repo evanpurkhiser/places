@@ -176,16 +176,15 @@ pnpm places list
 ```
 
 Repeat `--tag NAME_OR_ID` to apply existing tags by name or UUID. Names are trimmed
-and lowercased. Unknown tags are rejected before queuing. Tags are added to new
-and existing places; repeated tags are applied once.
+and lowercased. Unknown tags are rejected before queuing. Tags are applied when creating
+a place; repeated tags are applied once.
 
-Use `--notes TEXT` to save notes with a place. On reimport, supplied notes replace
-the saved note; omitting the option preserves it. Use `--notes ''` to clear it.
+Use `--notes TEXT` to save notes when creating a place. Reimporting an existing
+place preserves its tags, tag notes, and place notes while attaching supplied sources.
 
 Use `--tag-note NAME_OR_ID NOTE` to apply an existing tag and save a note on its
-assignment to the place. Repeat the option for multiple tags. Supplied notes
-replace existing assignment notes; an empty string clears the note while keeping
-the tag. Omitting a tag note, including when using plain `--tag`, preserves it.
+assignment when creating a place. Repeat the option for multiple tags. An empty
+string or omitted note creates the assignment without a note.
 If multiple notes resolve to the same tag, the last note wins. Tag names are
 normalized; note text is preserved verbatim. `--notes` stores the place's general
 note independently.
