@@ -41,14 +41,23 @@ export const queueOptions = {
   expireInSeconds: 900,
   deleteAfterSeconds: 7 * 24 * 60 * 60,
 };
-const importPayload = z.object({shortcode: z.string().regex(/^[A-Za-z0-9_-]+$/)});
+const importPayload = z.object({
+  shortcode: z.string().regex(/^[A-Za-z0-9_-]+$/),
+  tags: googleImportPayload.shape.tags,
+  notes: googleImportPayload.shape.notes,
+});
+type ImportOptions = Pick<z.infer<typeof importPayload>, 'tags' | 'notes'>;
 
 /**
  * Enqueue one ingestion per shortcode while a matching job is queued or active.
  */
-export function enqueueInstagramImport(jobs: PgBoss, url: string) {
+export function enqueueInstagramImport(
+  jobs: PgBoss,
+  url: string,
+  options?: ImportOptions,
+) {
   const shortcode = instagramShortcode(url);
-  return jobs.send(importQueue, {shortcode}, {singletonKey: shortcode});
+  return jobs.send(importQueue, {shortcode, ...options}, {singletonKey: shortcode});
 }
 
 /**
@@ -88,6 +97,7 @@ export async function importInstagramPost(
   jobs: PgBoss,
   dependencies: InstagramImportDependencies,
   shortcode: string,
+  options: ImportOptions = {tags: []},
 ) {
   const existing = await findSource(dependencies.db, shortcode);
 
@@ -99,7 +109,14 @@ export async function importInstagramPost(
     dependencies,
     postUrl(shortcode),
   );
-  return dispatchPlaces(dependencies.db, jobs, shortcode, captured, alwaysApplyTagIds);
+  return dispatchPlaces(
+    dependencies.db,
+    jobs,
+    shortcode,
+    captured,
+    alwaysApplyTagIds,
+    options,
+  );
 }
 
 /**
@@ -157,6 +174,7 @@ function dispatchPlaces(
   externalId: string,
   captured: CaptureResult,
   alwaysApplyTagIds: string[],
+  options: ImportOptions,
 ) {
   return db.transaction(async tx => {
     const {description, caption, username, postedAt, thumbnailUrl} = captured.source;
@@ -183,9 +201,15 @@ function dispatchPlaces(
     const imports = captured.places.map(place => ({
       data: googleImportPayload.parse({
         googlePlaceId: place.googlePlaceId,
-        tags: [...new Set([...place.tagIds, ...alwaysApplyTagIds])].map(tagId => ({
-          tagId,
-        })),
+        tags: [
+          ...new Map([
+            ...[...place.tagIds, ...alwaysApplyTagIds].map(
+              tagId => [tagId, {tagId}] as const,
+            ),
+            ...options.tags.map(tag => [tag.tagId, tag] as const),
+          ]).values(),
+        ],
+        notes: options.notes,
         source: {
           sourceId: source.id,
           description: place.description,
@@ -218,7 +242,7 @@ export function registerInstagramImportWorker(
   options: WorkerQueueConfig,
 ) {
   return registerWorker(jobs, importQueue, options, data => {
-    const {shortcode} = importPayload.parse(data);
-    return importInstagramPost(jobs, dependencies, shortcode);
+    const {shortcode, ...options} = importPayload.parse(data);
+    return importInstagramPost(jobs, dependencies, shortcode, options);
   });
 }

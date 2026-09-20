@@ -196,6 +196,39 @@ describe.skipIf(!testUrl)('Instagram ingestion with PostgreSQL and pg-boss', () 
     }
   });
 
+  it('passes explicit tags and notes from the queued post to each place import', async () => {
+    const options = {
+      tags: [{tagId: reviewTagId, note: 'Check this recommendation'}],
+      notes: 'From my saved posts',
+    };
+    const id = await enqueueInstagramImport(jobs, url, options);
+    await registerInstagramImportWorker(jobs, dependencies, config.workers[importQueue]);
+
+    try {
+      await vi.waitFor(
+        async () => {
+          expect((await jobs.getJobById(importQueue, id!))!.state).toBe('completed');
+        },
+        {timeout: 15000, interval: 100},
+      );
+
+      const children = await jobs.findJobs(googleQueue);
+      expect(children).toHaveLength(2);
+
+      for (const child of children) {
+        expect(googleImportPayload.parse(child.data)).toMatchObject({
+          tags: [
+            {tagId: reviewTagId, note: 'Check this recommendation'},
+            {tagId: importedTagId},
+          ],
+          notes: options.notes,
+        });
+      }
+    } finally {
+      await jobs.offWork(importQueue);
+    }
+  });
+
   it('skips existing sources before scraping, preparation, or capture', async () => {
     const [source] = await db
       .insert(sources)
