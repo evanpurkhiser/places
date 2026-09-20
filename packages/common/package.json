@@ -8,6 +8,7 @@
     "./contract": "./src/contract/index.ts",
     "./contract/namespace": "./src/contract/namespace.ts",
     "./contract/tag": "./src/contract/tag.ts",
+    "./contract/source": "./src/contract/source.ts",
     "./contract/place": "./src/contract/place.ts",
     "./search": "./src/search/index.ts",
     "./filter-engine": "./src/filter-engine/index.ts"

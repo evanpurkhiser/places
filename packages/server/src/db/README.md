@@ -5,7 +5,13 @@ properties use camelCase and PostgreSQL columns use snake_case.
 
 - Deleting a place, tag, or source cascades to its join-table associations.
 - Deleting a place preserves its source and tag records.
-- Source types and JSON payloads remain open-ended pending capture contracts.
+- Sources have a nullable `external_id`, unique within each source `type`.
+  Multiple sources without an external ID are allowed.
+- The shared Zod source contract validates `data` according to `type`; Instagram
+  metadata includes caption, username, UTC post timestamp, and thumbnail URL.
+  Drizzle's `$type` annotations provide static typing. Application boundaries
+  must parse the full source with Zod to enforce the type/payload relationship;
+  PostgreSQL stores JSONB without enforcing the Zod contract.
 - Namespaces have unique, nonempty, lowercase, trimmed names without colons,
   optional descriptions, and icons in the tag icon format.
 - Tags have a nullable `namespace_id` referencing namespaces; deleting a namespace

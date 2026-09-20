@@ -1,3 +1,4 @@
+import type {Source} from '@places/common/contract/source';
 import type {TagIcon} from '@places/common/contract/tag';
 import {sql} from 'drizzle-orm';
 import {
@@ -10,6 +11,7 @@ import {
   text,
   timestamp,
   uuid,
+  unique,
 } from 'drizzle-orm/pg-core';
 
 // PostGIS accepts EWKT on writes and returns hex EWKB. Convert to named
@@ -132,15 +134,20 @@ export const placeTags = pgTable(
   ],
 );
 
-export const sources = pgTable('sources', {
-  id: uuid('id').defaultRandom().primaryKey(),
-  url: text('url'),
-  type: text('type').notNull(),
-  description: text('description'),
-  data: jsonb('data'),
-  createdAt: createdAt(),
-  updatedAt: updatedAt(),
-});
+export const sources = pgTable(
+  'sources',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    externalId: text('external_id'),
+    url: text('url'),
+    type: text('type').$type<Source['type']>().notNull(),
+    description: text('description'),
+    data: jsonb('data').$type<Source['data']>(),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  table => [unique('sources_type_external_id_unique').on(table.type, table.externalId)],
+);
 
 export const placeSources = pgTable(
   'place_sources',

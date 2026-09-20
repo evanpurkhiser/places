@@ -50,6 +50,13 @@
       "when": 1789786561746,
       "tag": "0006_tag_namespaces",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1789877841856,
+      "tag": "0007_source_external_id",
+      "breakpoints": true
     }
   ]
 }

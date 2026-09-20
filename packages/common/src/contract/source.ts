@@ -1,0 +1,32 @@
+import {z} from 'zod';
+
+/**
+ * Instagram post metadata used to display a source card.
+ */
+export const instagramSourceData = z.strictObject({
+  caption: z.string(),
+  username: z.string().min(1).nullable(),
+  postedAt: z.iso.datetime().nullable(),
+  thumbnailUrl: z.url().nullable(),
+});
+export type InstagramSourceData = z.infer<typeof instagramSourceData>;
+
+const sourceFields = z.object({
+  id: z.uuid(),
+  externalId: z.string().min(1).nullable(),
+  url: z.url().nullable(),
+  description: z.string().nullable(),
+  createdAt: z.date(),
+  updatedAt: z.date(),
+});
+
+/**
+ * Validate source metadata together with the provider that defines its shape.
+ */
+export const source = z.discriminatedUnion('type', [
+  sourceFields.extend({
+    type: z.literal('instagram'),
+    data: instagramSourceData,
+  }),
+]);
+export type Source = z.infer<typeof source>;
