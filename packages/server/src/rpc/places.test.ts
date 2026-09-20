@@ -64,7 +64,7 @@ describe.skipIf(!testUrl)('place import with PostgreSQL and pg-boss', () => {
     });
     await jobs.start();
     await jobs.createQueue(importQueue, {retryLimit: 1, retryDelay: 0});
-    await registerImportWorker(jobs, db, google);
+    await registerImportWorker(jobs, {db, google}, config.workers[importQueue]);
   }, 30000);
 
   beforeEach(async () => {

@@ -259,7 +259,7 @@ describe.skipIf(!testUrl)('place sync with PostgreSQL and pg-boss', () => {
 
   it('runs queued jobs and exposes their result', async () => {
     const {jobIds} = await client.places.sync();
-    await registerSyncWorker(jobs, db, google);
+    await registerSyncWorker(jobs, {db, google}, config.workers[syncQueue]);
     await vi.waitFor(
       async () => {
         expect(await client.places.syncStatus({jobId: jobIds[0]!})).toMatchObject({

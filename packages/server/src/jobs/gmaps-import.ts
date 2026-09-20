@@ -3,7 +3,7 @@ import {eq, sql} from 'drizzle-orm';
 import type {PgBoss} from 'pg-boss';
 import {z} from 'zod';
 
-import {workersConfig, type WorkerQueueConfig} from '../config.ts';
+import type {WorkerQueueConfig} from '../config.ts';
 import type {Database} from '../db/index.ts';
 import {places, placeTags} from '../db/schema.ts';
 import type {GooglePlaces} from '../services/google/index.ts';
@@ -123,13 +123,20 @@ export function importPlace(
   });
 }
 
+interface WorkerDependencies {
+  db: Database;
+  google: GooglePlaces;
+}
+
+/**
+ * Register the worker with its dependencies and queue settings.
+ */
 export function registerImportWorker(
-  boss: PgBoss,
-  db: Database,
-  google: GooglePlaces,
-  options: WorkerQueueConfig = workersConfig.parse({})[importQueue],
+  jobs: PgBoss,
+  {db, google}: WorkerDependencies,
+  options: WorkerQueueConfig,
 ) {
-  return registerWorker(boss, importQueue, options, data => {
+  return registerWorker(jobs, importQueue, options, data => {
     const {googlePlaceId, tags, notes} = importPayload.parse(data);
 
     return importPlace(db, google, googlePlaceId, tags, notes);
