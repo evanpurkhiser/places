@@ -1,7 +1,15 @@
 import type OpenAI from 'openai';
-import type {z} from 'zod';
+import {z} from 'zod';
 
-import {transcriptSegments} from './schema.ts';
+export const transcriptSegments = z.array(
+  z
+    .object({
+      start: z.number().nonnegative().finite(),
+      end: z.number().nonnegative().finite(),
+      text: z.string(),
+    })
+    .refine(segment => segment.end >= segment.start),
+);
 
 export type TranscriptSegment = z.infer<typeof transcriptSegments>[number];
 

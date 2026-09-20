@@ -1,5 +1,5 @@
 import {createWriteStream} from 'node:fs';
-import {mkdtemp, rm} from 'node:fs/promises';
+import {mkdtempDisposable} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {pipeline} from 'node:stream/promises';
@@ -103,13 +103,15 @@ async function makeVideo(
   dependencies: MediaDependencies,
   options: {temporaryRoot?: string; signal?: AbortSignal},
 ): Promise<InstagramVideo> {
-  const directory = await mkdtemp(join(options.temporaryRoot ?? tmpdir(), 'instagram-'));
+  const directory = await mkdtempDisposable(
+    join(options.temporaryRoot ?? tmpdir(), 'instagram-'),
+  );
   const controller = new AbortController();
   const signal = options.signal
     ? AbortSignal.any([options.signal, controller.signal])
     : controller.signal;
   const frames = new Set<Promise<VideoFrame>>();
-  const video = join(directory, 'video');
+  const video = join(directory.path, 'video');
 
   /**
    * Cancel processing and wait for pending frames before deleting session files.
@@ -117,7 +119,7 @@ async function makeVideo(
   async function dispose() {
     controller.abort();
     await Promise.allSettled(frames);
-    await rm(directory, {recursive: true, force: true});
+    await directory.remove();
   }
 
   /**
@@ -206,7 +208,7 @@ async function makeImage(
   signal?: AbortSignal,
 ): Promise<InstagramImage> {
   const response = await fetchMedia(url, fetcher, signal);
-  const bytes = Buffer.from(await response.arrayBuffer());
+  const bytes = Buffer.from(await response.bytes());
   return {
     id,
     kind: 'image',

@@ -67,6 +67,7 @@ export function parseInstagramPost(html: string, shortcode: string): InstagramPo
   const $ = load(html);
   const item = $('script[type="application/json"]')
     .toArray()
+    .values()
     .map(element => parsePayload($(element).text()))
     .map(payload => findPost(payload, shortcode))
     .find(value => value !== undefined);
@@ -131,6 +132,7 @@ function findPost(
   }
 
   return Object.values(value)
+    .values()
     .map(child => findPost(child, shortcode))
     .find(item => item !== undefined);
 }

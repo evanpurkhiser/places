@@ -2,15 +2,7 @@ import {namespace} from '@places/common/contract/namespace';
 import {tag} from '@places/common/contract/tag';
 import {z} from 'zod';
 
-export const transcriptSegments = z.array(
-  z
-    .object({
-      start: z.number().nonnegative().finite(),
-      end: z.number().nonnegative().finite(),
-      text: z.string(),
-    })
-    .refine(segment => segment.end >= segment.start),
-);
+import {transcriptSegments} from './transcribing.ts';
 
 export const captureCatalog = z.object({
   tags: z.array(tag.pick({id: true, name: true, namespaceId: true, description: true})),

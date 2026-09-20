@@ -35,7 +35,7 @@ describe('Instagram scraper', () => {
       ),
     ).toBe(true);
     const positions = result.media.map(item => html.indexOf(item.url));
-    expect(positions).toEqual([...positions].sort((a, b) => a - b));
+    expect(positions).toEqual(positions.toSorted((a, b) => a - b));
   });
 
   it('preserves mixed carousel order and selects video URLs instead of thumbnails', async () => {

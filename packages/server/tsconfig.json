@@ -1,4 +1,7 @@
 {
   "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "lib": ["ES2024", "ESNext.Iterator", "DOM", "DOM.Iterable", "DOM.AsyncIterable"]
+  },
   "include": ["src/**/*.ts", "drizzle.config.ts"]
 }
