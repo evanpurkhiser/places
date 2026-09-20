@@ -1,7 +1,14 @@
 import {PgBoss} from 'pg-boss';
 
-import {importQueue, queueOptions} from './gmaps-import.ts';
-import {syncQueue} from './gmaps-sync.ts';
+import {
+  importQueue as googleImportQueue,
+  queueOptions as googleImportOptions,
+} from './gmaps-import.ts';
+import {syncQueue as googleSyncQueue} from './gmaps-sync.ts';
+import {
+  importQueue as instagramImportQueue,
+  queueOptions as instagramImportOptions,
+} from './instagram-import.ts';
 
 export async function startJobs(connectionString: string) {
   const boss = new PgBoss({connectionString});
@@ -10,8 +17,12 @@ export async function startJobs(connectionString: string) {
 
   try {
     await boss.start();
-    await boss.createQueue(importQueue, queueOptions);
-    await boss.createQueue(syncQueue, {...queueOptions, policy: 'exclusive'});
+    await boss.createQueue(googleImportQueue, googleImportOptions);
+    await boss.createQueue(instagramImportQueue, instagramImportOptions);
+    await boss.createQueue(googleSyncQueue, {
+      ...googleImportOptions,
+      policy: 'exclusive',
+    });
 
     return boss;
   } catch (error) {

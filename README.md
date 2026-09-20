@@ -221,6 +221,18 @@ such as `type:cafe` or `type:restaurant`. All four tagging lists live directly
 under `instagram` and accept `[]`. For review before map display, include
 `status:needs-review` in `alwaysApplyTags` and exclude it from map queries.
 
+`enqueueInstagramImport(jobs, url)` queues an ingestion keyed by the Instagram
+shortcode. The job skips existing sources, otherwise scrapes and prepares media,
+captures recommendations, and atomically saves the source with a batch of Google
+import jobs. Completion returns `sourceId`, child `jobIds`, unresolved mentions,
+and whether ingestion was skipped. Child jobs import places independently;
+Instagram job completion means capture and dispatch have finished.
+
+The Instagram queue defaults to one worker with a batch size of one. Local
+workers need `ffmpeg` and `ffprobe` on PATH; the container image includes them.
+Thumbnail metadata contains Instagram's remote cover URL. CLI and public API
+entry points for Instagram ingestion are planned.
+
 ## Sync Google place metadata
 
 ```sh
