@@ -1,0 +1,29 @@
+import type OpenAI from 'openai';
+import type {z} from 'zod';
+
+import {transcriptSegments} from './schema.ts';
+
+export type TranscriptSegment = z.infer<typeof transcriptSegments>[number];
+
+/**
+ * Transcribe extracted audio with segment timestamps for targeted frame requests.
+ */
+export function createTranscriber(openai: OpenAI) {
+  return async (audio: Buffer, signal?: AbortSignal) => {
+    const result = await openai.audio.transcriptions.create(
+      {
+        file: new File([new Uint8Array(audio)], 'audio.mp3', {type: 'audio/mpeg'}),
+        model: 'whisper-1',
+        response_format: 'verbose_json',
+        timestamp_granularities: ['segment'],
+      },
+      {signal},
+    );
+
+    if (!result.segments) {
+      throw new Error('Transcription did not include timestamped segments.');
+    }
+
+    return transcriptSegments.parse(result.segments);
+  };
+}
