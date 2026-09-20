@@ -1,7 +1,7 @@
 FROM debian:stable-slim
 
 RUN apt-get update \
-  && apt-get install -y curl gnupg libatomic1 ca-certificates xz-utils --no-install-recommends \
+  && apt-get install -y curl gnupg libatomic1 ca-certificates xz-utils ffmpeg --no-install-recommends \
   && rm -rf /var/lib/apt/lists/*
 
 ENV MISE_DATA_DIR=/mise
