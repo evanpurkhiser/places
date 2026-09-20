@@ -8,11 +8,13 @@ import {fileURLToPath} from 'node:url';
 
 import {configSchema} from '../config.ts';
 import {createDatabase} from '../db/index.ts';
-import {sources, tags} from '../db/schema.ts';
+import {places, placeSources, placeTags, sources, tags} from '../db/schema.ts';
+import {enqueueImport, getImportStatus} from '../importers/index.ts';
 import {createGooglePlaces} from '../services/google/index.ts';
 import * as instagram from '../services/instagram/index.ts';
 
 import {
+  importPlace,
   importPayload as googleImportPayload,
   importQueue as googleQueue,
 } from './gmaps-import.ts';
@@ -87,6 +89,7 @@ describe.skipIf(!testUrl)('Instagram ingestion with PostgreSQL and pg-boss', () 
     vi.clearAllMocks();
     await jobs.deleteAllJobs(googleQueue);
     await jobs.deleteAllJobs(importQueue);
+    await db.delete(places);
     await db.delete(sources);
     await db.delete(tags);
     const [tag, imported] = await db
@@ -181,6 +184,227 @@ describe.skipIf(!testUrl)('Instagram ingestion with PostgreSQL and pg-boss', () 
       },
       expect.any(AbortSignal),
     );
+  });
+
+  const context = () => ({db, jobs, google: dependencies.google, config});
+
+  async function dispatchImport() {
+    const submitted = await enqueueImport(url, context());
+    const [parent] = await jobs.fetch(importQueue);
+    const result = await importInstagramPost(jobs, dependencies, shortcode);
+    await jobs.complete(importQueue, parent!.id, result);
+    return {...submitted, ...result};
+  }
+
+  async function completePlace(jobId: string) {
+    const job = await jobs.getJobById(googleQueue, jobId);
+    const payload = googleImportPayload.parse(job!.data);
+    const google = {
+      ...dependencies.google,
+      getMetadata: vi.fn().mockResolvedValue({
+        id: payload.googlePlaceId,
+        displayName: {text: payload.googlePlaceId},
+        formattedAddress: 'NYC',
+        location: {latitude: 40, longitude: -74},
+        googleMapsUri: 'https://maps.google.com/',
+        timeZone: 'America/New_York',
+        hoursWeeklyOpen: [],
+        businessStatus: 'OPERATIONAL',
+      }),
+    };
+    const result = await importPlace(
+      db,
+      google,
+      payload.googlePlaceId,
+      payload.tags,
+      payload.notes,
+      payload.source,
+    );
+    await jobs.complete(googleQueue, jobId, result);
+    return result.placeIds[0]!;
+  }
+
+  it('reports capture progress and terminal failure', async () => {
+    const submitted = await enqueueImport(url, context());
+    expect(await getImportStatus(submitted.jobId, context())).toMatchObject({
+      state: 'created',
+      placeIds: [],
+    });
+    await jobs.fetch(importQueue);
+    expect(await getImportStatus(submitted.jobId, context())).toMatchObject({
+      state: 'active',
+      placeIds: [],
+    });
+    await jobs.cancel(importQueue, submitted.jobId);
+    expect(await getImportStatus(submitted.jobId, context())).toMatchObject({
+      state: 'cancelled',
+      error: expect.any(String),
+    });
+  });
+
+  it('rejects unknown tags before enqueueing Instagram capture', async () => {
+    await expect(enqueueImport(url, context(), [{tag: 'missing'}])).rejects.toMatchObject(
+      {code: 'BAD_REQUEST'},
+    );
+    expect(await jobs.findJobs(importQueue)).toHaveLength(0);
+  });
+
+  it('rejects duplicate queued imports without losing their original options', async () => {
+    await enqueueImport(url, context(), [{tag: 'imported'}]);
+    await expect(
+      enqueueImport(url, context(), [{tag: 'needs-review'}]),
+    ).rejects.toMatchObject({code: 'SERVICE_UNAVAILABLE'});
+    const queued = await jobs.findJobs(importQueue);
+    expect(queued).toHaveLength(1);
+    expect(queued[0]!.data).toMatchObject({tags: [{tagId: importedTagId}]});
+  });
+
+  it('forwards explicit tags, tag notes, and place notes through the worker', async () => {
+    const submitted = await enqueueImport(
+      url,
+      context(),
+      [{tag: 'needs-review', note: 'Check this recommendation'}, {tag: importedTagId}],
+      'From my saved posts',
+    );
+    expect(submitted.type).toBe('instagram');
+    const parent = await jobs.getJobById(importQueue, submitted.jobId);
+    expect(parent!.data).toMatchObject({
+      shortcode,
+      tags: [
+        {tagId: reviewTagId, note: 'Check this recommendation'},
+        {tagId: importedTagId},
+      ],
+      notes: 'From my saved posts',
+    });
+    await registerInstagramImportWorker(jobs, dependencies, config.workers[importQueue]);
+    try {
+      await vi.waitFor(
+        async () => {
+          expect((await jobs.getJobById(importQueue, submitted.jobId))!.state).toBe(
+            'completed',
+          );
+        },
+        {timeout: 15000, interval: 100},
+      );
+    } finally {
+      await jobs.offWork(importQueue);
+    }
+    const children = await jobs.fetch(googleQueue, {batchSize: 10});
+    expect(children).toHaveLength(2);
+    for (const child of children) {
+      expect(googleImportPayload.parse(child.data)).toMatchObject({
+        tags: [
+          {tagId: reviewTagId, note: 'Check this recommendation'},
+          {tagId: importedTagId},
+        ],
+        notes: 'From my saved posts',
+      });
+      await completePlace(child.id);
+    }
+    expect(await db.select().from(places)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({userNote: 'From my saved posts'}),
+      ]),
+    );
+    expect(await db.select().from(placeTags)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({tagId: reviewTagId, note: 'Check this recommendation'}),
+      ]),
+    );
+  });
+
+  it('waits for every child and returns all saved place IDs', async () => {
+    const submitted = await dispatchImport();
+    expect(await getImportStatus(submitted.jobId, context())).toMatchObject({
+      state: 'active',
+      placeIds: [],
+    });
+    const children = await jobs.fetch(googleQueue, {batchSize: 10});
+    const first = await completePlace(children[0]!.id);
+    expect(await getImportStatus(submitted.jobId, context())).toMatchObject({
+      state: 'active',
+      placeIds: [first],
+    });
+    const second = await completePlace(children[1]!.id);
+    expect(await getImportStatus(submitted.jobId, context())).toMatchObject({
+      type: 'instagram',
+      state: 'completed',
+      placeIds: expect.arrayContaining([first, second]),
+      error: null,
+    });
+  });
+
+  it.each(['failed', 'cancelled'] as const)(
+    'reports a %s child with partial results',
+    async state => {
+      const submitted = await dispatchImport();
+      const children = await jobs.fetch(googleQueue, {batchSize: 10});
+      const saved = await completePlace(children[0]!.id);
+      if (state === 'cancelled') {
+        await jobs.cancel(googleQueue, children[1]!.id);
+      } else {
+        await db.$client.query('UPDATE pgboss.job SET state = $1 WHERE id = $2', [
+          state,
+          children[1]!.id,
+        ]);
+      }
+      expect(await getImportStatus(submitted.jobId, context())).toMatchObject({
+        state,
+        placeIds: [saved],
+        error: expect.any(String),
+      });
+    },
+  );
+
+  it('keeps child retries pending', async () => {
+    const submitted = await dispatchImport();
+    const [child] = await jobs.fetch(googleQueue);
+    await jobs.fail(googleQueue, child!.id, {message: 'Transient provider failure'});
+    expect((await jobs.getJobById(googleQueue, child!.id))!.state).toBe('retry');
+    expect(await getImportStatus(submitted.jobId, context())).toMatchObject({
+      state: 'active',
+      error: expect.any(String),
+    });
+  });
+
+  it('reports missing child jobs instead of claiming completion', async () => {
+    const submitted = await dispatchImport();
+    await jobs.deleteAllJobs(googleQueue);
+    expect(await getImportStatus(submitted.jobId, context())).toMatchObject({
+      state: 'failed',
+      error: expect.stringContaining('missing or expired'),
+    });
+  });
+
+  it('recovers pending jobs and saved places for a skipped capture', async () => {
+    await dispatchImport();
+    const repeat = await dispatchImport();
+    expect(repeat.skipped).toBe(true);
+    expect(await getImportStatus(repeat.jobId, context())).toMatchObject({
+      state: 'active',
+    });
+    const children = await jobs.fetch(googleQueue, {batchSize: 10});
+    const saved = await Promise.all(children.map(child => completePlace(child.id)));
+    expect(await getImportStatus(repeat.jobId, context())).toMatchObject({
+      state: 'completed',
+      placeIds: expect.arrayContaining(saved),
+    });
+    await jobs.deleteAllJobs(googleQueue);
+    expect(await getImportStatus(repeat.jobId, context())).toMatchObject({
+      state: 'completed',
+      placeIds: expect.arrayContaining(saved),
+    });
+    expect(await db.select().from(placeSources)).toHaveLength(2);
+    expect(instagram.capture).toHaveBeenCalledOnce();
+  });
+
+  it('completes an import with no matched places', async () => {
+    captured.places = [];
+    const submitted = await dispatchImport();
+    expect(await getImportStatus(submitted.jobId, context())).toMatchObject({
+      state: 'completed',
+      placeIds: [],
+    });
   });
 
   it('supports an empty list of automatic tags', async () => {

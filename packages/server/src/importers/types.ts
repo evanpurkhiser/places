@@ -13,7 +13,7 @@ export interface ImportStatus {
 }
 
 export interface Importer {
-  type: 'gmaps';
+  type: 'gmaps' | 'instagram';
   queue: string;
   accepts(input: string): boolean;
   enqueue(
@@ -32,8 +32,8 @@ export function pendingStatus(job: JobWithMetadata<unknown>): ImportStatus {
     state: job.state,
     placeIds: [],
     error:
-      job.state === 'failed' || job.state === 'retry'
-        ? 'Import failed. Check the provider configuration and retry.'
+      job.state === 'failed' || job.state === 'retry' || job.state === 'cancelled'
+        ? 'Import failed or was cancelled. Check the provider configuration and retry.'
         : null,
   };
 }

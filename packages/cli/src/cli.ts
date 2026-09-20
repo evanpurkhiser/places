@@ -142,7 +142,7 @@ export const parser = merge(
           ),
         ),
         input: argument(zod(importInput, {metavar: 'INPUT', placeholder: ''}), {
-          description: message`URL or provider reference to import. Currently supports Google Maps URLs and gmaps:<place_id>.`,
+          description: message`URL or provider reference to import. Supports Google Maps URLs, gmaps:<place_id>, and Instagram post or reel URLs.`,
         }),
       }),
       {

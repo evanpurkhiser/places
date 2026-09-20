@@ -4,9 +4,10 @@ import type {ImportTag} from '@places/common/contract/place';
 import type {Context} from '../rpc/context.ts';
 
 import {googleImporter} from './gmaps.ts';
+import {instagramImporter} from './instagram.ts';
 import {resolveTags} from './tags.ts';
 
-const importers = [googleImporter];
+const importers = [googleImporter, instagramImporter];
 
 export async function enqueueImport(
   input: string,
@@ -19,7 +20,7 @@ export async function enqueueImport(
   if (!importer) {
     throw new ORPCError('BAD_REQUEST', {
       message:
-        'Unsupported import input. Currently supported: Google Maps place URLs and gmaps:<place_id>.',
+        'Unsupported import input. Currently supported: Google Maps place URLs, gmaps:<place_id>, and Instagram post or reel URLs.',
     });
   }
 
@@ -28,7 +29,7 @@ export async function enqueueImport(
 
   if (!jobId) {
     throw new ORPCError('SERVICE_UNAVAILABLE', {
-      message: 'Could not queue the import.',
+      message: 'Could not queue the import. It may already be queued or active.',
     });
   }
 

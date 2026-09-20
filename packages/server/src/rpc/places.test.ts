@@ -18,6 +18,10 @@ import {createDatabase} from '../db/index.ts';
 import {places, placeSources, placeTags, sources, tags} from '../db/schema.ts';
 import {testConfig} from '../fixtures/config.ts';
 import {importPlace, importQueue, registerImportWorker} from '../jobs/gmaps-import.ts';
+import {
+  importQueue as instagramQueue,
+  queueOptions as instagramOptions,
+} from '../jobs/instagram-import.ts';
 import {createGooglePlaces} from '../services/google/index.ts';
 
 const exec = promisify(execFile);
@@ -64,6 +68,7 @@ describe.skipIf(!testUrl)('place import with PostgreSQL and pg-boss', () => {
       migrationsFolder: fileURLToPath(new URL('../../drizzle', import.meta.url)),
     });
     await jobs.start();
+    await jobs.createQueue(instagramQueue, instagramOptions);
     await jobs.createQueue(importQueue, {retryLimit: 1, retryDelay: 0});
     await registerImportWorker(jobs, {db, google}, config.workers[importQueue]);
   }, 30000);

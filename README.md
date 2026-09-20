@@ -150,7 +150,7 @@ string clears it. `untag` removes the assignment and its note, preserving the
 place and shared tag definition. Its `removed` result is false when the tag was
 already unassigned. Both commands report an error for an unknown place or tag.
 
-## Google Maps imports
+## Place imports
 
 Enable Places API (New) for your Google Cloud project and put the API key in the
 ignored `packages/server/config.yaml`:
@@ -168,12 +168,21 @@ pg-boss creates and manages its own schema at startup.
 pnpm places import 'https://maps.app.goo.gl/jbJWNK3airzeACCC7'
 pnpm places search-gmaps 'coffee shops in East Village, NYC'
 pnpm places import 'gmaps:ChIJ...'
+pnpm places import 'https://www.instagram.com/p/SHORTCODE/' --tag type:cafe
 pnpm places import 'gmaps:ChIJ...' --tag type:cafe --tag <tag-id>
 pnpm places import 'gmaps:ChIJ...' --notes 'Try the espresso tonic'
 pnpm places import 'gmaps:ChIJ...' --tag-note attr:nice-bathroom 'Code 1234'
 pnpm places import-status <job-id>
 pnpm places list
 ```
+
+Instagram post and reel URLs use the Instagram capture worker, which requires the
+Instagram/OpenAI configuration. Each matched place is queued for Google import.
+`import-status` tracks the complete operation and returns all saved
+place IDs. Status includes partial results while children run and reports failed
+or cancelled children. A repeated post skips capture and follows retained child
+jobs, including failures; after those jobs expire, it returns the source's saved
+places. Queue history is retained for seven days after completion.
 
 Repeat `--tag NAME_OR_ID` to apply existing tags by name or UUID. Names are trimmed
 and lowercased. Unknown tags are rejected before queuing. Tags are applied when creating
@@ -189,9 +198,10 @@ If multiple notes resolve to the same tag, the last note wins. Tag names are
 normalized; note text is preserved verbatim. `--notes` stores the place's general
 note independently.
 
-Import resolves the input to a Google Place ID in the RPC request and returns a
-job ID and provider type (`gmaps`). Import status returns the resulting place IDs.
-The worker fetches name, formatted address, Maps URL, coordinates, time zone,
+Import returns a job ID and provider type (`gmaps` or `instagram`). Google Maps
+inputs resolve to a Google Place ID in the RPC request. Import status returns
+the resulting place IDs.
+The Google worker fetches name, formatted address, Maps URL, coordinates, time zone,
 business status, and weekly hours, then inserts the place with `lastSync` set. Existing places are reused. Failed attempts
 leave no partial place; pg-boss retries three times with backoff. Status comes
 from pg-boss and is temporary (completed jobs are retained for seven days).
