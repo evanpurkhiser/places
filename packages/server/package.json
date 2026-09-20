@@ -17,6 +17,7 @@
     "@openai/agents": "^0.18.0",
     "@orpc/server": "1.15.1",
     "@places/common": "workspace:*",
+    "cheerio": "^1.2.0",
     "drizzle-orm": "0.45.2",
     "hono": "4.13.8",
     "openai": "^7.18.0",
