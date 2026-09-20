@@ -231,7 +231,7 @@ workers:
     concurrency: 1
   gmaps-sync:
     batchSize: 1
-    concurrency: 8
+    concurrency: 1
 ```
 
 These are the defaults. `concurrency` is the number of polling workers for that

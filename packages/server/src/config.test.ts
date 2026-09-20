@@ -53,13 +53,13 @@ it('defaults worker settings independently and supports partial overrides', () =
   const database = {url: 'postgres://localhost/places'};
   expect(configSchema.parse({database}).workers).toEqual({
     'gmaps-import': {batchSize: 1, concurrency: 1},
-    'gmaps-sync': {batchSize: 1, concurrency: 8},
+    'gmaps-sync': {batchSize: 1, concurrency: 1},
   });
   expect(
     configSchema.parse({database, workers: {'gmaps-sync': {batchSize: 3}}}).workers,
   ).toEqual({
     'gmaps-import': {batchSize: 1, concurrency: 1},
-    'gmaps-sync': {batchSize: 3, concurrency: 8},
+    'gmaps-sync': {batchSize: 3, concurrency: 1},
   });
 });
 

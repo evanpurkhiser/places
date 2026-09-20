@@ -25,7 +25,7 @@ const workerQueue = (concurrency: number) =>
 export const workersConfig = z
   .strictObject({
     'gmaps-import': workerQueue(1),
-    'gmaps-sync': workerQueue(8),
+    'gmaps-sync': workerQueue(1),
   })
   .prefault({});
 export type WorkerQueueConfig = z.infer<typeof workersConfig>['gmaps-sync'];

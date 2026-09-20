@@ -16,4 +16,4 @@ workers:
     concurrency: 1
   gmaps-sync:
     batchSize: 1
-    concurrency: 8
+    concurrency: 1
