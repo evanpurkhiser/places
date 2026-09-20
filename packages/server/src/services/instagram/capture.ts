@@ -15,7 +15,7 @@ import type {z} from 'zod';
 import type {GooglePlaces} from '../google/index.ts';
 
 import {CaptureError} from './errors.ts';
-import type {InstagramMedia} from './media.ts';
+import type {InstagramPost} from './media.ts';
 import {buildCapturePrompt} from './prompt.ts';
 import {
   assignableTags,
@@ -58,35 +58,26 @@ function resolveAssignableTags(catalog: CaptureCatalog, options: ParsedCaptureOp
 /**
  * Package prepared text and images with labels the model can cite as evidence.
  */
-function contentInput(
-  media: InstagramMedia,
-): Exclude<UserMessageItem['content'], string> {
+function contentInput(post: InstagramPost): Exclude<UserMessageItem['content'], string> {
   const content = captureContent.parse({
-    caption: media.caption,
-    location: media.location,
-    transcript: media.kind === 'video' ? media.transcript : null,
-    images: media.kind === 'carousel' ? media.images : [],
+    caption: post.caption,
+    location: post.location,
+    media: post.media,
   });
 
   return [
     {
       type: 'input_text',
-      text: JSON.stringify({
-        caption: content.caption,
-        location: content.location,
-        ...(media.kind === 'video'
-          ? {durationSeconds: media.durationSeconds, transcript: content.transcript}
-          : {}),
-      }),
+      text: JSON.stringify({caption: content.caption, location: content.location}),
     },
-    ...content.images.flatMap(
-      (image, index): Exclude<UserMessageItem['content'], string> => [
-        {
-          type: 'input_text',
-          text: `Image ${index + 1}${image.timestampSeconds === null ? '' : ` at ${image.timestampSeconds}s`}`,
-        },
-        {type: 'input_image', image: image.url, detail: 'auto'},
-      ],
+    ...content.media.flatMap(
+      (item): Exclude<UserMessageItem['content'], string> =>
+        item.kind === 'image'
+          ? [
+              {type: 'input_text', text: `Image ${item.id}`},
+              {type: 'input_image', image: item.image, detail: 'auto'},
+            ]
+          : [{type: 'input_text', text: JSON.stringify(item)}],
     ),
   ];
 }
@@ -153,7 +144,7 @@ function resolveResult(
  */
 export async function capture(
   dependencies: CaptureDependencies,
-  media: InstagramMedia,
+  post: InstagramPost,
   catalogInput: CaptureCatalog,
   optionsInput: CaptureOptions,
   signal?: AbortSignal,
@@ -161,7 +152,7 @@ export async function capture(
   const options = captureOptions.parse(optionsInput);
   const catalog = captureCatalog.parse(catalogInput);
   const schema = captureOutput(resolveAssignableTags(catalog, options));
-  const tools = createCaptureTools(dependencies.google, media);
+  const tools = createCaptureTools(dependencies.google, post);
   const timeout = AbortSignal.timeout(options.timeoutMs);
   const requestSignal = signal ? AbortSignal.any([signal, timeout]) : timeout;
   requestSignal.throwIfAborted();
@@ -181,7 +172,7 @@ export async function capture(
   });
   const runner = new Runner({tracingDisabled: true});
   const result = await runner
-    .run(agent, [user(contentInput(media))], {
+    .run(agent, [user(contentInput(post))], {
       signal: requestSignal,
       maxTurns: options.maxTurns,
     })

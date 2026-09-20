@@ -5,7 +5,7 @@ import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 
 import type {FFmpeg} from './ffmpeg.ts';
-import {prepareInstagramMedia} from './media.ts';
+import {prepareInstagramPost, type InstagramPostSource} from './media.ts';
 
 let root: string;
 beforeEach(async () => {
@@ -34,15 +34,15 @@ function harness(hasAudio = true) {
   const transcribe = vi.fn().mockResolvedValue([{start: 1, end: 3, text: 'A cafe'}]);
   const dependencies = {ffmpeg, fetch: fetcher, transcribe};
   const prepare = (signal?: AbortSignal) =>
-    prepareInstagramMedia(
-      {kind: 'video', caption: 'A cafe', url: 'https://cdn.example/video'},
+    prepareInstagramPost(
+      {caption: 'A cafe', media: [{kind: 'video', url: 'https://cdn.example/video'}]},
       dependencies,
       {temporaryRoot: root, signal},
     );
   return {ffmpeg, fetcher, transcribe, dependencies, prepare};
 }
 
-describe('Instagram media session', () => {
+describe('Instagram post preparation', () => {
   it('cleans up aborted preparation before making network requests', async () => {
     const {prepare, fetcher} = harness();
     await expect(prepare(AbortSignal.abort())).rejects.toMatchObject({
@@ -54,7 +54,8 @@ describe('Instagram media session', () => {
 
   it('keeps the video until disposal and extracts frames only when requested', async () => {
     const {prepare, ffmpeg, transcribe} = harness();
-    const media = await prepare();
+    const post = await prepare();
+    const media = post.media[0]!;
     expect(media.kind).toBe('video');
     if (media.kind !== 'video') {
       throw new Error('Expected video');
@@ -79,15 +80,16 @@ describe('Instagram media session', () => {
       expect.any(AbortSignal),
     );
 
-    await media[Symbol.asyncDispose]();
+    await post[Symbol.asyncDispose]();
     expect(await readdir(root)).toEqual([]);
     await expect(media.getFrames([2])).rejects.toMatchObject({name: 'AbortError'});
-    await media[Symbol.asyncDispose]();
+    await post[Symbol.asyncDispose]();
   });
 
   it('preserves frame order across concurrent requests', async () => {
     const {prepare, ffmpeg} = harness();
-    await using media = await prepare();
+    await using post = await prepare();
+    const media = post.media[0]!;
     if (media.kind !== 'video') {
       throw new Error('Expected video');
     }
@@ -102,13 +104,14 @@ describe('Instagram media session', () => {
 
   it('handles silent videos without invoking audio extraction or transcription', async () => {
     const {prepare, ffmpeg, transcribe} = harness(false);
-    await using media = await prepare();
+    await using post = await prepare();
+    const media = post.media[0]!;
     expect(media).toMatchObject({kind: 'video', transcript: []});
     expect(ffmpeg.audio).not.toHaveBeenCalled();
     expect(transcribe).not.toHaveBeenCalled();
   });
 
-  it('preserves carousel images in memory without temporary files', async () => {
+  it('prepares image-only posts in memory', async () => {
     const {dependencies, ffmpeg, transcribe, fetcher} = harness();
     fetcher.mockResolvedValueOnce(
       new Response('first image', {headers: {'content-type': 'image/jpeg'}}),
@@ -117,34 +120,125 @@ describe('Instagram media session', () => {
       new Response('second image', {headers: {'content-type': 'image/webp'}}),
     );
     {
-      await using media = await prepareInstagramMedia(
+      await using post = await prepareInstagramPost(
         {
-          kind: 'carousel',
           caption: 'Cafes',
-          urls: ['https://cdn.example/1', 'https://cdn.example/2'],
+          media: [
+            {kind: 'image', url: 'https://cdn.example/1'},
+            {kind: 'image', url: 'https://cdn.example/2'},
+          ],
         },
         dependencies,
         {temporaryRoot: join(root, 'nonexistent')},
       );
-      expect(media.kind).toBe('carousel');
-      if (media.kind !== 'carousel') {
-        throw new Error('Expected carousel');
-      }
-      expect(media.images).toHaveLength(2);
-      expect(media.images).toEqual([
+      expect(post.media).toEqual([
         {
-          url: `data:image/jpeg;base64,${Buffer.from('first image').toString('base64')}`,
-          timestampSeconds: null,
+          id: 'media-1',
+          kind: 'image',
+          image: `data:image/jpeg;base64,${Buffer.from('first image').toString('base64')}`,
         },
         {
-          url: `data:image/webp;base64,${Buffer.from('second image').toString('base64')}`,
-          timestampSeconds: null,
+          id: 'media-2',
+          kind: 'image',
+          image: `data:image/webp;base64,${Buffer.from('second image').toString('base64')}`,
         },
       ]);
       expect(ffmpeg.image).not.toHaveBeenCalled();
       expect(ffmpeg.probe).not.toHaveBeenCalled();
       expect(transcribe).not.toHaveBeenCalled();
     }
+    expect(await readdir(root)).toEqual([]);
+  });
+
+  it('prepares mixed media with distinct video sources and cleans up both', async () => {
+    const {dependencies, ffmpeg, fetcher, transcribe} = harness();
+    const source: InstagramPostSource = {
+      caption: 'Mixed post',
+      media: [
+        {kind: 'video', url: 'https://cdn.example/first.mp4'},
+        {kind: 'image', url: 'https://cdn.example/image.jpg'},
+        {kind: 'video', url: 'https://cdn.example/second.mp4'},
+      ],
+    };
+    fetcher.mockImplementation(url =>
+      Promise.resolve(
+        new Response(String(url), {headers: {'content-type': 'image/jpeg'}}),
+      ),
+    );
+    ffmpeg.image.mockImplementation(async (path, timestamp) =>
+      Buffer.from(`${await readFile(path, 'utf8')} at ${timestamp}`),
+    );
+    const post = await prepareInstagramPost(source, dependencies, {temporaryRoot: root});
+    expect(post.media.map(item => item.kind)).toEqual(
+      source.media.map(item => item.kind),
+    );
+    expect(post.media.map(item => item.id)).toEqual(
+      source.media.map((_, index) => `media-${index + 1}`),
+    );
+    const videos = post.media.filter(item => item.kind === 'video');
+    expect(videos.map(video => video.id)).toEqual(['media-1', 'media-3']);
+    expect(transcribe).toHaveBeenCalledTimes(2);
+    const [first, second] = await Promise.all(videos.map(video => video.getFrames([1])));
+    expect(first![0]!.url).not.toEqual(second![0]!.url);
+    expect(new Set(ffmpeg.probe.mock.calls.map(call => call[0])).size).toBe(2);
+    await post[Symbol.asyncDispose]();
+    expect(await readdir(root)).toEqual([]);
+  });
+
+  it.each(['image', 'video'] as const)(
+    'cleans up earlier videos when a later %s fails',
+    async kind => {
+      const {dependencies, fetcher, ffmpeg} = harness();
+      fetcher.mockImplementation(url =>
+        String(url).endsWith('/first')
+          ? Promise.resolve(new Response('video'))
+          : Promise.reject(new Error('Later download failed')),
+      );
+      await expect(
+        prepareInstagramPost(
+          {
+            caption: '',
+            media: [
+              {kind: 'video', url: 'https://cdn.example/first'},
+              {kind, url: 'https://cdn.example/second'},
+            ],
+          },
+          dependencies,
+          {temporaryRoot: root},
+        ),
+      ).rejects.toThrow('Later download failed');
+      expect(ffmpeg.probe).toHaveBeenCalledOnce();
+      expect(await readdir(root)).toEqual([]);
+    },
+  );
+
+  it('waits for concurrent preparation before cleaning up after a failure', async () => {
+    const {dependencies, fetcher, transcribe} = harness();
+    const transcription =
+      Promise.withResolvers<Array<{start: number; end: number; text: string}>>();
+    transcribe.mockReturnValue(transcription.promise);
+    fetcher.mockImplementation(url =>
+      String(url).endsWith('/video')
+        ? Promise.resolve(new Response('video'))
+        : Promise.reject(new Error('Image failed')),
+    );
+    const pending = prepareInstagramPost(
+      {
+        caption: '',
+        media: [
+          {kind: 'video', url: 'https://cdn.example/video'},
+          {kind: 'image', url: 'https://cdn.example/image'},
+        ],
+      },
+      dependencies,
+      {temporaryRoot: root},
+    );
+    const rejection = expect(pending).rejects.toThrow('Image failed');
+    await vi.waitFor(() => expect(transcribe).toHaveBeenCalledOnce());
+    expect(fetcher).toHaveBeenCalledTimes(2);
+    expect(await readdir(root)).toHaveLength(1);
+    transcription.resolve([]);
+    await rejection;
     expect(await readdir(root)).toEqual([]);
   });
 
@@ -172,7 +266,8 @@ describe('Instagram media session', () => {
 
   it('waits for in-flight extraction to settle before removing files', async () => {
     const {prepare, ffmpeg} = harness();
-    const media = await prepare();
+    const post = await prepare();
+    const media = post.media[0]!;
     if (media.kind !== 'video') {
       throw new Error('Expected video');
     }
@@ -184,7 +279,7 @@ describe('Instagram media session', () => {
     );
     const pending = media.getFrames([2]);
     const rejection = expect(pending).rejects.toMatchObject({name: 'AbortError'});
-    await media[Symbol.asyncDispose]();
+    await post[Symbol.asyncDispose]();
     await rejection;
     expect(await readdir(root)).toEqual([]);
   });
@@ -193,7 +288,8 @@ describe('Instagram media session', () => {
     const {prepare} = harness();
     await expect(
       (async () => {
-        await using media = await prepare();
+        await using post = await prepare();
+        const media = post.media[0]!;
         expect(media.kind).toBe('video');
         throw new Error('Capture failed');
       })(),

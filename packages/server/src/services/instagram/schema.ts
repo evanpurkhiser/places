@@ -21,15 +21,21 @@ export type CaptureCatalog = z.infer<typeof captureCatalog>;
 export const captureContent = z.strictObject({
   caption: z.string().max(30000),
   location: z.string().max(1000).nullable().default(null),
-  transcript: transcriptSegments.max(5000).nullable().default(null),
-  images: z
-    .array(
-      z.strictObject({
-        url: z.string().regex(/^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/]+=*$/),
-        timestampSeconds: z.number().nonnegative().nullable().default(null),
+  media: z.array(
+    z.discriminatedUnion('kind', [
+      z.object({
+        id: z.string(),
+        kind: z.literal('image'),
+        image: z.string().regex(/^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/]+=*$/),
       }),
-    )
-    .default([]),
+      z.object({
+        id: z.string(),
+        kind: z.literal('video'),
+        durationSeconds: z.number().positive(),
+        transcript: transcriptSegments,
+      }),
+    ]),
+  ),
 });
 export type CaptureContent = z.input<typeof captureContent>;
 
@@ -90,7 +96,7 @@ export function captureOutput(tags: CaptureCatalog['tags']) {
             .string()
             .min(1)
             .describe(
-              'Concise supporting caption/transcript excerpt or visual evidence, with a frame timestamp when available.',
+              'Concise supporting caption/transcript excerpt or visual evidence, with a media ID and video timestamp when available.',
             ),
           matchReason: z
             .string()

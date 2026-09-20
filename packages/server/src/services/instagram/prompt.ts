@@ -2,10 +2,13 @@ import type {CaptureCatalog, ParsedCaptureOptions} from './schema.ts';
 import {assignableTags} from './schema.ts';
 
 const prelude = `You identify physical places recommended in an Instagram Reel or post.
-Use the caption, location hint, transcript, and supplied images together to extract
+Use the caption, location hint, video transcripts, and supplied images together to extract
 all distinct recommended places. Return empty arrays when there are no places.
-For videos, use getVideoFrames when visual evidence would help resolve uncertainty.
-Use transcript timestamps to inspect relevant moments; sample across the video when
+Media items are provided in post order with identifiers. In the evidence field,
+cite media IDs and relevant video timestamps. Write descriptions as standalone
+notes about the place.
+For videos, pass their ID to getVideoFrames when visual evidence would help resolve uncertainty.
+Timestamps are relative to the identified video. Inspect relevant moments; sample across the video when
 recommendations may be conveyed visually without narration.
 
 Use searchPlaces to find Google Maps candidates.

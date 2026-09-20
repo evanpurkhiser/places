@@ -2,11 +2,18 @@
   "content": {
     "caption": "Coffee at Example Cafe on Orchard Street in Manhattan. Small, casual spot for a flat white.",
     "location": "Lower East Side, New York",
-    "transcript": [
+    "media": [
       {
-        "start": 0,
-        "end": 10,
-        "text": "I stopped at Example Cafe on Orchard Street. Try the flat white."
+        "id": "media-1",
+        "kind": "video",
+        "durationSeconds": 60,
+        "transcript": [
+          {
+            "start": 0,
+            "end": 10,
+            "text": "I stopped at Example Cafe on Orchard Street. Try the flat white."
+          }
+        ]
       }
     ]
   },

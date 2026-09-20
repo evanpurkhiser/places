@@ -3,11 +3,13 @@ import type {ResponseCreateParamsNonStreaming} from 'openai/resources/responses/
 import {describe, expect, it, vi} from 'vitest';
 
 import {capture} from './capture.ts';
-import fixture from './fixtures/cafe.json' with {type: 'json'};
-import type {InstagramMedia} from './media.ts';
+import rawFixture from './fixtures/cafe.json' with {type: 'json'};
+import type {InstagramVideo} from './media.ts';
 import {buildCapturePrompt} from './prompt.ts';
 import type {CaptureContent} from './schema.ts';
-import {captureOptions} from './schema.ts';
+import {captureContent, captureOptions} from './schema.ts';
+
+const fixture = {...rawFixture, content: captureContent.parse(rawFixture.content)};
 
 /**
  * Represent a model-requested tool call in the fake Responses transport.
@@ -66,7 +68,7 @@ function harness(outputs = [response([call()]), response([final()])]) {
     search: vi.fn().mockResolvedValue(fixture.candidates),
   };
 
-  const getFrames = vi.fn<Extract<InstagramMedia, {kind: 'video'}>['getFrames']>();
+  const getFrames = vi.fn<InstagramVideo['getFrames']>();
   /**
    * Run capture with fixture defaults and per-test overrides.
    */
@@ -82,27 +84,18 @@ function harness(outputs = [response([call()]), response([final()])]) {
         caption: content.caption,
         location: content.location,
         [Symbol.asyncDispose]: async () => {},
-        ...(content.images?.length
-          ? {
-              kind: 'carousel' as const,
-              images: content.images.map(image => ({
-                ...image,
-                timestampSeconds: image.timestampSeconds ?? null,
-              })),
-            }
-          : {
-              kind: 'video' as const,
-              durationSeconds: 60,
-              transcript: content.transcript ?? [],
-              getFrames,
-            }),
+        media: content.media.map(item =>
+          item.kind === 'video'
+            ? {...item, getFrames, [Symbol.asyncDispose]: async () => {}}
+            : item,
+        ),
       },
       catalog,
       {...fixture.options, ...options},
       signal,
     );
 
-  return {run, google, requests, fetcher, getFrames};
+  return {run, google, requests, fetcher, getFrames, openai};
 }
 
 describe('Instagram capture', () => {
@@ -142,7 +135,9 @@ describe('Instagram capture', () => {
 
   it('starts videos with timestamps and retrieves images only through the frame tool', async () => {
     const {run, requests, getFrames} = harness([
-      response([call('getVideoFrames', {timestamps: [2, 5]}, 'frames')]),
+      response([
+        call('getVideoFrames', {videoId: 'media-1', timestamps: [2, 5]}, 'frames'),
+      ]),
       response([call()]),
       response([final()]),
     ]);
@@ -159,11 +154,99 @@ describe('Instagram capture', () => {
       item => item.type === 'function_call_output',
     );
     expect(result?.output).toEqual([
-      {type: 'input_text', text: 'Video frame at 2s'},
+      {type: 'input_text', text: 'Video media-1 frame at 2s'},
       {type: 'input_image', image_url: 'data:image/jpeg;base64,YQ==', detail: 'auto'},
-      {type: 'input_text', text: 'Video frame at 5s'},
+      {type: 'input_text', text: 'Video media-1 frame at 5s'},
       {type: 'input_image', image_url: 'data:image/jpeg;base64,Yg==', detail: 'auto'},
     ]);
+  });
+
+  it('routes concurrent frame requests by video ID and preserves mixed input order', async () => {
+    const {openai, google, requests} = harness([
+      response([
+        call('getVideoFrames', {videoId: 'media-1', timestamps: [2]}, 'first'),
+        call('getVideoFrames', {videoId: 'media-3', timestamps: [2]}, 'second'),
+      ]),
+      response([final({places: [], unresolved: []})]),
+    ]);
+    const first = vi
+      .fn()
+      .mockResolvedValue([{url: 'data:image/jpeg;base64,YQ==', timestampSeconds: 2}]);
+    const second = vi
+      .fn()
+      .mockResolvedValue([{url: 'data:image/jpeg;base64,Yg==', timestampSeconds: 2}]);
+    const video = {
+      kind: 'video' as const,
+      durationSeconds: 10,
+      [Symbol.asyncDispose]: async () => {},
+    };
+    await capture(
+      {openai, google},
+      {
+        caption: 'Mixed post',
+        media: [
+          {
+            ...video,
+            id: 'media-1',
+            transcript: [{start: 0, end: 3, text: 'First cafe'}],
+            getFrames: first,
+          },
+          {kind: 'image', id: 'media-2', image: 'data:image/jpeg;base64,Yw=='},
+          {
+            ...video,
+            id: 'media-3',
+            transcript: [{start: 0, end: 3, text: 'Second cafe'}],
+            getFrames: second,
+          },
+        ],
+        [Symbol.asyncDispose]: async () => {},
+      },
+      fixture.catalog,
+      fixture.options,
+    );
+    expect(first).toHaveBeenCalledWith([2], expect.any(AbortSignal));
+    expect(second).toHaveBeenCalledWith([2], expect.any(AbortSignal));
+    const content = (
+      requests[0]!.input as Array<{content: Array<{type: string; text?: string}>}>
+    )[0]!.content;
+    expect(content.map(item => item.type)).toEqual([
+      'input_text',
+      'input_text',
+      'input_text',
+      'input_image',
+      'input_text',
+    ]);
+    expect(JSON.parse(content[1]!.text!)).toMatchObject({
+      id: 'media-1',
+      transcript: [{text: 'First cafe'}],
+    });
+    expect(content[2]!.text).toBe('Image media-2');
+    expect(JSON.parse(content[4]!.text!)).toMatchObject({
+      id: 'media-3',
+      transcript: [{text: 'Second cafe'}],
+    });
+    const outputs = (
+      requests[1]!.input as Array<{type: string; output?: unknown}>
+    ).filter(item => item.type === 'function_call_output');
+    expect(outputs.map(item => item.output)).toEqual([
+      [
+        {type: 'input_text', text: 'Video media-1 frame at 2s'},
+        {type: 'input_image', image_url: 'data:image/jpeg;base64,YQ==', detail: 'auto'},
+      ],
+      [
+        {type: 'input_text', text: 'Video media-3 frame at 2s'},
+        {type: 'input_image', image_url: 'data:image/jpeg;base64,Yg==', detail: 'auto'},
+      ],
+    ]);
+    expect(JSON.stringify(requests[0]!.tools)).toContain('media-3');
+  });
+
+  it('checks timestamps against the selected video duration', async () => {
+    const {run, getFrames} = harness([
+      response([call('getVideoFrames', {videoId: 'media-1', timestamps: [60]})]),
+    ]);
+    await expect(run()).rejects.toMatchObject({code: 'invalid_output'});
+    expect(getFrames).not.toHaveBeenCalled();
   });
 
   it('groups assignable tags and omits excluded tags and empty groups', () => {
@@ -438,20 +521,20 @@ describe('Instagram capture', () => {
     expect(fetcher).not.toHaveBeenCalled();
   });
 
-  it('passes images with their timestamps to the model', async () => {
+  it('passes identified images to the model', async () => {
     const {run, requests} = harness([response([final({places: [], unresolved: []})])]);
     await run(
       {},
       {
         ...fixture.content,
-        images: [{url: 'data:image/jpeg;base64,YQ==', timestampSeconds: 3}],
+        media: [{kind: 'image', id: 'media-1', image: 'data:image/jpeg;base64,YQ=='}],
       },
     );
     expect(requests[0]!.tools).toHaveLength(1);
     expect(requests[0]!.input).toEqual([
       expect.objectContaining({
         content: expect.arrayContaining([
-          {type: 'input_text', text: 'Image 1 at 3s'},
+          {type: 'input_text', text: 'Image media-1'},
           {type: 'input_image', image_url: 'data:image/jpeg;base64,YQ==', detail: 'auto'},
         ]),
       }),

@@ -7,41 +7,49 @@ import {pipeline} from 'node:stream/promises';
 import type {FFmpeg} from './ffmpeg.ts';
 import type {TranscriptSegment} from './transcribing.ts';
 
-export type MediaImage = {url: string; timestampSeconds: number | null};
+/**
+ * An extracted frame with its timestamp relative to the source video.
+ */
+export type VideoFrame = {url: string; timestampSeconds: number};
 
 type PostMetadata = {caption: string; location?: string | null};
 
 /**
- * Resolved Instagram media URLs and post metadata used to prepare a capture session.
+ * A downloadable image or video in an Instagram post.
  */
-export type InstagramMediaSource = PostMetadata &
-  ({kind: 'video'; url: string} | {kind: 'carousel'; urls: string[]});
+export type InstagramMediaSource = {kind: 'image' | 'video'; url: string};
 
 /**
- * Prepared media consumed by capture. Keep its using scope open throughout capture
- * so video frames remain available; disposal releases the session's resources.
+ * Resolved post metadata and media URLs in their original order.
  */
-export type InstagramMedia = InstagramVideo | InstagramCarousel;
+export type InstagramPostSource = PostMetadata & {media: InstagramMediaSource[]};
 
 /**
- * A video session with timestamped transcription and on-demand frame extraction.
+ * Prepared post consumed by capture. Keep its using scope open throughout capture
+ * so video frames remain available; disposal releases all video resources.
  */
-export type InstagramVideo = PostMetadata &
-  AsyncDisposable & {
-    kind: 'video';
-    durationSeconds: number;
-    transcript: TranscriptSegment[];
-    getFrames(timestamps: number[], signal?: AbortSignal): Promise<MediaImage[]>;
-  };
+export type InstagramPost = PostMetadata & AsyncDisposable & {media: InstagramMedia[]};
 
 /**
- * A carousel session containing downloaded images in post order.
+ * An identified image or video within a prepared post.
  */
-export type InstagramCarousel = PostMetadata &
-  AsyncDisposable & {
-    kind: 'carousel';
-    images: MediaImage[];
-  };
+export type InstagramMedia = InstagramVideo | InstagramImage;
+
+/**
+ * A video with timestamped transcription and on-demand frame extraction.
+ */
+export type InstagramVideo = AsyncDisposable & {
+  id: string;
+  kind: 'video';
+  durationSeconds: number;
+  transcript: TranscriptSegment[];
+  getFrames(timestamps: number[], signal?: AbortSignal): Promise<VideoFrame[]>;
+};
+
+/**
+ * An image held in memory in its original format.
+ */
+export type InstagramImage = {id: string; kind: 'image'; image: string};
 
 interface MediaDependencies {
   ffmpeg: FFmpeg;
@@ -50,36 +58,57 @@ interface MediaDependencies {
 }
 
 /**
- * Download a resolved post into an owned session, cleaning up on preparation failure.
+ * Prepare media concurrently, preserve post order, and own video cleanup.
  */
-export async function prepareInstagramMedia(
-  source: InstagramMediaSource,
+export async function prepareInstagramPost(
+  source: InstagramPostSource,
   dependencies: MediaDependencies,
   options: {temporaryRoot?: string; signal?: AbortSignal} = {},
-): Promise<InstagramMedia> {
-  options.signal?.throwIfAborted();
-  const metadata = {caption: source.caption, location: source.location ?? null};
-  const fetcher = dependencies.fetch ?? fetch;
+): Promise<InstagramPost> {
+  const resources = new AsyncDisposableStack();
 
-  if (source.kind === 'carousel') {
-    const images = await prepareCarousel(source.urls, fetcher, options.signal);
+  const pending = source.media.map(async (item, index) => {
+    options.signal?.throwIfAborted();
+    const id = `media-${index + 1}`;
+    return item.kind === 'video'
+      ? resources.use(await makeVideo(id, item.url, dependencies, options))
+      : makeImage(id, item.url, dependencies.fetch ?? fetch, options.signal);
+  });
+
+  try {
+    const media = await Promise.all(pending);
+
     return {
-      kind: 'carousel',
-      ...metadata,
-      images,
+      caption: source.caption,
+      location: source.location ?? null,
+      media,
       /**
-       * Carousel bytes are owned in memory and need no external cleanup.
+       * Release video resources owned by this post.
        */
-      async [Symbol.asyncDispose]() {},
+      [Symbol.asyncDispose]: () => resources.disposeAsync(),
     };
+  } catch (error) {
+    await Promise.allSettled(pending);
+    await resources.disposeAsync();
+    throw error;
   }
+}
 
+/**
+ * Download and transcribe a video, retaining its source for frame requests.
+ */
+async function makeVideo(
+  id: string,
+  url: string,
+  dependencies: MediaDependencies,
+  options: {temporaryRoot?: string; signal?: AbortSignal},
+): Promise<InstagramVideo> {
   const directory = await mkdtemp(join(options.temporaryRoot ?? tmpdir(), 'instagram-'));
   const controller = new AbortController();
   const signal = options.signal
     ? AbortSignal.any([options.signal, controller.signal])
     : controller.signal;
-  const frames = new Set<Promise<MediaImage>>();
+  const frames = new Set<Promise<VideoFrame>>();
   const video = join(directory, 'video');
 
   /**
@@ -104,7 +133,10 @@ export async function prepareInstagramMedia(
     const pending = timestamps.map(timestamp => {
       const frame = dependencies.ffmpeg
         .image(video, timestamp, extractionSignal)
-        .then(bytes => image(bytes, timestamp))
+        .then(bytes => ({
+          url: imageDataUrl(bytes, 'image/jpeg'),
+          timestampSeconds: timestamp,
+        }))
         .finally(() => frames.delete(frame));
       frames.add(frame);
       return frame;
@@ -117,7 +149,7 @@ export async function prepareInstagramMedia(
 
   try {
     signal.throwIfAborted();
-    const response = await fetchMedia(source.url, fetcher, signal);
+    const response = await fetchMedia(url, dependencies.fetch ?? fetch, signal);
     await pipeline(response.body!, createWriteStream(video), {signal});
     const {durationSeconds, hasAudio} = await dependencies.ffmpeg.probe(video, signal);
 
@@ -130,8 +162,8 @@ export async function prepareInstagramMedia(
     signal.throwIfAborted();
 
     return {
+      id,
       kind: 'video',
-      ...metadata,
       durationSeconds,
       transcript: segments,
       getFrames,
@@ -160,32 +192,24 @@ async function fetchMedia(url: string, fetcher: typeof fetch, signal?: AbortSign
 /**
  * Encode image bytes in the data URL format accepted by capture.
  */
-function image(
-  bytes: Buffer,
-  timestampSeconds: number | null,
-  contentType = 'image/jpeg',
-): MediaImage {
-  return {
-    url: `data:${contentType};base64,${bytes.toString('base64')}`,
-    timestampSeconds,
-  };
+function imageDataUrl(bytes: Buffer, contentType: string): string {
+  return `data:${contentType};base64,${bytes.toString('base64')}`;
 }
 
 /**
- * Download carousel images in their original format and order.
+ * Download an image directly into memory with its position-based identifier.
  */
-async function prepareCarousel(
-  urls: string[],
+async function makeImage(
+  id: string,
+  url: string,
   fetcher: typeof fetch,
   signal?: AbortSignal,
-) {
-  const images: MediaImage[] = [];
-
-  for (const url of urls) {
-    const response = await fetchMedia(url, fetcher, signal);
-    const bytes = Buffer.from(await response.arrayBuffer());
-    images.push(image(bytes, null, response.headers.get('content-type') ?? 'image/jpeg'));
-  }
-
-  return images;
+): Promise<InstagramImage> {
+  const response = await fetchMedia(url, fetcher, signal);
+  const bytes = Buffer.from(await response.arrayBuffer());
+  return {
+    id,
+    kind: 'image',
+    image: imageDataUrl(bytes, response.headers.get('content-type') ?? 'image/jpeg'),
+  };
 }
