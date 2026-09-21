@@ -214,7 +214,7 @@ export const parser = merge(
         jobId: argument(zod(z.uuid(), {metavar: 'JOB_ID', placeholder: ''})),
       }),
       {
-        description: message`Show an import's status and resulting place IDs. Jobs are retained for seven days after completion.`,
+        description: message`Show an import's recorded status and resulting place IDs, including after queue cleanup.`,
       },
     ),
     command(

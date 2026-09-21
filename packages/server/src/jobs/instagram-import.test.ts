@@ -1,3 +1,4 @@
+import {eq} from 'drizzle-orm';
 import {migrate} from 'drizzle-orm/node-postgres/migrator';
 import OpenAI from 'openai';
 import {Pool} from 'pg';
@@ -22,6 +23,11 @@ import {
 } from '../importers/import-instagram.ts';
 import {importPlace} from '../importers/import-place.ts';
 import {enqueueImport, getImportStatus} from '../importers/index.ts';
+import {
+  recordImportCompleted,
+  recordImportStarted,
+  withImportRun,
+} from '../importers/runs.ts';
 import {createGooglePlaces} from '../services/google/index.ts';
 import * as instagram from '../services/instagram/index.ts';
 
@@ -215,7 +221,16 @@ describe.skipIf(!testUrl)('Instagram ingestion with PostgreSQL and pg-boss', () 
   async function dispatchImport() {
     const submitted = await enqueueImport(url, context());
     const [parent] = await jobs.fetch(importQueue);
-    const result = await importInstagramPost(jobs, dependencies, shortcode);
+    const job = await jobs.getJobById(importQueue, parent!.id);
+    const result = await importInstagramPost(
+      jobs,
+      dependencies,
+      shortcode,
+      {tags: []},
+      parent!.id,
+    );
+    await recordImportStarted(db, job!.id, 'instagram', job!.data);
+    await recordImportCompleted(db, job!.id, result);
     await jobs.complete(importQueue, parent!.id, result);
     return {...submitted, ...result};
   }
@@ -244,22 +259,28 @@ describe.skipIf(!testUrl)('Instagram ingestion with PostgreSQL and pg-boss', () 
       payload.notes,
       payload.source,
     );
+    await recordImportStarted(db, jobId, 'gmaps', job!.data);
+    await recordImportCompleted(db, jobId, result);
     await jobs.complete(googleQueue, jobId, result);
     return result.placeIds[0]!;
   }
 
-  it('reports capture progress and terminal failure', async () => {
+  it('reports recorded capture progress and cancellation', async () => {
     const submitted = await enqueueImport(url, context());
     expect(await getImportStatus(submitted.jobId, context())).toMatchObject({
       state: 'created',
       placeIds: [],
     });
-    await jobs.fetch(importQueue);
+    const [job] = await jobs.fetch(importQueue);
+    await recordImportStarted(db, job!.id, 'instagram', job!.data);
     expect(await getImportStatus(submitted.jobId, context())).toMatchObject({
       state: 'active',
       placeIds: [],
     });
-    await jobs.cancel(importQueue, submitted.jobId);
+    await db
+      .update(importRuns)
+      .set({state: 'cancelled'})
+      .where(eq(importRuns.id, submitted.jobId));
     expect(await getImportStatus(submitted.jobId, context())).toMatchObject({
       state: 'cancelled',
       error: expect.any(String),
@@ -364,14 +385,10 @@ describe.skipIf(!testUrl)('Instagram ingestion with PostgreSQL and pg-boss', () 
       const submitted = await dispatchImport();
       const children = await jobs.fetch(googleQueue, {batchSize: 10});
       const saved = await completePlace(children[0]!.id);
-      if (state === 'cancelled') {
-        await jobs.cancel(googleQueue, children[1]!.id);
-      } else {
-        await db.$client.query('UPDATE pgboss.job SET state = $1 WHERE id = $2', [
-          state,
-          children[1]!.id,
-        ]);
-      }
+      await db
+        .update(importRuns)
+        .set({state, error: 'Place unavailable'})
+        .where(eq(importRuns.id, children[1]!.id));
       expect(await getImportStatus(submitted.jobId, context())).toMatchObject({
         state,
         placeIds: [saved],
@@ -383,20 +400,35 @@ describe.skipIf(!testUrl)('Instagram ingestion with PostgreSQL and pg-boss', () 
   it('keeps child retries pending', async () => {
     const submitted = await dispatchImport();
     const [child] = await jobs.fetch(googleQueue);
-    await jobs.fail(googleQueue, child!.id, {message: 'Transient provider failure'});
-    expect((await jobs.getJobById(googleQueue, child!.id))!.state).toBe('retry');
+    const job = await jobs.getJobById(googleQueue, child!.id);
+    await expect(
+      withImportRun(db, 'gmaps', () =>
+        Promise.reject(new Error('Transient provider failure')),
+      )(job!.data, job!),
+    ).rejects.toThrow('Transient provider failure');
     expect(await getImportStatus(submitted.jobId, context())).toMatchObject({
       state: 'active',
-      error: expect.any(String),
+      error: 'Transient provider failure',
     });
   });
 
-  it('reports missing child jobs instead of claiming completion', async () => {
+  it('keeps recorded child work pending after queue cleanup', async () => {
     const submitted = await dispatchImport();
+    await jobs.deleteAllJobs(importQueue);
     await jobs.deleteAllJobs(googleQueue);
+    expect(await getImportStatus(submitted.jobId, {db})).toMatchObject({
+      state: 'active',
+      placeIds: [],
+      error: null,
+    });
+  });
+
+  it('reports missing child records instead of claiming completion', async () => {
+    const submitted = await dispatchImport();
+    await db.delete(importRuns).where(eq(importRuns.type, 'gmaps'));
     expect(await getImportStatus(submitted.jobId, context())).toMatchObject({
       state: 'failed',
-      error: expect.stringContaining('missing or expired'),
+      error: expect.stringContaining('record is missing'),
     });
   });
 
@@ -475,9 +507,16 @@ describe.skipIf(!testUrl)('Instagram ingestion with PostgreSQL and pg-boss', () 
     await jobs.deleteAllJobs(importQueue);
     await jobs.deleteAllJobs(googleQueue);
     expect(await db.select().from(importRuns)).toEqual(runs);
-    await expect(getImportStatus(submitted.jobId, context())).rejects.toMatchObject({
-      code: 'NOT_FOUND',
-    });
+    const status = await getImportStatus(submitted.jobId, {db});
+    expect(status).toMatchObject({state: 'completed', error: null});
+    expect(status.placeIds).toHaveLength(2);
+    for (const child of runs.filter(run => run.type === 'gmaps')) {
+      expect(await getImportStatus(child.id, {db})).toMatchObject({
+        state: 'completed',
+        placeIds: expect.any(Array),
+        error: null,
+      });
+    }
   });
 
   it('records extraction before the parent job acknowledges completion', async () => {
@@ -541,6 +580,11 @@ describe.skipIf(!testUrl)('Instagram ingestion with PostgreSQL and pg-boss', () 
     expect(await db.select().from(importRuns)).toMatchObject([
       {id, state: 'failed', sourceId: null, error: 'Post unavailable'},
     ]);
+    expect(await getImportStatus(id!, {db})).toMatchObject({
+      state: 'failed',
+      placeIds: [],
+      error: 'Post unavailable',
+    });
   });
 
   it('supports an empty list of automatic tags', async () => {

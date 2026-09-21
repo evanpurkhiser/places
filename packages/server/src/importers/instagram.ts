@@ -1,9 +1,8 @@
-import {eq} from 'drizzle-orm';
+import {and, eq, inArray} from 'drizzle-orm';
 import {z} from 'zod';
 
-import {placeSources} from '../db/schema.ts';
-import {importQueue as googleQueue} from '../jobs/gmaps-import.ts';
-import {enqueueInstagramImport, importQueue} from '../jobs/instagram-import.ts';
+import {importRuns, placeSources} from '../db/schema.ts';
+import {enqueueInstagramImport} from '../jobs/instagram-import.ts';
 import {instagramShortcode} from '../services/instagram/index.ts';
 
 import {googleImporter} from './gmaps.ts';
@@ -17,7 +16,6 @@ const dispatchResult = z.object({
 
 export const instagramImporter: Importer = {
   type: 'instagram',
-  queue: importQueue,
   accepts(input) {
     try {
       instagramShortcode(input);
@@ -28,16 +26,24 @@ export const instagramImporter: Importer = {
   },
   enqueue: (input, options, {jobs, db}) =>
     enqueueInstagramImport(jobs, db, input, options),
-  async getStatus(job, context) {
-    if (job.state !== 'completed') {
-      return pendingStatus(job);
+  async getStatus(run, context) {
+    if (run.state !== 'completed') {
+      return pendingStatus(run);
     }
 
-    const {sourceId, jobIds, skipped} = dispatchResult.parse(job.output);
+    const {sourceId, jobIds, skipped} = dispatchResult.parse(run.output);
     // A skipped capture resumes observation of the source's original imports.
-    const children = skipped
-      ? await context.jobs.findJobs(googleQueue, {data: {source: {sourceId}}})
-      : await Promise.all(jobIds.map(id => context.jobs.getJobById(googleQueue, id)));
+    const recorded = await context.db
+      .select()
+      .from(importRuns)
+      .where(
+        and(
+          eq(importRuns.type, 'gmaps'),
+          skipped ? eq(importRuns.sourceId, sourceId) : inArray(importRuns.id, jobIds),
+        ),
+      );
+    const byId = new Map(recorded.map(child => [child.id, child]));
+    const children = skipped ? recorded : jobIds.map(id => byId.get(id));
     const saved = await context.db
       .select({placeId: placeSources.placeId})
       .from(placeSources)
@@ -49,8 +55,7 @@ export const instagramImporter: Importer = {
           : Promise.resolve<ImportStatus>({
               state: 'failed',
               placeIds: [],
-              error:
-                'A place import job is missing or expired; completion cannot be verified.',
+              error: 'A place import record is missing; completion cannot be verified.',
             }),
       ),
     );

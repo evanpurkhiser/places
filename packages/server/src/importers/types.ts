@@ -1,20 +1,21 @@
-import type {JobWithMetadata} from 'pg-boss';
 import type {z} from 'zod';
 
+import type {importRuns} from '../db/schema.ts';
 import type {importPayload} from '../jobs/gmaps-import.ts';
 import type {Context} from '../rpc/context.ts';
 
 export type ImportOptions = Pick<z.infer<typeof importPayload>, 'tags' | 'notes'>;
 
+export type ImportRun = typeof importRuns.$inferSelect;
+
 export interface ImportStatus {
-  state: JobWithMetadata['state'];
+  state: ImportRun['state'];
   placeIds: string[];
   error: string | null;
 }
 
 export interface Importer {
   type: 'gmaps' | 'instagram';
-  queue: string;
   accepts(input: string): boolean;
   enqueue(
     input: string,
@@ -22,18 +23,18 @@ export interface Importer {
     context: Context,
   ): Promise<string | null>;
   getStatus(
-    job: JobWithMetadata<unknown>,
-    context: Context,
+    run: ImportRun,
+    context: Pick<Context, 'db'>,
   ): ImportStatus | Promise<ImportStatus>;
 }
 
-export function pendingStatus(job: JobWithMetadata<unknown>): ImportStatus {
+export function pendingStatus(run: ImportRun): ImportStatus {
   return {
-    state: job.state,
+    state: run.state,
     placeIds: [],
     error:
-      job.state === 'failed' || job.state === 'retry' || job.state === 'cancelled'
-        ? 'Import failed or was cancelled. Check the provider configuration and retry.'
+      run.state === 'failed' || run.state === 'retry' || run.state === 'cancelled'
+        ? (run.error ?? 'Import failed or was cancelled.')
         : null,
   };
 }

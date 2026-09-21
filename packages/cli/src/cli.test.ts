@@ -271,9 +271,9 @@ describe('waiting for imports', () => {
 
   it('reports status request errors', async () => {
     const {places, run} = setup();
-    places.importStatus.mockRejectedValue(new Error('Import not found or expired.'));
+    places.importStatus.mockRejectedValue(new Error('Import not found.'));
 
-    await expect(run()).rejects.toThrow('Import not found or expired.');
+    await expect(run()).rejects.toThrow('Import not found.');
     expect(places.import).toHaveBeenCalledTimes(1);
   });
 });

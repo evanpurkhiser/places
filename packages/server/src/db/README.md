@@ -85,10 +85,11 @@ token usage. Media files and model reasoning are not stored in the run record.
 Capture output and its source link are saved in the same transaction as the source
 and child jobs. Queue retries preserve that extraction in the run record.
 
-A run's `state` records worker progress for bookkeeping. Import status continues to
-read the queue. Runs retain the last recorded worker state; queue-side cancellations
+Import status reads `import_runs` and aggregates the recorded child runs for Instagram
+imports. Runs retain the last recorded worker state; queue-side cancellations
 or timeouts can leave that state unfinished. The run records can be inspected directly
 in PostgreSQL after queue cleanup.
 
-Migration `0008_import_runs` creates the table. Existing queue jobs remain readable;
-historical imports are not automatically backfilled into run records.
+Migration `0008_import_runs` creates the table. Runs are recorded when imports are
+enqueued or begin execution. Status lookup requires a recorded run; historical
+imports are not automatically backfilled.

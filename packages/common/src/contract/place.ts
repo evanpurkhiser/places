@@ -131,7 +131,7 @@ export const placeContract = {
       }),
     ),
   importStatus: oc
-    .errors({NOT_FOUND: {message: 'Import not found or expired.'}})
+    .errors({NOT_FOUND: {message: 'Import not found.'}})
     .input(z.object({jobId: z.uuid()}))
     .output(
       z.object({

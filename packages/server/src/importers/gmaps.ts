@@ -1,13 +1,12 @@
 import {importResult} from '@places/common/contract/place';
 
-import {enqueuePlaceImport, importQueue} from '../jobs/gmaps-import.ts';
+import {enqueuePlaceImport} from '../jobs/gmaps-import.ts';
 import {isGoogleMapsInput} from '../services/google/index.ts';
 
 import {type Importer, pendingStatus} from './types.ts';
 
 export const googleImporter: Importer = {
   type: 'gmaps',
-  queue: importQueue,
   accepts: isGoogleMapsInput,
   async enqueue(input, options, {google, jobs, db}) {
     return enqueuePlaceImport(jobs, db, {
@@ -15,10 +14,10 @@ export const googleImporter: Importer = {
       ...options,
     });
   },
-  getStatus(job) {
+  getStatus(run) {
     return {
-      ...pendingStatus(job),
-      placeIds: job.state === 'completed' ? importResult.parse(job.output).placeIds : [],
+      ...pendingStatus(run),
+      placeIds: run.state === 'completed' ? importResult.parse(run.output).placeIds : [],
     };
   },
 };

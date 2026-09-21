@@ -1,6 +1,8 @@
 import {ORPCError} from '@orpc/server';
 import type {ImportTag} from '@places/common/contract/place';
+import {eq} from 'drizzle-orm';
 
+import {importRuns} from '../db/schema.ts';
 import type {Context} from '../rpc/context.ts';
 
 import {googleImporter} from './gmaps.ts';
@@ -36,20 +38,20 @@ export async function enqueueImport(
   return {jobId, type: importer.type};
 }
 
-export async function getImportStatus(jobId: string, context: Context) {
-  for (const importer of importers) {
-    const job = await context.jobs.getJobById(importer.queue, jobId);
+export async function getImportStatus(jobId: string, context: Pick<Context, 'db'>) {
+  const [run] = await context.db
+    .select()
+    .from(importRuns)
+    .where(eq(importRuns.id, jobId));
 
-    if (!job) {
-      continue;
-    }
-
-    return {
-      jobId: job.id,
-      type: importer.type,
-      ...(await importer.getStatus(job, context)),
-    };
+  if (!run) {
+    throw new ORPCError('NOT_FOUND', {message: 'Import not found.'});
   }
 
-  throw new ORPCError('NOT_FOUND', {message: 'Import not found or expired.'});
+  const importer = importers.find(importer => importer.type === run.type)!;
+  return {
+    jobId: run.id,
+    type: run.type,
+    ...(await importer.getStatus(run, context)),
+  };
 }
