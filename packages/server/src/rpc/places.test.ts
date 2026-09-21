@@ -17,7 +17,8 @@ import {configSchema} from '../config.ts';
 import {createDatabase} from '../db/index.ts';
 import {places, placeSources, placeTags, sources, tags} from '../db/schema.ts';
 import {testConfig} from '../fixtures/config.ts';
-import {importPlace, importQueue, registerImportWorker} from '../jobs/gmaps-import.ts';
+import {importPlace} from '../importers/import-place.ts';
+import {importQueue, registerImportWorker} from '../jobs/gmaps-import.ts';
 import {
   importQueue as instagramQueue,
   queueOptions as instagramOptions,

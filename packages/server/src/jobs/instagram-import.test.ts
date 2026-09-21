@@ -9,20 +9,22 @@ import {fileURLToPath} from 'node:url';
 import {configSchema} from '../config.ts';
 import {createDatabase} from '../db/index.ts';
 import {places, placeSources, placeTags, sources, tags} from '../db/schema.ts';
+import {
+  importInstagramPost,
+  type InstagramImportDependencies,
+} from '../importers/import-instagram.ts';
+import {importPlace} from '../importers/import-place.ts';
 import {enqueueImport, getImportStatus} from '../importers/index.ts';
 import {createGooglePlaces} from '../services/google/index.ts';
 import * as instagram from '../services/instagram/index.ts';
 
 import {
-  importPlace,
   importPayload as googleImportPayload,
   importQueue as googleQueue,
 } from './gmaps-import.ts';
 import {startJobs} from './index.ts';
 import {
-  type InstagramImportDependencies,
   enqueueInstagramImport,
-  importInstagramPost,
   importQueue,
   registerInstagramImportWorker,
 } from './instagram-import.ts';
