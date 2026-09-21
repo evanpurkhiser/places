@@ -9,8 +9,8 @@ export const googleImporter: Importer = {
   type: 'gmaps',
   queue: importQueue,
   accepts: isGoogleMapsInput,
-  async enqueue(input, options, {google, jobs}) {
-    return enqueuePlaceImport(jobs, {
+  async enqueue(input, options, {google, jobs, db}) {
+    return enqueuePlaceImport(jobs, db, {
       googlePlaceId: await google.resolve(input),
       ...options,
     });

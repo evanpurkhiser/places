@@ -2,10 +2,12 @@ import type {PgBoss} from 'pg-boss';
 import {z} from 'zod';
 
 import type {WorkerQueueConfig} from '../config.ts';
+import type {Database} from '../db/index.ts';
 import {
   importInstagramPost,
   type InstagramImportDependencies,
 } from '../importers/import-instagram.ts';
+import {withImportEnqueue, withImportRun} from '../importers/runs.ts';
 import type {ImportOptions} from '../importers/types.ts';
 import {instagramShortcode} from '../services/instagram/index.ts';
 
@@ -32,11 +34,16 @@ const importPayload = z.object({
  */
 export function enqueueInstagramImport(
   jobs: PgBoss,
+  db: Database,
   url: string,
   options?: ImportOptions,
 ) {
   const shortcode = instagramShortcode(url);
-  return jobs.send(importQueue, {shortcode, ...options}, {singletonKey: shortcode});
+  const input = {shortcode, ...options};
+
+  return withImportEnqueue(db, 'instagram', {input}, queueDb =>
+    jobs.send(importQueue, input, {singletonKey: shortcode, db: queueDb}),
+  );
 }
 
 /**
@@ -47,8 +54,13 @@ export function registerInstagramImportWorker(
   dependencies: InstagramImportDependencies,
   options: WorkerQueueConfig,
 ) {
-  return registerWorker(jobs, importQueue, options, data => {
-    const {shortcode, ...options} = importPayload.parse(data);
-    return importInstagramPost(jobs, dependencies, shortcode, options);
-  });
+  return registerWorker(
+    jobs,
+    importQueue,
+    options,
+    withImportRun(dependencies.db, 'instagram', (data, runId) => {
+      const {shortcode, ...options} = importPayload.parse(data);
+      return importInstagramPost(jobs, dependencies, shortcode, options, runId);
+    }),
+  );
 }

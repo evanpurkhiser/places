@@ -17,6 +17,7 @@ import {
   type FFmpeg,
 } from '../services/instagram/index.ts';
 
+import {recordImportCapture} from './runs.ts';
 import type {ImportOptions} from './types.ts';
 
 export interface InstagramImportDependencies {
@@ -65,6 +66,7 @@ export async function importInstagramPost(
   dependencies: InstagramImportDependencies,
   shortcode: string,
   options: ImportOptions = {tags: []},
+  runId?: string,
 ) {
   const existing = await findSource(dependencies.db, shortcode);
 
@@ -83,6 +85,7 @@ export async function importInstagramPost(
     captured,
     alwaysApplyTagIds,
     options,
+    runId,
   );
 }
 
@@ -173,6 +176,7 @@ function dispatchPlaces(
   captured: CaptureResult,
   alwaysApplyTagIds: string[],
   options: ImportOptions,
+  runId?: string,
 ) {
   return db.transaction(async tx => {
     const {description, caption, username, postedAt, thumbnailUrl} = captured.source;
@@ -209,8 +213,13 @@ function dispatchPlaces(
       sourceId: source.id,
       jobIds,
       unresolved: captured.unresolved,
+      captured,
       skipped: false,
     };
+
+    if (runId) {
+      await recordImportCapture(tx, runId, output);
+    }
 
     return output;
   });

@@ -8,7 +8,14 @@ import {fileURLToPath} from 'node:url';
 
 import {configSchema} from '../config.ts';
 import {createDatabase} from '../db/index.ts';
-import {places, placeSources, placeTags, sources, tags} from '../db/schema.ts';
+import {
+  importRuns,
+  places,
+  placeSources,
+  placeTags,
+  sources,
+  tags,
+} from '../db/schema.ts';
 import {
   importInstagramPost,
   type InstagramImportDependencies,
@@ -19,6 +26,7 @@ import {createGooglePlaces} from '../services/google/index.ts';
 import * as instagram from '../services/instagram/index.ts';
 
 import {
+  registerImportWorker,
   importPayload as googleImportPayload,
   importQueue as googleQueue,
 } from './gmaps-import.ts';
@@ -91,6 +99,7 @@ describe.skipIf(!testUrl)('Instagram ingestion with PostgreSQL and pg-boss', () 
     vi.clearAllMocks();
     await jobs.deleteAllJobs(googleQueue);
     await jobs.deleteAllJobs(importQueue);
+    await db.delete(importRuns);
     await db.delete(places);
     await db.delete(sources);
     await db.delete(tags);
@@ -422,6 +431,118 @@ describe.skipIf(!testUrl)('Instagram ingestion with PostgreSQL and pg-boss', () 
     });
   });
 
+  it('retains capture metadata, child results, and unresolved mentions after queue cleanup', async () => {
+    vi.spyOn(dependencies.google, 'getMetadata').mockImplementation(id =>
+      Promise.resolve({
+        id,
+        displayName: {text: id},
+        formattedAddress: 'NYC',
+        location: {latitude: 40, longitude: -74},
+        googleMapsUri: 'https://maps.google.com/',
+        timeZone: 'America/New_York',
+        hoursWeeklyOpen: [],
+        businessStatus: 'OPERATIONAL',
+      }),
+    );
+    const submitted = await enqueueImport(url, context());
+    await registerInstagramImportWorker(jobs, dependencies, config.workers[importQueue]);
+    await registerImportWorker(jobs, dependencies, config.workers[googleQueue]);
+
+    try {
+      await vi.waitFor(
+        async () => {
+          const runs = await db.select().from(importRuns);
+          expect(runs).toHaveLength(3);
+          expect(runs.every(run => run.state === 'completed')).toBe(true);
+        },
+        {timeout: 15000, interval: 100},
+      );
+    } finally {
+      await jobs.offWork(importQueue);
+      await jobs.offWork(googleQueue);
+    }
+
+    const runs = await db.select().from(importRuns);
+    const parent = runs.find(run => run.id === submitted.jobId)!;
+    expect(parent).toMatchObject({
+      sourceId: expect.any(String),
+      attempts: 1,
+      startedAt: expect.any(Date),
+      finishedAt: expect.any(Date),
+      output: {captured, unresolved: captured.unresolved},
+    });
+    expect(runs.every(run => run.sourceId === parent.sourceId)).toBe(true);
+    await jobs.deleteAllJobs(importQueue);
+    await jobs.deleteAllJobs(googleQueue);
+    expect(await db.select().from(importRuns)).toEqual(runs);
+    await expect(getImportStatus(submitted.jobId, context())).rejects.toMatchObject({
+      code: 'NOT_FOUND',
+    });
+  });
+
+  it('records extraction before the parent job acknowledges completion', async () => {
+    const submitted = await enqueueImport(url, context());
+    const first = await importInstagramPost(
+      jobs,
+      dependencies,
+      shortcode,
+      {tags: []},
+      submitted.jobId,
+    );
+    const runs = await db.select().from(importRuns);
+    const parent = runs.find(item => item.id === submitted.jobId);
+    expect(parent).toMatchObject({
+      sourceId: first.sourceId,
+      state: 'created',
+      output: {captured},
+    });
+    await registerInstagramImportWorker(jobs, dependencies, config.workers[importQueue]);
+
+    try {
+      await vi.waitFor(
+        async () => {
+          const recorded = await db.select().from(importRuns);
+          expect(recorded.find(run => run.id === submitted.jobId)).toMatchObject({
+            state: 'completed',
+            sourceId: first.sourceId,
+            output: {captured},
+          });
+        },
+        {timeout: 15000, interval: 100},
+      );
+    } finally {
+      await jobs.offWork(importQueue);
+    }
+
+    expect(instagram.capture).toHaveBeenCalledOnce();
+  });
+
+  it('retains a failed capture without requiring a source', async () => {
+    vi.mocked(instagram.scrapeInstagramPost).mockRejectedValue(
+      new Error('Post unavailable'),
+    );
+    const id = await jobs.send(importQueue, {shortcode, tags: []}, {retryLimit: 0});
+    await registerInstagramImportWorker(jobs, dependencies, config.workers[importQueue]);
+
+    try {
+      await vi.waitFor(
+        async () => {
+          expect(await db.select().from(importRuns)).toMatchObject([
+            {id, state: 'failed', sourceId: null, error: 'Post unavailable', attempts: 1},
+          ]);
+        },
+        {timeout: 15000, interval: 100},
+      );
+    } finally {
+      await jobs.offWork(importQueue);
+    }
+
+    await jobs.deleteAllJobs(importQueue);
+    expect(await db.select().from(importRuns)).toMatchObject([
+      {id, state: 'failed', sourceId: null, error: 'Post unavailable'},
+    ]);
+  });
+
   it('supports an empty list of automatic tags', async () => {
     await importInstagramPost(
       jobs,
@@ -440,7 +561,7 @@ describe.skipIf(!testUrl)('Instagram ingestion with PostgreSQL and pg-boss', () 
       tags: [{tagId: reviewTagId, note: 'Check this recommendation'}],
       notes: 'From my saved posts',
     };
-    const id = await enqueueInstagramImport(jobs, url, options);
+    const id = await enqueueInstagramImport(jobs, db, url, options);
     await registerInstagramImportWorker(jobs, dependencies, config.workers[importQueue]);
 
     try {
@@ -543,13 +664,17 @@ describe.skipIf(!testUrl)('Instagram ingestion with PostgreSQL and pg-boss', () 
   });
 
   it('deduplicates different share URLs for the same queued post', async () => {
-    const first = await enqueueInstagramImport(jobs, url);
+    const first = await enqueueInstagramImport(jobs, db, url);
     const duplicate = await enqueueInstagramImport(
       jobs,
+      db,
       'https://instagram.com/reel/ExamplePost/?igsh=test',
     );
     expect(first).toEqual(expect.any(String));
     expect(duplicate).toBeNull();
+    expect(await db.select().from(importRuns)).toMatchObject([
+      {id: first, type: 'instagram', state: 'created', input: {shortcode}},
+    ]);
     const queued = await jobs.findJobs(importQueue);
     expect(queued).toHaveLength(1);
     expect(queued[0]!.data).toEqual({shortcode});
@@ -558,7 +683,7 @@ describe.skipIf(!testUrl)('Instagram ingestion with PostgreSQL and pg-boss', () 
   it('registers a worker that captures and dispatches queued posts', async () => {
     await registerInstagramImportWorker(jobs, dependencies, config.workers[importQueue]);
     try {
-      const id = await enqueueInstagramImport(jobs, url);
+      const id = await enqueueInstagramImport(jobs, db, url);
       await vi.waitFor(
         async () => {
           const [job] = await jobs.findJobs(importQueue, {id: id!});

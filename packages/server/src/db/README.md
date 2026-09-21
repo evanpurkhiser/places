@@ -1,7 +1,8 @@
 # Database schema
 
-`schema.ts` defines the initial five-table model. Database IDs are UUIDs; TypeScript
-properties use camelCase and PostgreSQL columns use snake_case.
+`schema.ts` defines places, tags, sources, their associations, and import runs.
+Database IDs are UUIDs; TypeScript properties use camelCase and PostgreSQL columns
+use snake_case.
 
 - Deleting a place, tag, or source cascades to its join-table associations.
 - Deleting a place preserves its source and tag records.
@@ -68,3 +69,26 @@ Generation requires no database connection. Migration execution uses node-postgr
 and reads the database URL from the server's YAML config. Pass `--config` to select
 a config file. Provider metadata retention remains subject to the design in
 `design/place-metadata.md` at the repository root.
+
+## Import runs
+
+`import_runs` retains Instagram and Google import executions independently of queue
+retention. Its UUID is the queue job ID. Queue retries increment `attempts` on the
+same record; a separately queued request gets a new record. `source_id` links the
+Instagram run and its Google place jobs to their source. It is nullable for failed
+fetches and standalone Google imports. Deleting a source preserves its run history.
+
+`input` contains the job payload. `output` contains the handler result; Instagram
+capture results include source metadata, extracted places, unresolved mentions,
+model settings, the assembled instruction prompt, Google search candidates, and model
+token usage. Media files and model reasoning are not stored in the run record.
+Capture output and its source link are saved in the same transaction as the source
+and child jobs. Queue retries preserve that extraction in the run record.
+
+A run's `state` records worker progress for bookkeeping. Import status continues to
+read the queue. Runs retain the last recorded worker state; queue-side cancellations
+or timeouts can leave that state unfinished. The run records can be inspected directly
+in PostgreSQL after queue cleanup.
+
+Migration `0008_import_runs` creates the table. Existing queue jobs remain readable;
+historical imports are not automatically backfilled into run records.

@@ -26,7 +26,8 @@ export const instagramImporter: Importer = {
       return false;
     }
   },
-  enqueue: (input, options, {jobs}) => enqueueInstagramImport(jobs, input, options),
+  enqueue: (input, options, {jobs, db}) =>
+    enqueueInstagramImport(jobs, db, input, options),
   async getStatus(job, context) {
     if (job.state !== 'completed') {
       return pendingStatus(job);

@@ -1,12 +1,16 @@
 import {importTag, placeTag} from '@places/common/contract/place';
 import {placeSourceInput} from '@places/common/contract/source';
-import {sql} from 'drizzle-orm';
-import {fromDrizzle, type PgBoss} from 'pg-boss';
+import type {PgBoss} from 'pg-boss';
 import {z} from 'zod';
 
 import type {WorkerQueueConfig} from '../config.ts';
 import type {Database} from '../db/index.ts';
 import {importPlace} from '../importers/import-place.ts';
+import {
+  withImportBatchEnqueue,
+  withImportEnqueue,
+  withImportRun,
+} from '../importers/runs.ts';
 import type {GooglePlaces} from '../services/google/index.ts';
 
 import {registerWorker} from './worker.ts';
@@ -30,30 +34,40 @@ export const importPayload = z.object({
   source: placeSourceInput.optional(),
 });
 
-export function enqueuePlaceImport(jobs: PgBoss, input: z.input<typeof importPayload>) {
-  return jobs.send(importQueue, importPayload.parse(input));
+export async function enqueuePlaceImport(
+  jobs: PgBoss,
+  db: Database,
+  input: z.input<typeof importPayload>,
+) {
+  const payload = importPayload.parse(input);
+
+  const id = await withImportEnqueue(
+    db,
+    'gmaps',
+    {input: payload, sourceId: payload.source?.sourceId},
+    queueDb => jobs.send(importQueue, payload, {db: queueDb}),
+  );
+
+  if (id === null) {
+    throw new Error('Could not queue the Google Maps import.');
+  }
+
+  return id;
 }
 
-export async function enqueuePlaceImports(
+export function enqueuePlaceImports(
   jobs: PgBoss,
   tx: Pick<Database, 'insert' | 'execute'>,
   inputs: Array<z.input<typeof importPayload>>,
 ) {
-  if (inputs.length === 0) {
-    return [];
-  }
-
   const imports = inputs.map(input => ({data: importPayload.parse(input)}));
-  const ids = await jobs.insert(importQueue, imports, {
-    db: fromDrizzle(tx, sql),
-    returnId: true,
-  });
 
-  if (!ids || ids.length !== imports.length) {
-    throw new Error('Some place imports could not be queued.');
-  }
-
-  return ids;
+  return withImportBatchEnqueue(
+    tx,
+    'gmaps',
+    imports.map(({data}) => ({input: data, sourceId: data.source?.sourceId})),
+    queueDb => jobs.insert(importQueue, imports, {db: queueDb, returnId: true}),
+  );
 }
 
 interface WorkerDependencies {
@@ -69,9 +83,14 @@ export function registerImportWorker(
   {db, google}: WorkerDependencies,
   options: WorkerQueueConfig,
 ) {
-  return registerWorker(jobs, importQueue, options, data => {
-    const {googlePlaceId, tags, notes, source} = importPayload.parse(data);
+  return registerWorker(
+    jobs,
+    importQueue,
+    options,
+    withImportRun(db, 'gmaps', data => {
+      const {googlePlaceId, tags, notes, source} = importPayload.parse(data);
 
-    return importPlace(db, google, googlePlaceId, tags, notes, source);
-  });
+      return importPlace(db, google, googlePlaceId, tags, notes, source);
+    }),
+  );
 }
