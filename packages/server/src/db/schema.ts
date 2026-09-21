@@ -1,10 +1,11 @@
 import type {Source} from '@places/common/contract/source';
 import type {TagIcon} from '@places/common/contract/tag';
-import {sql} from 'drizzle-orm';
+import {inArray, sql} from 'drizzle-orm';
 import {
   check,
   customType,
   index,
+  integer,
   jsonb,
   pgTable,
   primaryKey,
@@ -166,5 +167,42 @@ export const placeSources = pgTable(
   table => [
     primaryKey({columns: [table.placeId, table.sourceId]}),
     index('place_sources_source_id_idx').on(table.sourceId),
+  ],
+);
+
+const importRunTypes = ['instagram', 'gmaps'] as const;
+const importRunStates = [
+  'created',
+  'active',
+  'retry',
+  'completed',
+  'failed',
+  'cancelled',
+] as const;
+
+/** Durable execution records, independent of the queue's retention period. */
+export const importRuns = pgTable(
+  'import_runs',
+  {
+    id: uuid('id').primaryKey(),
+    type: text('type', {enum: importRunTypes}).notNull(),
+    state: text('state', {enum: importRunStates}).notNull().default('created'),
+    sourceId: uuid('source_id').references(() => sources.id, {onDelete: 'set null'}),
+    input: jsonb('input').$type<unknown>().notNull(),
+    output: jsonb('output').$type<unknown>(),
+    error: text('error'),
+    attempts: integer('attempts').notNull().default(0),
+    startedAt: timestamp('started_at', {withTimezone: true}),
+    finishedAt: timestamp('finished_at', {withTimezone: true}),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  table => [
+    index('import_runs_source_id_idx').on(table.sourceId),
+    check('import_runs_type_check', inArray(table.type, importRunTypes).inlineParams()),
+    check(
+      'import_runs_state_check',
+      inArray(table.state, importRunStates).inlineParams(),
+    ),
   ],
 );
