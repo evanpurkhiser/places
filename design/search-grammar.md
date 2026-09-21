@@ -386,8 +386,7 @@ orExpression := andExpression (OR andExpression)*
 andExpression := unaryExpression ((AND | implicitAnd) unaryExpression)*
 unaryExpression := "!" unaryExpression | primary
 primary     := "(" expression ")" | filter
-filter      := key "[" whitespace filterArguments? whitespace "]"
-filterArguments := positionalArgument ("," argument)*
+filter      := key "[" whitespace arguments? whitespace "]"
 comparison  := ">=" | "<=" | "=" | ">" | "<"
 value       := function | reference | quotedString | unquotedValue
 reference   := "@" (identifier | quotedString)
@@ -397,15 +396,18 @@ argument    := identifier ":" comparison? value | positionalArgument
 positionalArgument := comparison? value
 ```
 
-`implicitAnd` requires whitespace and the start of another expression. Function
-arguments permit whitespace around separators. An identifier immediately followed
-by `[` starts a filter and must name a registered field. Quote string values
-containing literal brackets. Colons remain
-part of string values, with `:` also separating named function arguments such as
-`buffer:800ft`. The first filter argument is positional, accepting literal colons in
-string values. Subsequent filter arguments and all function arguments may be named.
-Quote colon-containing positional strings after a comma or inside a function to
-distinguish them from named arguments. Positional arguments precede named ones.
+`implicitAnd` requires whitespace and the start of another expression. Filter and
+function arguments share the same syntax and permit whitespace around separators.
+An identifier immediately followed by `[` starts a filter and must name a
+registered field. Arguments without a key bind to positional parameters in their
+declared order. Named arguments use `key:value` and follow any positional arguments;
+a call may contain only named arguments when its registered signature permits it.
+Empty argument lists are valid syntax; required parameters are checked during
+validation. An empty string is written `""` and counts as an argument.
+
+Quote values containing literal brackets or values such as `"type:coffee"` that
+would otherwise parse as named arguments. Colons within values, such as the time
+in `open[2026-09-21T18:30:00Z]`, remain valid.
 Each field declares its allowed arguments. References such as `@home` are valid
 only in configured reference positions; a tag name beginning with `@` must be
 quoted.

@@ -233,6 +233,43 @@ describe('filter engine', () => {
     expect(await compile('name[cafe]')).toBe('name~cafe');
   });
 
+  it('binds named-only filters and positional values in declared order', async () => {
+    const difference = defineFunction({
+      name: 'difference',
+      description: 'Subtract the second value from the first.',
+      positional: [
+        {name: 'first', description: 'First value.', type: number},
+        {name: 'second', description: 'Second value.', type: number},
+      ],
+      returns: number,
+      resolve: ({positional: [first, second]}, _context: null) =>
+        first.value - second.value,
+    });
+    const named = defineFilter({
+      name: 'named',
+      description: 'A filter with only named parameters.',
+      positional: [],
+      named: {value: {description: 'Value to match.', type: number}},
+      compile: ({named: {value}}, _context: null) => `value=${value.value}`,
+    });
+    const engine = createFilterEngine({
+      types: [number],
+      functions: [difference],
+      filters: [named, count],
+      boolean,
+    });
+    const result = engine.compile(
+      await engine.resolve(engine.prepare('named[value:difference(8, 3)]'), null),
+      null,
+    );
+
+    expect(result).toBe('value=5');
+    expect(() => engine.prepare('named[]')).toThrow('Missing argument: value');
+    expect(() => engine.prepare('named[other:3]')).toThrow('Unknown argument: other');
+    expect(() => engine.prepare('named[value:3, value:4]')).toThrow('Duplicate argument');
+    expect(() => engine.prepare('count[value:3]')).toThrow('positional arguments');
+  });
+
   it('validates named function parameters, ordering, and cross-argument constraints', async () => {
     const add = defineFunction({
       name: 'add',
@@ -407,6 +444,7 @@ describe('filter engine', () => {
     ['name[a,b]', 'argument_count'],
     ['name[a, other:b]', 'unknown_argument'],
     ['name[a, notes:b, notes:c]', 'duplicate_argument'],
+    ['name[notes:b, a]', 'argument_order'],
     ['count[>=oops]', 'invalid_value'],
     ['name[>x]', 'invalid_operator'],
     ['name[@home]', 'invalid_value'],

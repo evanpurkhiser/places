@@ -4,7 +4,7 @@ import {describe, expect, it} from 'vitest';
 import {readFile} from 'node:fs/promises';
 
 import {parseQuery, SearchError} from './parser.ts';
-import type {Diagnostic, Filter, Query} from './types.ts';
+import type {Diagnostic, Filter, FunctionValue, Query} from './types.ts';
 
 function filter(input: string): Filter {
   const result = parseQuery(input);
@@ -75,7 +75,7 @@ describe('search grammar', () => {
     expect(shape(parseQuery('a[x] !b[x]'))).toEqual({and: ['a', {not: 'b'}]});
   });
 
-  it.each(['ORange', 'ANDerson', 'NOTable', '"OR"', 'not:visited'])(
+  it.each(['ORange', 'ANDerson', 'NOTable', '"OR"', '"not:visited"'])(
     'accepts keyword-like string arguments: %s',
     value => {
       expect(filter(`name[${value}]`).arguments[0].value).toMatchObject({
@@ -136,6 +136,29 @@ describe('search grammar', () => {
       ],
     });
   });
+
+  it('supports filters with only named arguments', () => {
+    expect(filter('source[type:instagram, id:"source-uuid"]').arguments).toMatchObject([
+      {name: 'type', value: {value: 'instagram'}},
+      {name: 'id', value: {value: 'source-uuid', quoted: true}},
+    ]);
+  });
+
+  it.each(['custom[%s]', 'custom[future(%s)]'])(
+    'uses the same positional and named syntax in %s',
+    template => {
+      const result = filter(template.replace('%s', '"type:coffee", "", count:>=3'));
+      const args = template.includes('future')
+        ? (result.arguments[0].value as FunctionValue).arguments
+        : result.arguments;
+
+      expect(args).toMatchObject([
+        {name: null, value: {value: 'type:coffee', quoted: true}},
+        {name: null, value: {value: '', quoted: true}},
+        {name: 'count', operator: '>=', value: {value: '3'}},
+      ]);
+    },
+  );
 
   it('preserves quoted brackets, escaped characters, and wildcard intent', () => {
     expect(filter('tag["gmaps-list.[NYC] Coffee"]').arguments[0].value).toMatchObject({

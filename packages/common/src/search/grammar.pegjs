@@ -26,14 +26,8 @@ primary
   / filter
 
 filter
-  = key:identifier '[' _ args:filter_arguments? _ ']' {
+  = key:identifier '[' _ args:arguments? _ ']' {
       return nodes.filter(key, args ?? [], span());
-    }
-
-// The first filter argument is positional; later arguments may be named.
-filter_arguments
-  = first:positional_argument rest:(_ ',' _ arg:argument { return arg; })* {
-      return [first, ...rest];
     }
 
 argument = named_argument / positional_argument

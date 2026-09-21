@@ -65,6 +65,9 @@ and distance until compilation.
 ### Filters
 
 A filter declares its arguments and compiles resolved values to a predicate.
+Filters and functions share argument syntax. Values without a key fill the declared
+positional parameters in order; named arguments bind to the named parameter map.
+Registrations can declare zero positional parameters to support named-only calls.
 Filters may resolve application data before compilation, such as looking up exact
 tag names. `tag`, `notes`, `has`, and `location` use the same registration mechanism.
 
