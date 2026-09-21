@@ -19,9 +19,9 @@ export const tag = defineFilter({
   examples: [
     {query: 'tag[favorite]', description: 'Places assigned the favorite tag.'},
     {query: 'tag["date night"]', description: 'Places assigned a tag containing spaces.'},
-    {query: 'tag[type:cafe]', description: 'Places assigned the type:cafe tag.'},
+    {query: 'tag[type.cafe]', description: 'Places assigned the type.cafe tag.'},
     {
-      query: 'tag[type:*]',
+      query: 'tag[type.*]',
       description: 'Places with a tag in the type namespace.',
     },
     {

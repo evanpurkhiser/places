@@ -13,12 +13,12 @@ use snake_case.
   Drizzle's `$type` annotations provide static typing. Application boundaries
   must parse the full source with Zod to enforce the type/payload relationship;
   PostgreSQL stores JSONB without enforcing the Zod contract.
-- Namespaces have unique, nonempty, lowercase, trimmed names without colons,
+- Namespaces have unique, nonempty, lowercase, trimmed names without dots,
   optional descriptions, and icons in the tag icon format.
 - Tags have a nullable `namespace_id` referencing namespaces; deleting a namespace
   containing tags is restricted.
-- Tags store globally unique qualified names (`type:cafe`). Names are lowercase
-  and trimmed; namespaced tags have exactly one colon with nonempty parts.
+- Tags store globally unique qualified names (`type.cafe`). Names are lowercase
+  and trimmed; namespaced tags have exactly one dot with nonempty parts.
 - Application writes resolve and lock the namespace before writing a qualified
   tag name. Namespace renames rewrite member prefixes in the same transaction.
   Direct SQL writers must keep the prefix and `namespace_id` consistent.
@@ -93,3 +93,6 @@ in PostgreSQL after queue cleanup.
 Migration `0008_import_runs` creates the table. Runs are recorded when imports are
 enqueued or begin execution. Status lookup requires a recorded run; historical
 imports are not automatically backfilled.
+
+Migration `0009_dot_tag_namespaces` converts namespaced tag names to the dot
+separator and updates the name constraints. Tag IDs and associations are preserved.

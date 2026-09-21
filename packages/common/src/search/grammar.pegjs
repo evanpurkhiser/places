@@ -30,7 +30,7 @@ filter
       return nodes.filter(key, args ?? [], span());
     }
 
-// The first filter argument is positional so tag namespaces remain literal.
+// The first filter argument is positional; later arguments may be named.
 filter_arguments
   = first:positional_argument rest:(_ ',' _ arg:argument { return arg; })* {
       return [first, ...rest];

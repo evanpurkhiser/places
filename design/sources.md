@@ -55,7 +55,7 @@ user inspect each post and its context. Reprocessing the same post should reuse
 its source association; a different post about that place adds another source.
 
 Source records preserve discovery context. Tags provide organization and filtering:
-for example, `source:instagram` can group places while a source record identifies
+for example, `source.instagram` can group places while a source record identifies
 the particular post. Imported list membership can be preserved as tags alongside
 the import source.
 

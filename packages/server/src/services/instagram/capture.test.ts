@@ -160,8 +160,8 @@ describe('Instagram capture', () => {
     const format = JSON.stringify(requests[0]!.text?.format);
     expect(requests[0]!.tools).toHaveLength(2);
     expect(requests[0]!.tools![0]).toMatchObject({name: 'searchPlaces'});
-    expect(format).toContain('type:cafe');
-    expect(format).not.toContain('rating:favorite');
+    expect(format).toContain('type.cafe');
+    expect(format).not.toContain('rating.favorite');
     expect(format).not.toContain('needs-review');
     expect(requests[0]).toMatchObject({
       store: false,
@@ -294,9 +294,9 @@ describe('Instagram capture', () => {
     );
 
     expect(prompt).toContain(
-      '## type — What kind of place this is\n  - type:cafe — Coffee shops and cafes\n  - type:restaurant',
+      '## type — What kind of place this is\n  - type.cafe — Coffee shops and cafes\n  - type.restaurant',
     );
-    expect(prompt).not.toContain('rating:favorite');
+    expect(prompt).not.toContain('rating.favorite');
     expect(prompt).not.toContain('needs-review');
     expect(prompt).not.toContain('## rating');
     expect(prompt).not.toContain('## Ungrouped');
@@ -413,7 +413,7 @@ describe('Instagram capture', () => {
       response([
         final({
           places: [
-            {...item, tags: ['type:cafe', 'type:cafe']},
+            {...item, tags: ['type.cafe', 'type.cafe']},
             {...item, googlePlaceId: 'ChIJwrongBranch'},
           ],
           unresolved: [],
@@ -439,10 +439,10 @@ describe('Instagram capture', () => {
 
   it.each([
     {googlePlaceId: 'invented'},
-    {tags: ['rating:favorite']},
+    {tags: ['rating.favorite']},
     {tags: ['needs-review']},
-    {tags: ['type:invented']},
-    {tags: ['vibe:casual']},
+    {tags: ['type.invented']},
+    {tags: ['vibe.casual']},
   ])('rejects ungrounded output or invalid tagging: %j', async change => {
     const output = {
       ...fixture.output,

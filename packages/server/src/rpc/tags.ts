@@ -96,7 +96,7 @@ export const tagRouter = api.router({
 type Transaction = Parameters<Parameters<Database['transaction']>[0]>[0];
 
 async function tagNamespace(tx: Transaction, name: string) {
-  const [prefix, localName] = name.split(':');
+  const [prefix, localName] = name.split('.');
 
   if (localName === undefined) {
     return {namespaceId: null};

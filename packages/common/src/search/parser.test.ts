@@ -85,13 +85,13 @@ describe('search grammar', () => {
   );
 
   it('separates tag namespaces from named note constraints', () => {
-    const result = filter('tag[attr:laptop-friendly, notes:"*outlet*"]');
+    const result = filter('tag[attr.laptop-friendly, notes:"*outlet*"]');
 
     expect(result.arguments).toMatchObject([
       {
         name: null,
         operator: null,
-        value: {type: 'string', value: 'attr:laptop-friendly'},
+        value: {type: 'string', value: 'attr.laptop-friendly'},
       },
       {name: 'notes', value: {value: '*outlet*', quoted: true, wildcards: [0, 7]}},
     ]);
@@ -138,8 +138,8 @@ describe('search grammar', () => {
   });
 
   it('preserves quoted brackets, escaped characters, and wildcard intent', () => {
-    expect(filter('tag["gmaps-list:[NYC] Coffee"]').arguments[0].value).toMatchObject({
-      value: 'gmaps-list:[NYC] Coffee',
+    expect(filter('tag["gmaps-list.[NYC] Coffee"]').arguments[0].value).toMatchObject({
+      value: 'gmaps-list.[NYC] Coffee',
     });
     expect(filter(String.raw`notes["a\"b\\c\**"]`).arguments[0].value).toMatchObject({
       value: 'a"b\\c**',
@@ -161,7 +161,7 @@ describe('search grammar', () => {
   });
 
   it('retains source spans through nesting and multiline queries', () => {
-    const input = 'tag[type:cafe]\nAND location[radius(@home, 1mi)]';
+    const input = 'tag[type.cafe]\nAND location[radius(@home, 1mi)]';
     const query = parseQuery(input);
 
     expect(query).toMatchObject({type: 'and', text: input});
@@ -180,11 +180,11 @@ describe('search grammar', () => {
   it.each([
     'coffee',
     'name[!=coffee]',
-    'tag[type:cafe, notes:!=outlets]',
+    'tag[type.cafe, notes:!=outlets]',
     '"La Cabra"',
-    'coffee tag[type:cafe]',
-    'tag[type:cafe] coffee',
-    'tag[type:cafe] OR coffee',
+    'coffee tag[type.cafe]',
+    'tag[type.cafe] coffee',
+    'tag[type.cafe] OR coffee',
     'tag[',
     'tag[] trailing[',
     'tag[x,]',
@@ -204,7 +204,7 @@ describe('search grammar', () => {
     'tag[x] OR OR tag[y]',
     'tag[x]tag[y]',
     'tag[foo bar]',
-    'tag[gmaps-list:[nyc]]',
+    'tag[gmaps-list.[nyc]]',
     'tag["x"] garbage)',
   ])('rejects malformed syntax: %s', input => {
     expect(diagnostics(input)[0].code).toBe('syntax');
@@ -221,10 +221,10 @@ describe('search grammar', () => {
 
 describe('query syntax examples', () => {
   it.each([
-    'tag[type:cafe] tag[attr:laptop-friendly, notes:"*outlet*"]',
-    '(tag[type:cafe] OR tag[type:bakery]) !tag[status:visited]',
+    'tag[type.cafe] tag[attr.laptop-friendly, notes:"*outlet*"]',
+    '(tag[type.cafe] OR tag[type.bakery]) !tag[status.visited]',
     '!has[tag] OR !has[notes]',
-    'tag["gmaps-list:[nyc]*"] AND !tag[type:*]',
+    'tag["gmaps-list.[nyc]*"] AND !tag[type.*]',
     'created[>=2026-09-01] updated[<"2026-10-01T12:00:00-04:00"]',
     'location[within("Manhattan, NYC")]',
     'location[radius(point(-73.985, 40.726), 800m)]',

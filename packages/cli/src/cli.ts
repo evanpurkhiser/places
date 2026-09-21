@@ -20,7 +20,7 @@ const id = argument(zod(tag.shape.id, {metavar: 'ID', placeholder: ''}), {
   description: message`Tag UUID, shown by tags list or tags create.`,
 });
 const name = argument(zod(tag.shape.name, {metavar: 'NAME', placeholder: ''}), {
-  description: message`Tag name or namespace:tag; trimmed and lowercased. The namespace must exist.`,
+  description: message`Tag name or namespace.tag; trimmed and lowercased. The namespace must exist.`,
 });
 
 const assignmentArguments = {

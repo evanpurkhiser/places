@@ -10,8 +10,8 @@ export const namespace = z.object({
     .trim()
     .toLowerCase()
     .min(1)
-    .refine(name => !name.includes(':'), {
-      message: 'Namespace names cannot contain colons',
+    .refine(name => !name.includes('.'), {
+      message: 'Namespace names cannot contain dots',
     }),
   icon: tagIcon.nullable(),
   description: z.string().nullable(),

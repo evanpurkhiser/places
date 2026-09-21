@@ -13,12 +13,12 @@ export const tag = z.object({
   id: z.uuid(),
   name: tagReference.refine(
     name => {
-      const parts = name.split(':');
+      const parts = name.split('.');
       return (
         parts.length <= 2 && parts.every(part => part.length > 0 && part === part.trim())
       );
     },
-    {message: 'Use a tag name or namespace:tag with nonempty, trimmed parts'},
+    {message: 'Use a tag name or namespace.tag with nonempty, trimmed parts'},
   ),
   namespaceId: z.uuid().nullable(),
   icon: tagIcon.nullable(),

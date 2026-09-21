@@ -374,7 +374,7 @@ describe.skipIf(!testUrl)('filter engine with PostgreSQL', () => {
     await expect(names('name[*] OR !tag[missing]')).rejects.toThrow(
       'Unknown tag: missing',
     );
-    expect(await names('tag[missing:*]')).toEqual([]);
+    expect(await names('tag[missing.*]')).toEqual([]);
   });
   it('combines membership and note exclusion when assignment notes are absent', async () => {
     const [place] = await db

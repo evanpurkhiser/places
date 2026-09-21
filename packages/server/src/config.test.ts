@@ -103,7 +103,7 @@ it('requires explicit Instagram capture and automatic-tag configuration', () => 
     false,
   );
   const instagram = {
-    alwaysApplyTags: ['status:needs-review'],
+    alwaysApplyTags: ['status.needs-review'],
     requiredNamespaces: ['type'],
     excludedNamespaces: ['rating'],
     excludedTags: ['favorite'],

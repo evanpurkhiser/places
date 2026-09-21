@@ -12,9 +12,9 @@ Queries select places. Inspection and mutation use the returned place IDs. Sorti
 pagination, and output selection are separate API inputs and CLI options.
 
 ```sh
-places list --query 'tag[type:cafe] tag[attr:laptop-friendly]'
-places list --query '(tag[type:cafe] OR tag[type:bakery]) location[within("Manhattan, NYC")]'
-places list --query 'tag[status:want-to-try] hours[open(now)]'
+places list --query 'tag[type.cafe] tag[attr.laptop-friendly]'
+places list --query '(tag[type.cafe] OR tag[type.bakery]) location[within("Manhattan, NYC")]'
+places list --query 'tag[status.want-to-try] hours[open(now)]'
 ```
 
 Use a PEG grammar generated with Peggy and a typed expression tree shared through
@@ -34,10 +34,10 @@ execution grammar with explicit boolean precedence and actionable errors.
 - An empty query selects all places.
 
 ```text
-tag[type:cafe] tag[attr:laptop-friendly]
-tag[type:cafe] AND tag[attr:laptop-friendly]
-(tag[type:cafe] OR tag[type:bakery]) AND !tag[status:visited]
-!(tag[type:bar] OR tag[type:restaurant])
+tag[type.cafe] tag[attr.laptop-friendly]
+tag[type.cafe] AND tag[attr.laptop-friendly]
+(tag[type.cafe] OR tag[type.bakery]) AND !tag[status.visited]
+!(tag[type.bar] OR tag[type.restaurant])
 ```
 
 Comparison operators appear inside the brackets before the value: `name[="La Cabra"]` or, for a
@@ -46,7 +46,7 @@ and `>=`; validate supported operators against the field's type. Ordering applie
 to dates and numbers once those fields are defined. Strings support default
 matching and exact equality. Unsupported combinations are errors.
 
-`!field[=value]` excludes an exact match. For tags, `!tag[=type:cafe]`
+`!field[=value]` excludes an exact match. For tags, `!tag[=type.cafe]`
 selects places without that tag, regardless of other assigned tags.
 
 ## Strings and wildcards
@@ -67,9 +67,9 @@ characters such as `%` and `_` remain literal characters.
 tag[favorite]
 tag["date night"]
 tag[*friendly*]
-tag[type:*]
-tag[gmaps-list:*]
-tag["gmaps-list:[NYC] Coffee"]
+tag[type.*]
+tag[gmaps-list.*]
+tag["gmaps-list.[NYC] Coffee"]
 name["*coffee*"]
 name[="La Cabra"]
 ```
@@ -93,13 +93,13 @@ related record. Boolean operators and groups combine complete predicates outside
 the brackets.
 
 Tag names are arbitrary labels: `tag[favorite]`, `tag["date night"]`, and
-`tag[type:cafe]` all match tag names. Colons are ordinary characters; names such
-as `type:cafe` follow a user-chosen naming convention. Quote values containing
-spaces or square brackets, such as `tag["gmaps-list:[NYC] Coffee"]`.
+`tag[type.cafe]` all match tag names. Qualified names use a dot between
+the namespace and local name, as in `type.cafe`. Quote values containing
+spaces or square brackets, such as `tag["gmaps-list.[NYC] Coffee"]`.
 
 | Key        | Meaning                               | Example                              |
 | ---------- | ------------------------------------- | ------------------------------------ |
-| `tag`      | Match an assigned tag name or pattern | `tag[type:cafe]`                     |
+| `tag`      | Match an assigned tag name or pattern | `tag[type.cafe]`                     |
 | `name`     | Match the saved place name            | `name["La Cabra"]`                   |
 | `address`  | Match the formatted address as text   | `address["Broadway"]`                |
 | `notes`    | Match the general place note          | `notes[espresso]`                    |
@@ -118,13 +118,13 @@ Additional presence checks must be registered explicitly.
 Use `name[...]`, `address[...]`, and `notes[...]` to search place fields.
 
 ```text
-name["La Cabra"] tag[type:cafe]
+name["La Cabra"] tag[type.cafe]
 name[espresso] !has[notes]
 !has[tag]
 ```
 
-Use `tag[...]` for tag membership. Namespaces such as `type:`, `status:`, and
-`trip:` remain part of the tag name. For example, `tag[location:nyc]` matches a tag
+Use `tag[...]` for tag membership. Namespaces such as `type.`, `status.`, and
+`trip.` remain part of the tag name. For example, `tag[location.nyc]` matches a tag
 independently of the `location[...]` geographic filter.
 
 Exact tag references must resolve to an existing tag or produce an unknown-tag
@@ -134,9 +134,9 @@ should expose that expansion, especially when the expression is negated.
 ### Tag-assignment notes
 
 ```text
-tag[attr:laptop-friendly, notes:"*outlet*"]
-tag[attr:*, notes:"upstairs"]
-!tag[attr:laptop-friendly, notes:"*outlet*"]
+tag[attr.laptop-friendly, notes:"*outlet*"]
+tag[attr.*, notes:"upstairs"]
+!tag[attr.laptop-friendly, notes:"*outlet*"]
 ```
 
 The primary condition matches the tag name. The optional `notes:` constraint
@@ -151,7 +151,7 @@ assignment matches both the name and note; places without that tag also qualify.
 To require the tag while excluding a particular note, combine predicates:
 
 ```text
-tag[attr:laptop-friendly] AND !tag[attr:laptop-friendly, notes:"*outlet*"]
+tag[attr.laptop-friendly] AND !tag[attr.laptop-friendly, notes:"*outlet*"]
 ```
 
 Tag names and note constraints support default matching or `=` for literal
@@ -321,8 +321,8 @@ Provider failures are query errors rather than successful empty results.
 Combine geography with ordinary boolean expressions:
 
 ```text
-tag[type:cafe] location[within("Manhattan, NYC")] !location[within("East Village, NYC")]
-(location[within("Manhattan, NYC")] OR location[within("Brooklyn, NYC")]) tag[type:museum]
+tag[type.cafe] location[within("Manhattan, NYC")] !location[within("East Village, NYC")]
+(location[within("Manhattan, NYC")] OR location[within("Brooklyn, NYC")]) tag[type.museum]
 ```
 
 ## Opening hours
@@ -357,7 +357,7 @@ schedules require additional data.
 
 ```text
 saved[work-friendly] AND location[within("Manhattan, NYC")]
-saved["date night"] AND !tag[status:visited]
+saved["date night"] AND !tag[status.visited]
 ```
 
 `saved[...]` references a named query and evaluates its complete expression as a
@@ -402,8 +402,8 @@ arguments permit whitespace around separators. An identifier immediately followe
 by `[` starts a filter and must name a registered field. Quote string values
 containing literal brackets. Colons remain
 part of string values, with `:` also separating named function arguments such as
-`buffer:800ft`. The first filter argument is positional, preserving colons in
-tag names. Subsequent filter arguments and all function arguments may be named.
+`buffer:800ft`. The first filter argument is positional, accepting literal colons in
+string values. Subsequent filter arguments and all function arguments may be named.
 Quote colon-containing positional strings after a comma or inside a function to
 distinguish them from named arguments. Positional arguments precede named ones.
 Each field declares its allowed arguments. References such as `@home` are valid
@@ -425,7 +425,7 @@ that have no registered implementation.
 
 ```ts
 const query = parseQuery(
-  'tag[attr:laptop-friendly, notes:"*outlet*"] location[radius(@home, 1mi)]',
+  'tag[attr.laptop-friendly, notes:"*outlet*"] location[radius(@home, 1mi)]',
 );
 ```
 

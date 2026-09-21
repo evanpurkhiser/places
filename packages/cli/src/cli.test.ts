@@ -38,8 +38,8 @@ describe('tag arguments', () => {
 
   it.each([
     ['tags', 'create', '  '],
-    ['tags', 'create', ':cafe'],
-    ['tags', 'update', '9a53fa46-9d9d-4dac-b0b2-f3a8334900ef', 'type:'],
+    ['tags', 'create', '.cafe'],
+    ['tags', 'update', '9a53fa46-9d9d-4dac-b0b2-f3a8334900ef', 'type.'],
     ['tags', 'create'],
     ['tags', 'get', 'bad-id'],
     ['tags', 'list', '--unknown'],
@@ -86,10 +86,10 @@ describe('import arguments', () => {
     const id = '9a53fa46-9d9d-4dac-b0b2-f3a8334900ef';
 
     expect(
-      parse(parser, ['import', '--tag', ' Type:CAFE ', 'gmaps:ChIJtest', '--tag', id]),
+      parse(parser, ['import', '--tag', ' Type.CAFE ', 'gmaps:ChIJtest', '--tag', id]),
     ).toMatchObject({
       success: true,
-      value: {action: 'import', input: 'gmaps:ChIJtest', tags: ['type:cafe', id]},
+      value: {action: 'import', input: 'gmaps:ChIJtest', tags: ['type.cafe', id]},
     });
   });
 
@@ -99,10 +99,10 @@ describe('import arguments', () => {
       const result = parse(parser, [
         'import',
         '--tag-note',
-        ' Attr:Nice-Bathroom ',
+        ' Attr.Nice-Bathroom ',
         note,
         '--tag',
-        'type:cafe',
+        'type.cafe',
         'gmaps:ChIJtest',
         '--tag-note',
         'favorite',
@@ -124,8 +124,8 @@ describe('import arguments', () => {
         input: 'gmaps:ChIJtest',
         notes: 'Place note',
         tags: [
-          {tag: 'type:cafe'},
-          {tag: 'attr:nice-bathroom', note},
+          {tag: 'type.cafe'},
+          {tag: 'attr.nice-bathroom', note},
           {tag: 'favorite', note: 'Order the Espresso'},
         ],
       });
@@ -135,7 +135,7 @@ describe('import arguments', () => {
   it.each([
     ['import', 'gmaps:ChIJtest', '--tag-note'],
     ['import', 'gmaps:ChIJtest', '--tag-note', 'favorite'],
-    ['import', 'gmaps:ChIJtest', '--tag-note', 'favorite', '--tag', 'type:cafe'],
+    ['import', 'gmaps:ChIJtest', '--tag-note', 'favorite', '--tag', 'type.cafe'],
     ['import', '--tag-note', 'favorite', 'Note'],
     ['import', 'gmaps:ChIJtest', '--tag-note', ' ', 'Note'],
     ['import', 'gmaps:ChIJtest', 'Stray note'],
@@ -384,7 +384,7 @@ describe('place tagging arguments', () => {
       const result = parse(parser, [
         'tag',
         placeId,
-        ' Attr:Nice-Bathroom ',
+        ' Attr.Nice-Bathroom ',
         ...(notes === undefined ? [] : ['--notes', notes]),
       ]);
 
@@ -396,7 +396,7 @@ describe('place tagging arguments', () => {
       execute(result.value, {places} as unknown as Client);
       expect(places.tag).toHaveBeenCalledWith({
         placeId,
-        tag: 'attr:nice-bathroom',
+        tag: 'attr.nice-bathroom',
         notes,
       });
     },
@@ -427,7 +427,7 @@ describe('place tagging arguments', () => {
 });
 
 describe('place query arguments', () => {
-  it.each([undefined, '', '  tag[type:cafe] OR notes["Good Coffee"]\n'])(
+  it.each([undefined, '', '  tag[type.cafe] OR notes["Good Coffee"]\n'])(
     'forwards the query without normalization: %j',
     query => {
       const result = parse(parser, [
@@ -641,8 +641,8 @@ describe.each(['namespace', 'ns'])('%s commands', command => {
   });
 
   it.each([
-    ['create', 'type:cafe'],
-    ['update', id, 'type:cafe'],
+    ['create', 'type.cafe'],
+    ['update', id, 'type.cafe'],
     ['get', 'bad-id'],
   ])('rejects invalid arguments: %j', (...args) => {
     expect(parse(parser, [command, ...args])).toMatchObject({success: false});
@@ -656,8 +656,8 @@ describe('qualified tag commands', () => {
     const id = '9a53fa46-9d9d-4dac-b0b2-f3a8334900ef';
 
     for (const args of [
-      ['create', ' TYPE:CAFE '],
-      ['update', id, ' Cuisine:Coffee '],
+      ['create', ' TYPE.CAFE '],
+      ['update', id, ' Cuisine.Coffee '],
     ]) {
       const result = parse(parser, ['tags', ...args]);
       expect(result.success).toBe(true);
@@ -668,13 +668,13 @@ describe('qualified tag commands', () => {
     }
 
     expect(tags.create).toHaveBeenCalledWith({
-      name: 'type:cafe',
+      name: 'type.cafe',
       icon: undefined,
       description: undefined,
     });
     expect(tags.update).toHaveBeenCalledWith({
       id,
-      name: 'cuisine:coffee',
+      name: 'cuisine.coffee',
       icon: undefined,
       description: undefined,
     });

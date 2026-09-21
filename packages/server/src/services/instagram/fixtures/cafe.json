@@ -38,25 +38,25 @@
     "tags": [
       {
         "id": "20000000-0000-4000-8000-000000000001",
-        "name": "type:cafe",
+        "name": "type.cafe",
         "namespaceId": "10000000-0000-4000-8000-000000000001",
         "description": "Coffee shops and cafes"
       },
       {
         "id": "20000000-0000-4000-8000-000000000002",
-        "name": "type:restaurant",
+        "name": "type.restaurant",
         "namespaceId": "10000000-0000-4000-8000-000000000001",
         "description": "Places serving meals"
       },
       {
         "id": "20000000-0000-4000-8000-000000000003",
-        "name": "vibe:casual",
+        "name": "vibe.casual",
         "namespaceId": "10000000-0000-4000-8000-000000000002",
         "description": "Relaxed and informal"
       },
       {
         "id": "20000000-0000-4000-8000-000000000004",
-        "name": "rating:favorite",
+        "name": "rating.favorite",
         "namespaceId": "10000000-0000-4000-8000-000000000003",
         "description": null
       },
@@ -97,7 +97,7 @@
     "places": [
       {
         "googlePlaceId": "ChIJorchard",
-        "tags": ["type:cafe", "vibe:casual"],
+        "tags": ["type.cafe", "vibe.casual"],
         "description": "A casual cafe recommended for a flat white.",
         "evidence": "Caption names Orchard Street in Manhattan and calls the cafe casual.",
         "matchReason": "The Orchard Street address matches the post; the Brooklyn branch does not."

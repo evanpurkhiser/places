@@ -29,13 +29,13 @@ openai:
 instagram:
   # Add these existing tags to every newly created place. They are automatically
   # excluded from model choices. Existing places keep their tags. Use [] for none.
-  alwaysApplyTags: [status:needs-review]
+  alwaysApplyTags: [status.needs-review]
   # Additional tags the model must not assign, such as a personal favorite tag.
   excludedTags: [favorite]
   # Exclude whole namespaces: personal ratings should be assigned by you.
   excludedNamespaces: [rating]
   # Require at least one allowed tag per namespace for each captured place:
-  # type might include type:cafe, type:bakery, and type:restaurant.
+  # type might include type.cafe, type.bakery, and type.restaurant.
   requiredNamespaces: [type]
   # The model receives all assignable tags grouped by namespace, including the
   # descriptions of both tags and namespaces, alongside the post content.

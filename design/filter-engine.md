@@ -125,7 +125,7 @@ must fail explicitly rather than silently broadening the selection.
 ```text
 tag[favorite]
 tag["date night"]
-tag[type:*]
+tag[type.*]
 tag[laptop-friendly, notes:outlet]
 !tag[visited]
 ```

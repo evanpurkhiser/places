@@ -49,7 +49,7 @@ export const instagramConfig = z
     alwaysApplyTags: z
       .array(tagReference)
       .describe(
-        'Existing tags added automatically to newly imported places, such as status:needs-review. These tags are excluded from model choices. Use [] for none.',
+        'Existing tags added automatically to newly imported places, such as status.needs-review. These tags are excluded from model choices. Use [] for none.',
       ),
     excludedTags: z
       .array(z.string())
@@ -64,7 +64,7 @@ export const instagramConfig = z
     requiredNamespaces: z
       .array(z.string())
       .describe(
-        'Namespaces from which the model must assign at least one allowed tag per place, such as type for type:cafe or type:restaurant. Use [] for none.',
+        'Namespaces from which the model must assign at least one allowed tag per place, such as type for type.cafe or type.restaurant. Use [] for none.',
       ),
     capture: instagramCaptureConfig,
   })

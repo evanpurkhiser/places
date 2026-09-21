@@ -9,7 +9,7 @@ it('renders signatures, optional arguments, capabilities, and examples as text',
         name: 'tag',
         description: 'Match an assigned tag.',
         presence: true,
-        examples: [{query: 'tag[type:cafe]', description: 'Find cafes.'}],
+        examples: [{query: 'tag[type.cafe]', description: 'Find cafes.'}],
         positional: [
           {
             name: 'pattern',
@@ -49,7 +49,7 @@ it('renders signatures, optional arguments, capabilities, and examples as text',
   expect(output).toContain('notes: text (optional) — Assignment note.');
   expect(output).toContain('Operators: =');
   expect(output).toContain('Presence: has[tag]');
-  expect(output).toContain('Example: tag[type:cafe]\n    Find cafes.');
+  expect(output).toContain('Example: tag[type.cafe]\n    Find cafes.');
   expect(output).toContain('Example: tag[label()]');
   expect(output).toContain('label() -> text');
   expect(output).toContain('Accepts: literals, @references, label()');

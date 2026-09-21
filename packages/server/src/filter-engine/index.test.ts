@@ -7,7 +7,7 @@ import {createGooglePlaces} from '../services/google/index.ts';
 import {placeFilterEngine} from './index.ts';
 
 const dialect = new PgDialect();
-async function compile(query: string, names = ['type:cafe', 'type:bar', 'star:*']) {
+async function compile(query: string, names = ['type.cafe', 'type.bar', 'star.*']) {
   const context = {
     now: Date.now(),
     google: createGooglePlaces(),
@@ -112,13 +112,13 @@ describe('Places SQL predicates', () => {
     ['tag[unknown()]', 'unknown_function'],
     ['tag[@home]', 'invalid_value'],
     ['tagged[false]', 'unknown_filter'],
-    ['tag[>type:cafe]', 'invalid_operator'],
-    ['tag[!=type:cafe, notes:outlets]', 'syntax'],
-    ['tag[!=type:cafe]', 'syntax'],
+    ['tag[>type.cafe]', 'invalid_operator'],
+    ['tag[!=type.cafe, notes:outlets]', 'syntax'],
+    ['tag[!=type.cafe]', 'syntax'],
     ['name[!=coffee]', 'syntax'],
     ['address[!=Broadway]', 'syntax'],
     ['notes[!=coffee]', 'syntax'],
-    ['tag[type:cafe, notes:!=outlets]', 'syntax'],
+    ['tag[type.cafe, notes:!=outlets]', 'syntax'],
     ['tag[""]', 'invalid_value'],
     ['created[>=2026-09-01]', 'unknown_filter'],
     ['hours[open(now)]', 'unknown_filter'],
@@ -144,16 +144,16 @@ describe('Places SQL predicates', () => {
   });
 
   it('builds correlated membership with notes on the same assignment', async () => {
-    const result = await compile('tag[type:cafe, notes:outlet]');
+    const result = await compile('tag[type.cafe, notes:outlet]');
 
     expect(result.sql).toContain('exists');
     expect(result.sql).toContain('"place_tags"."place_id" = "places"."id"');
     expect(result.sql).toContain('"place_tags"."note"');
-    expect(result.params).toEqual(['type:cafe', '%outlet%']);
+    expect(result.params).toEqual(['type.cafe', '%outlet%']);
   });
 
   it('negates membership instead of checking a different assigned tag', async () => {
-    const result = await compile('!tag[=type:cafe]');
+    const result = await compile('!tag[=type.cafe]');
 
     expect(result.sql).toMatch(/not \(exists/);
     expect(result.sql).not.toContain('<> $');
@@ -161,7 +161,7 @@ describe('Places SQL predicates', () => {
 
   it('rejects exact missing tags even under negation, but permits empty patterns', async () => {
     await expect(compile('!tag[typo]')).rejects.toThrow('Unknown tag: typo');
-    await expect(compile('tag[typo:*]')).resolves.toMatchObject({params: ['typo:%']});
+    await expect(compile('tag[typo.*]')).resolves.toMatchObject({params: ['typo.%']});
   });
 
   it('normalizes after preserving wildcard positions and escapes SQL metacharacters', async () => {
@@ -171,14 +171,14 @@ describe('Places SQL predicates', () => {
   });
 
   it('makes stars literal for equality', async () => {
-    const tagResult = await compile('tag[=star:*]');
-    expect(tagResult.params).toEqual(['star:*']);
+    const tagResult = await compile('tag[=star.*]');
+    expect(tagResult.params).toEqual(['star.*']);
     const notesResult = await compile('notes[="*outlet*"]');
     expect(notesResult.params).toEqual(['*outlet*']);
   });
 
   it('supports boolean composition, presence hooks', async () => {
-    const result = await compile('(tag[type:cafe] OR !has[tag]) AND !has[notes]');
+    const result = await compile('(tag[type.cafe] OR !has[tag]) AND !has[notes]');
 
     expect(result.sql).toContain(' or ');
     expect(result.sql).toContain(' and ');
@@ -194,7 +194,7 @@ describe('Places SQL predicates', () => {
       'notes[nope()]',
       'has[hours]',
       'notes[>a]',
-      'tag[type:cafe, other:x]',
+      'tag[type.cafe, other:x]',
     ]) {
       await expect(compile(query)).rejects.toThrow();
     }

@@ -39,11 +39,11 @@ extension. The server defaults to `127.0.0.1:5188`, available on the tailnet at
 
 ```sh
 pnpm places ns create type
-pnpm places tags create 'type:cafe'
-pnpm places tags create 'type:bar' --icon '🍸' --description 'Primarily visited for drinks'
+pnpm places tags create 'type.cafe'
+pnpm places tags create 'type.bar' --icon '🍸' --description 'Primarily visited for drinks'
 pnpm places tags list
 pnpm places tags get <id>
-pnpm places tags update <id> 'type:coffee'
+pnpm places tags update <id> 'type.coffee'
 pnpm places tags update <id> --icon '☕' --description 'Cafe or coffee shop'
 pnpm places tags update <id> --icon '' --description ''
 pnpm places tags delete <id>
@@ -79,15 +79,15 @@ source edits take effect immediately. Keep the checkout in place and run
 The CLI and web use typed oRPC calls at `/rpc`. Shared contracts are available
 from `@places/common/contract` and tag schemas from `@places/common/contract/tag`.
 
-Tag names are stored as globally unique qualified names, such as `type:cafe`,
-and normalized by trimming and lowercasing. A qualified name has one colon and
+Tag names are stored as globally unique qualified names, such as `type.cafe`,
+and normalized by trimming and lowercasing. A qualified name has one dot and
 nonempty, trimmed namespace and local-name parts. Bare names such as `favorite`
 have a null `namespaceId`. Namespaces must exist before creating or renaming tags
 into them; an unknown namespace returns 404. Duplicate names return 409.
 
 Renaming a tag can move it to another namespace or to no namespace while
 preserving its ID, metadata, and place associations. For example,
-`places tags update <id> cuisine:coffee` moves it into an existing `cuisine`
+`places tags update <id> cuisine.coffee` moves it into an existing `cuisine`
 namespace, and `places tags update <id> coffee` removes namespace membership.
 Listing returns tags sorted by their qualified name. Deleting a tag removes its
 place associations while preserving places.
@@ -138,10 +138,10 @@ Apply existing tags to saved places using the place UUID from `list` or
 `import-status` and a tag name or UUID:
 
 ```sh
-pnpm places tag <place-id> attr:nice-bathroom
-pnpm places tag <place-id> attr:nice-bathroom --notes 'Code 1234'
-pnpm places tag <place-id> attr:nice-bathroom --notes ''
-pnpm places untag <place-id> attr:nice-bathroom
+pnpm places tag <place-id> attr.nice-bathroom
+pnpm places tag <place-id> attr.nice-bathroom --notes 'Code 1234'
+pnpm places tag <place-id> attr.nice-bathroom --notes ''
+pnpm places untag <place-id> attr.nice-bathroom
 ```
 
 `tag` ensures the assignment exists and returns it, including its note. Omitted
@@ -169,10 +169,10 @@ pnpm places import 'https://maps.app.goo.gl/jbJWNK3airzeACCC7'
 pnpm places search-gmaps 'coffee shops in East Village, NYC'
 pnpm places import 'gmaps:ChIJ...'
 pnpm places import 'gmaps:ChIJ...' --wait
-pnpm places import 'https://www.instagram.com/p/SHORTCODE/' --wait --tag type:cafe
-pnpm places import 'gmaps:ChIJ...' --tag type:cafe --tag <tag-id>
+pnpm places import 'https://www.instagram.com/p/SHORTCODE/' --wait --tag type.cafe
+pnpm places import 'gmaps:ChIJ...' --tag type.cafe --tag <tag-id>
 pnpm places import 'gmaps:ChIJ...' --notes 'Try the espresso tonic'
-pnpm places import 'gmaps:ChIJ...' --tag-note attr:nice-bathroom 'Code 1234'
+pnpm places import 'gmaps:ChIJ...' --tag-note attr.nice-bathroom 'Code 1234'
 pnpm places import-status <job-id>
 pnpm places list
 ```
@@ -232,9 +232,9 @@ creating a place. Existing places keep their tags and notes while gaining the
 source association. Automatic tags are excluded from model choices. Use
 `excludedTags` for additional exclusions, `excludedNamespaces` to exclude groups
 such as personal ratings, and `requiredNamespaces` to require a classification
-such as `type:cafe` or `type:restaurant`. All four tagging lists live directly
+such as `type.cafe` or `type.restaurant`. All four tagging lists live directly
 under `instagram` and accept `[]`. For review before map display, include
-`status:needs-review` in `alwaysApplyTags` and exclude it from map queries.
+`status.needs-review` in `alwaysApplyTags` and exclude it from map queries.
 
 `enqueueInstagramImport(jobs, url)` queues an ingestion keyed by the Instagram
 shortcode. The job skips existing sources, otherwise scrapes and prepares media,
@@ -252,7 +252,7 @@ entry points for Instagram ingestion are planned.
 
 ```sh
 pnpm places sync
-pnpm places sync --query 'tag[type:cafe]'
+pnpm places sync --query 'tag[type.cafe]'
 pnpm places sync-status <job-id>
 ```
 
@@ -315,7 +315,7 @@ Filter saved places through the API or CLI:
 ```sh
 pnpm places list --query 'tag[favorite] AND !tag[visited]'
 pnpm places list --query 'tag[laptop-friendly, notes:outlet]'
-pnpm places list --query '(name[coffee] OR tag[type:bakery]) !has[notes]'
+pnpm places list --query '(name[coffee] OR tag[type.bakery]) !has[notes]'
 pnpm places list --query 'location[radius("East Village, NY", 1mi)]'
 pnpm places list --query 'open[@now, for:2h]'
 pnpm places list --query 'open["mon 6pm", until:"tue 2am"]'

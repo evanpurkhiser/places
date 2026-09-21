@@ -62,7 +62,7 @@ export const namespaceRouter = api.router({
       if (input.name !== undefined) {
         await tx
           .update(tags)
-          .set({name: sql`${namespace.name} || ':' || split_part(${tags.name}, ':', 2)`})
+          .set({name: sql`${namespace.name} || '.' || split_part(${tags.name}, '.', 2)`})
           .where(eq(tags.namespaceId, namespace.id));
       }
 
@@ -102,7 +102,7 @@ export const namespaceRouter = api.router({
         if (input.force) {
           await tx
             .update(tags)
-            .set({namespaceId: null, name: sql`split_part(${tags.name}, ':', 2)`})
+            .set({namespaceId: null, name: sql`split_part(${tags.name}, '.', 2)`})
             .where(eq(tags.namespaceId, namespace.id));
         }
 
