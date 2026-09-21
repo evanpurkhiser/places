@@ -1,6 +1,6 @@
 import {parse} from '@optique/core/parser';
 import type {Client} from '@places/common/contract';
-import {describe, expect, it, vi} from 'vitest';
+import {afterEach, describe, expect, it, vi} from 'vitest';
 
 import {execute, parser} from './cli.ts';
 
@@ -155,6 +155,126 @@ describe('import arguments', () => {
     ['import', 'gmaps:ChIJtest', '--tag', '  '],
   ])('rejects invalid tag arguments: %j', (...args) => {
     expect(parse(parser, args)).toMatchObject({success: false});
+  });
+});
+
+describe('waiting for imports', () => {
+  const jobId = '9a53fa46-9d9d-4dac-b0b2-f3a8334900ef';
+  const completed = {
+    jobId,
+    type: 'gmaps',
+    state: 'completed',
+    placeIds: ['1c8e915f-992c-4862-a45f-857408b49792'],
+    error: null,
+  };
+
+  afterEach(() => vi.useRealTimers());
+
+  function setup(wait = true) {
+    const result = parse(parser, [
+      'import',
+      'gmaps:ChIJtest',
+      ...(wait ? ['--wait'] : []),
+    ]);
+
+    if (!result.success) {
+      throw new Error('Expected valid arguments');
+    }
+
+    const places = {
+      import: vi.fn().mockResolvedValue({jobId, type: 'gmaps'}),
+      importStatus: vi.fn().mockResolvedValue(completed),
+    };
+
+    return {places, run: () => execute(result.value, {places} as unknown as Client)};
+  }
+
+  it('returns the queued job without polling by default', async () => {
+    const {places, run} = setup(false);
+
+    await expect(run()).resolves.toEqual({jobId, type: 'gmaps'});
+    expect(places.importStatus).not.toHaveBeenCalled();
+  });
+
+  it('returns saved place IDs immediately for an already completed job', async () => {
+    const {places, run} = setup();
+
+    await expect(run()).resolves.toEqual(completed);
+    expect(places.importStatus).toHaveBeenCalledExactlyOnceWith({jobId});
+  });
+
+  it('polls through pending states and retries once per second', async () => {
+    vi.useFakeTimers();
+    const {places, run} = setup();
+
+    for (const state of ['created', 'active', 'retry']) {
+      places.importStatus.mockResolvedValueOnce({
+        ...completed,
+        state,
+        placeIds: [],
+        error: state === 'retry' ? 'Import failed.' : null,
+      });
+    }
+
+    const pending = run();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(places.importStatus).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(999);
+    expect(places.importStatus).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(2001);
+
+    await expect(pending).resolves.toEqual(completed);
+    expect(places.importStatus).toHaveBeenCalledTimes(4);
+  });
+
+  it.each(['failed', 'cancelled'])('rejects a %s job', async state => {
+    const {places, run} = setup();
+    places.importStatus.mockResolvedValue({...completed, state, error: null});
+
+    await expect(run()).rejects.toThrow(`Import ${jobId} ${state}.`);
+    expect(places.importStatus).toHaveBeenCalledTimes(1);
+  });
+
+  it('waits for an Instagram import and returns multiple places', async () => {
+    vi.useFakeTimers();
+    const result = parse(parser, [
+      'import',
+      'https://www.instagram.com/p/ExamplePost/',
+      '--wait',
+      '--tag',
+      'cafe',
+    ]);
+    if (!result.success) {
+      throw new Error('Expected valid arguments');
+    }
+    const status = {
+      ...completed,
+      type: 'instagram',
+      placeIds: [completed.placeIds[0], jobId],
+    };
+    const places = {
+      import: vi.fn().mockResolvedValue({jobId, type: 'instagram'}),
+      importStatus: vi
+        .fn()
+        .mockResolvedValueOnce({...status, state: 'active', placeIds: []})
+        .mockResolvedValue(status),
+    };
+    const pending = execute(result.value, {places} as unknown as Client);
+    await vi.advanceTimersByTimeAsync(1000);
+    await expect(pending).resolves.toEqual(status);
+    expect(places.import).toHaveBeenCalledWith({
+      input: 'https://www.instagram.com/p/ExamplePost/',
+      tags: [{tag: 'cafe'}],
+      notes: undefined,
+    });
+  });
+
+  it('reports status request errors', async () => {
+    const {places, run} = setup();
+    places.importStatus.mockRejectedValue(new Error('Import not found or expired.'));
+
+    await expect(run()).rejects.toThrow('Import not found or expired.');
+    expect(places.import).toHaveBeenCalledTimes(1);
   });
 });
 

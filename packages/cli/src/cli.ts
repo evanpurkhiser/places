@@ -117,6 +117,9 @@ export const parser = merge(
       'import',
       object({
         action: constant('import'),
+        wait: option('--wait', {
+          description: message`Wait for completion and return the import status with saved place IDs.`,
+        }),
         notes: optional(
           option('--notes', string({metavar: 'TEXT'}), {
             description: message`Notes for the place. Replaces existing notes; an empty string clears them.`,
@@ -308,8 +311,8 @@ export function execute(args: InferValue<typeof parser>, client: Client) {
       return client.places.searchGoogle({query: args.query});
     case 'docs-filter':
       return client.query.describe().then(formatFilterDocs);
-    case 'import':
-      return client.places.import({
+    case 'import': {
+      const pending = client.places.import({
         input: args.input,
         tags: [
           ...args.tags.map(tag => ({tag})),
@@ -317,6 +320,11 @@ export function execute(args: InferValue<typeof parser>, client: Client) {
         ],
         notes: args.notes,
       });
+
+      return args.wait
+        ? pending.then(({jobId}) => waitForImport(jobId, client))
+        : pending;
+    }
     case 'place-tag':
       return client.places.tag({placeId: args.placeId, tag: args.tag, notes: args.notes});
     case 'place-untag':
@@ -359,6 +367,22 @@ export function execute(args: InferValue<typeof parser>, client: Client) {
       return updateTag(args, client);
     case 'delete':
       return client.tags.delete({id: args.id});
+  }
+}
+
+async function waitForImport(jobId: string, client: Client) {
+  while (true) {
+    const status = await client.places.importStatus({jobId});
+
+    if (status.state === 'completed') {
+      return status;
+    }
+
+    if (status.state === 'failed' || status.state === 'cancelled') {
+      throw new Error(`Import ${jobId} ${status.state}. ${status.error ?? ''}`.trim());
+    }
+
+    await new Promise(resolve => setTimeout(resolve, 1000));
   }
 }
 

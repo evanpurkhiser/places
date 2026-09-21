@@ -168,7 +168,8 @@ pg-boss creates and manages its own schema at startup.
 pnpm places import 'https://maps.app.goo.gl/jbJWNK3airzeACCC7'
 pnpm places search-gmaps 'coffee shops in East Village, NYC'
 pnpm places import 'gmaps:ChIJ...'
-pnpm places import 'https://www.instagram.com/p/SHORTCODE/' --tag type:cafe
+pnpm places import 'gmaps:ChIJ...' --wait
+pnpm places import 'https://www.instagram.com/p/SHORTCODE/' --wait --tag type:cafe
 pnpm places import 'gmaps:ChIJ...' --tag type:cafe --tag <tag-id>
 pnpm places import 'gmaps:ChIJ...' --notes 'Try the espresso tonic'
 pnpm places import 'gmaps:ChIJ...' --tag-note attr:nice-bathroom 'Code 1234'
@@ -178,7 +179,7 @@ pnpm places list
 
 Instagram post and reel URLs use the Instagram capture worker, which requires the
 Instagram/OpenAI configuration. Each matched place is queued for Google import.
-`import-status` tracks the complete operation and returns all saved
+`import-status` and `--wait` track the complete operation and return all saved
 place IDs. Status includes partial results while children run and reports failed
 or cancelled children. A repeated post skips capture and follows retained child
 jobs, including failures; after those jobs expire, it returns the source's saved
@@ -201,6 +202,10 @@ note independently.
 Import returns a job ID and provider type (`gmaps` or `instagram`). Google Maps
 inputs resolve to a Google Place ID in the RPC request. Import status returns
 the resulting place IDs.
+With `--wait`, the CLI polls status once per second until completion and prints
+`jobId`, `type`, `state`, `placeIds`, and `error` as JSON. Failed or cancelled jobs
+exit nonzero. Waiting continues through retries; Ctrl-C stops waiting while the
+queued job continues running.
 The Google worker fetches name, formatted address, Maps URL, coordinates, time zone,
 business status, and weekly hours, then inserts the place with `lastSync` set. Existing places are reused. Failed attempts
 leave no partial place; pg-boss retries three times with backoff. Status comes
