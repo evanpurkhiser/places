@@ -134,6 +134,13 @@ describe('Instagram capture', () => {
     const result = await run();
 
     expect(google.search).toHaveBeenCalledExactlyOnceWith('Example Cafe NYC', 5);
+    expect(result.metadata).toMatchObject({
+      version: 1,
+      model: 'o4-mini',
+      prompt: expect.any(String),
+      searches: [{query: 'Example Cafe NYC', limit: 5, candidates: fixture.candidates}],
+      usage: {requests: expect.any(Number)},
+    });
     expect(result.places[0]).toMatchObject({
       googlePlaceId: 'ChIJorchard',
       name: 'Example Cafe',
@@ -385,6 +392,10 @@ describe('Instagram capture', () => {
     expect(result.places.map(place => place.googlePlaceId)).toEqual([
       fixture.candidates[1]!.id,
       fixture.candidates[0]!.id,
+    ]);
+    expect(result.metadata.searches).toEqual([
+      {query: 'Cafe Manhattan', limit: 3, candidates: [fixture.candidates[1]!]},
+      {query: 'Cafe Brooklyn', limit: 3, candidates: [fixture.candidates[0]!]},
     ]);
     expect(google.search).toHaveBeenCalledTimes(2);
     expect(requests[1]!.input).toEqual(

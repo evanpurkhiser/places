@@ -11,6 +11,11 @@ import {type GooglePlaces, searchDetails} from '../google/index.ts';
 
 import type {InstagramPost} from './media.ts';
 
+const searchParameters = z.strictObject({
+  query: googleSearchQuery,
+  limit: z.number().int().min(1).max(10),
+});
+
 /**
  * Expose place search and frame inspection for the videos in this post.
  */
@@ -22,10 +27,7 @@ export function createCaptureTools(
     name: 'searchPlaces',
     description:
       'Search Google Maps for candidate places. Include location clues and compare several results.',
-    parameters: z.strictObject({
-      query: googleSearchQuery,
-      limit: z.number().int().min(1).max(10),
-    }),
+    parameters: searchParameters,
     errorFunction: null,
     execute: ({query, limit}) => google.search(query, limit),
   });
@@ -70,10 +72,20 @@ export function createCaptureTools(
 }
 
 /**
- * Recover validated Google candidates from executed searches, skipping tool errors.
+ * Recover search arguments and validated candidates, pairing tool items by call ID.
  */
 export function collectSearchResults(items: RunItem[]) {
-  const places = items.flatMap(item => {
+  const calls = new Map(
+    items.flatMap(item =>
+      item.type === 'tool_call_item' &&
+      item.rawItem.type === 'function_call' &&
+      item.rawItem.name === 'searchPlaces'
+        ? [[item.rawItem.callId, item.rawItem.arguments] as const]
+        : [],
+    ),
+  );
+
+  return items.flatMap(item => {
     if (
       item.type !== 'tool_call_output_item' ||
       item.executionStatus !== 'executed' ||
@@ -83,8 +95,13 @@ export function collectSearchResults(items: RunItem[]) {
       return [];
     }
 
-    return z.array(searchDetails).parse(item.output);
-  });
+    const argumentsJson = calls.get(item.rawItem.callId);
 
-  return new Map(places.map(place => [place.id, place]));
+    if (argumentsJson === undefined) {
+      throw new ModelBehaviorError('Search result has no matching tool call.');
+    }
+
+    const parameters = searchParameters.parse(JSON.parse(argumentsJson));
+    return [{...parameters, candidates: z.array(searchDetails).parse(item.output)}];
+  });
 }

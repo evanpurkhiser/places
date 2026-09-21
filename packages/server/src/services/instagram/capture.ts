@@ -87,7 +87,10 @@ function contentInput(post: InstagramPost): Exclude<UserMessageItem['content'], 
  */
 function resolveResult(
   result: z.infer<ReturnType<typeof captureOutput>>,
-  candidates: ReturnType<typeof collectSearchResults>,
+  candidates: Map<
+    string,
+    ReturnType<typeof collectSearchResults>[number]['candidates'][number]
+  >,
   catalog: CaptureCatalog,
   options: ParsedCaptureOptions,
 ) {
@@ -153,6 +156,7 @@ export async function capture(
   const catalog = captureCatalog.parse(catalogInput);
   const schema = captureOutput(resolveAssignableTags(catalog, options));
   const tools = createCaptureTools(dependencies.google, post);
+  const prompt = buildCapturePrompt(catalog, options);
   const timeout = AbortSignal.timeout(options.timeoutMs);
   const requestSignal = signal ? AbortSignal.any([signal, timeout]) : timeout;
   requestSignal.throwIfAborted();
@@ -160,7 +164,7 @@ export async function capture(
   const agent = new Agent({
     name: 'Instagram capture',
     model: new OpenAIResponsesModel(dependencies.openai, options.model),
-    instructions: buildCapturePrompt(catalog, options),
+    instructions: prompt,
     tools,
     outputType: schema,
     modelSettings: {
@@ -217,7 +221,27 @@ export async function capture(
     );
   }
 
+  const searches = collectSearchResults(result.newItems);
+  const candidates = new Map(
+    searches.flatMap(search =>
+      search.candidates.map(place => [place.id, place] as const),
+    ),
+  );
+
   return {
+    metadata: {
+      version: 1,
+      model: options.model,
+      options,
+      prompt,
+      searches,
+      usage: {
+        requests: result.state.usage.requests,
+        inputTokens: result.state.usage.inputTokens,
+        outputTokens: result.state.usage.outputTokens,
+        totalTokens: result.state.usage.totalTokens,
+      },
+    },
     source: {
       externalId: post.externalId,
       description: parsed.data.description,
@@ -226,12 +250,7 @@ export async function capture(
       postedAt: post.postedAt,
       thumbnailUrl: post.thumbnailUrl,
     },
-    ...resolveResult(
-      parsed.data,
-      collectSearchResults(result.newItems),
-      catalog,
-      options,
-    ),
+    ...resolveResult(parsed.data, candidates, catalog, options),
   };
 }
 

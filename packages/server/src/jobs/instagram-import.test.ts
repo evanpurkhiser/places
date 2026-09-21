@@ -99,6 +99,19 @@ describe.skipIf(!testUrl)('Instagram ingestion with PostgreSQL and pg-boss', () 
     importedTagId = imported!.id;
     reviewTagId = tag!.id;
     captured = {
+      metadata: {
+        version: 1,
+        model: 'test',
+        prompt: 'Test prompt',
+        searches: [],
+        usage: {requests: 1, inputTokens: 10, outputTokens: 10, totalTokens: 20},
+        options: {
+          ...config.instagram.capture,
+          excludedTags: [],
+          excludedNamespaces: [],
+          requiredNamespaces: [],
+        },
+      },
       source: {...metadata, description: 'A guide to two neighborhood cafes.'},
       places: ['first', 'second'].map(googlePlaceId => ({
         googlePlaceId,
