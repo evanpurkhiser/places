@@ -42,7 +42,7 @@ literal equality.
 
 ### Functions
 
-A function declares argument types, positional and named parameters, and a return
+A function declares ordered parameters and a return
 type. Its resolver produces a value, potentially asynchronously. Function results
 can feed filters or other functions whose parameter type accepts that result.
 
@@ -65,9 +65,9 @@ and distance until compilation.
 ### Filters
 
 A filter declares its arguments and compiles resolved values to a predicate.
-Filters and functions share argument syntax. Values without a key fill the declared
-positional parameters in order; named arguments bind to the named parameter map.
-Registrations can declare zero positional parameters to support named-only calls.
+Filters and functions share argument syntax. Values without a key fill parameters
+in declaration order; `key:value` fills the parameter with that name. A parameter
+can be supplied once per call, and positional values precede named values.
 Filters may resolve application data before compilation, such as looking up exact
 tag names. `tag`, `notes`, `has`, and `location` use the same registration mechanism.
 
@@ -87,8 +87,8 @@ own predicates and any correlated subqueries needed to express membership.
 ## Capability documentation
 
 Registrations supply descriptions for filters, functions, types, and parameters.
-Positional parameters have names for documentation; named parameters use their
-registration keys. Filters and functions may include complete query examples as
+Parameter names appear in documentation and can be used in calls. Filters and
+functions may include complete query examples as
 `{query, description?}` objects. Example descriptions explain the expected match.
 
 `engine.describe()` returns a serializable description of registered capabilities,

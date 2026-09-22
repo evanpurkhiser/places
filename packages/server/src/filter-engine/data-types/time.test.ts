@@ -12,16 +12,16 @@ import {time} from './time.ts';
 const probe = defineFilter({
   name: 'probe',
   description: 'Inspect resolved temporal values.',
-  positional: [{name: 'start', description: 'Start time.', type: time}],
-  named: {
+  parameters: {
+    start: {description: 'Start time.', type: time},
     until: {description: 'End time.', type: time, optional: true},
     for: {description: 'Elapsed duration.', type: duration, optional: true},
   },
-  compile: ({positional: [start], named}) =>
+  compile: ({start, until, for: duration}) =>
     JSON.stringify({
       start: start.value,
-      until: named.until?.value,
-      for: named.for?.value,
+      until: until?.value,
+      for: duration?.value,
     }),
 });
 const engine = createFilterEngine({

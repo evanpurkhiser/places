@@ -45,15 +45,12 @@ export const tag = defineFilter({
         'Require the tag, but exclude places whose assignment note mentions outlet.',
     },
   ],
-  positional: [
-    {
-      name: 'pattern',
+  parameters: {
+    name: {
       description: 'Assigned tag name or wildcard pattern.',
       type: tagName,
       operators: equality,
     },
-  ] as const,
-  named: {
     notes: {
       description: 'Match the note on the same tag assignment.',
       type: text,
@@ -61,7 +58,7 @@ export const tag = defineFilter({
       optional: true,
     },
   },
-  compile: ({positional: [name], named}): SQL => {
+  compile: ({name, notes}): SQL => {
     const normalized = name.value.value.trim().toLowerCase();
     const exact = name.operator !== null || name.value.wildcards.length === 0;
 
@@ -70,8 +67,8 @@ export const tag = defineFilter({
     const nameMatch = exact
       ? sql`${tags.name} = ${normalized}`
       : sql`${tags.name} like ${likePattern(name.value, false).trim().toLowerCase()} escape '\\'`;
-    const noteMatch = named.notes
-      ? sql`and ${matchText(placeTags.note, named.notes.value, named.notes.operator)}`
+    const noteMatch = notes
+      ? sql`and ${matchText(placeTags.note, notes.value, notes.operator)}`
       : sql``;
     return sql`exists (
       select 1 from ${placeTags}

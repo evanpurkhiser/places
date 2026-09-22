@@ -274,7 +274,7 @@ describe.skipIf(!testUrl)('place filtering through API and CLI', () => {
       const {stdout: documentation} = await cli('docs', 'filter');
       expect(documentation).toMatch(/^Filter language\n/);
       expect(documentation).toContain('Example: tag[favorite]');
-      expect(documentation).toContain('Example: source[type:instagram]');
+      expect(documentation).toContain('Example: source[instagram]');
       expect(documentation).not.toMatch(/^"/);
 
       try {

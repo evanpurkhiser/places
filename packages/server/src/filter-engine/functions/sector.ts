@@ -45,8 +45,8 @@ export const sector = defineFunction({
         'Search east for one kilometer with a 60-degree opening and 200-meter allowance around the sector.',
     },
   ],
-  positional: [{name: 'origin', description: 'Starting point.', type: geographicPoint}],
-  named: {
+  parameters: {
+    origin: {description: 'Starting point.', type: geographicPoint},
     towards: {
       description: 'Point setting the heading and default forward range.',
       type: geographicPoint,
@@ -91,18 +91,18 @@ export const sector = defineFunction({
     }
   },
   returns: geographicPredicate,
-  resolve: ({positional: [origin], named}) => {
-    const spread = named.spread?.value ?? 30;
-    const buffer = named.buffer?.value ?? 200;
-    const explicitRange = named.range?.value;
-    const bearing = named.bearing?.value;
-    const towards = named.towards?.value;
+  resolve: ({origin, spread, buffer, range: rangeArg, bearing, towards}) => {
+    const spreadValue = spread?.value ?? 30;
+    const bufferValue = buffer?.value ?? 200;
+    const explicitRange = rangeArg?.value;
+    const bearingValue = bearing?.value;
+    const towardsValue = towards?.value;
 
-    if (bearing !== undefined && (bearing < 0 || bearing >= 360)) {
+    if (bearingValue !== undefined && (bearingValue < 0 || bearingValue >= 360)) {
       throw new InvalidValueError('sector bearing must be from 0deg to below 360deg');
     }
 
-    if (spread <= 0 || spread > 360) {
+    if (spreadValue <= 0 || spreadValue > 360) {
       throw new InvalidValueError(
         'sector spread must be greater than 0deg and at most 360deg',
       );
@@ -114,19 +114,21 @@ export const sector = defineFunction({
     }
 
     if (
-      towards &&
-      towards.latitude === origin.value.latitude &&
-      (Math.abs(towards.latitude) === 90 ||
-        (towards.longitude - origin.value.longitude) % 360 === 0)
+      towardsValue &&
+      towardsValue.latitude === origin.value.latitude &&
+      (Math.abs(towardsValue.latitude) === 90 ||
+        (towardsValue.longitude - origin.value.longitude) % 360 === 0)
     ) {
       throw new InvalidValueError('sector towards must differ from its origin');
     }
 
-    if (towards && explicitRange === undefined) {
+    if (towardsValue && explicitRange === undefined) {
       const radians = (degrees: number) => (degrees * Math.PI) / 180;
       const originLatitude = radians(origin.value.latitude);
-      const targetLatitude = radians(towards.latitude);
-      const longitudeDifference = radians(towards.longitude - origin.value.longitude);
+      const targetLatitude = radians(towardsValue.latitude);
+      const longitudeDifference = radians(
+        towardsValue.longitude - origin.value.longitude,
+      );
       const dot =
         Math.sin(originLatitude) * Math.sin(targetLatitude) +
         Math.cos(originLatitude) *
@@ -142,24 +144,24 @@ export const sector = defineFunction({
 
     const center = sql`ST_SetSRID(ST_MakePoint(${origin.value.longitude}, ${origin.value.latitude}), 4326)::geography`;
 
-    const target = towards
-      ? sql`ST_SetSRID(ST_MakePoint(${towards.longitude}, ${towards.latitude}), 4326)::geography`
+    const target = towardsValue
+      ? sql`ST_SetSRID(ST_MakePoint(${towardsValue.longitude}, ${towardsValue.latitude}), 4326)::geography`
       : undefined;
     const range =
       explicitRange !== undefined
         ? sql`${explicitRange}::double precision`
         : sql`ST_Distance(${center}, ${target})`;
 
-    if (spread === 360) {
-      return sql`ST_DWithin(${places.coordinates}, ${center}, ${range} + ${buffer})`;
+    if (spreadValue === 360) {
+      return sql`ST_DWithin(${places.coordinates}, ${center}, ${range} + ${bufferValue})`;
     }
 
     const heading = target
       ? sql`ST_Azimuth(${center}, ${target})`
-      : sql`radians(${bearing})`;
+      : sql`radians(${bearingValue})`;
 
-    const sector = createSector(center, heading, range, spread);
+    const sector = createSector(center, heading, range, spreadValue);
 
-    return sql`ST_DWithin(${places.coordinates}, ${sector}, ${buffer})`;
+    return sql`ST_DWithin(${places.coordinates}, ${sector}, ${bufferValue})`;
   },
 });

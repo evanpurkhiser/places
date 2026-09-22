@@ -16,19 +16,19 @@ const boolean = {
 const present = defineFilter({
   name: 'present',
   description: 'Check property presence.',
-  positional: [{name: 'property', description: 'Property to check.', type: text}],
+  parameters: {property: {description: 'Property to check.', type: text}},
   validate: ([argument], registry) =>
     argument?.value.type === 'string' &&
     !registry.filters.get(argument.value.value)?.presence
       ? 'Property does not support presence'
       : undefined,
-  compile: ({positional: [argument]}, context: boolean, registry) =>
-    registry.filters.get(argument.value)!.presence!(context),
+  compile: ({property}, context: boolean, registry) =>
+    registry.filters.get(property.value)!.presence!(context),
 });
 const property = defineFunction({
   name: 'property',
   description: 'Select the value property.',
-  positional: [],
+  parameters: {},
   returns: text,
   validate: (_args, registry) =>
     registry.filters.has('value') ? undefined : 'Missing value filter',
@@ -42,7 +42,7 @@ function engine(invert: boolean) {
       defineFilter({
         name: 'value',
         description: 'Value with presence support.',
-        positional: [],
+        parameters: {},
         compile: (_args, context: boolean) => context,
         presence: (context: boolean) => (invert ? !context : context),
       }),

@@ -49,7 +49,8 @@ matching and exact equality. Unsupported combinations are errors.
 `!field[=value]` excludes an exact match. For tags, `!tag[=type.cafe]`
 selects places without that tag, regardless of other assigned tags.
 
-Source predicates use named arguments: `source[type:instagram, text:coffee]`
+Source predicates accept a positional provider type or named arguments:
+`source[instagram, text:coffee]` (equivalent to `source[type:instagram, text:coffee]`)
 requires one attached source matching both conditions. `source[text:coffee]`
 searches discovery context. `has[source]` requires any source; `!has[source]`
 selects places without sources. See [source filtering](sources.md#source-filtering)
@@ -106,6 +107,7 @@ spaces or square brackets, such as `tag["gmaps-list.[NYC] Coffee"]`.
 | Key        | Meaning                               | Example                              |
 | ---------- | ------------------------------------- | ------------------------------------ |
 | `tag`      | Match an assigned tag name or pattern | `tag[type.cafe]`                     |
+| `source`   | Match an attached discovery source    | `source[instagram, text:coffee]`     |
 | `name`     | Match the saved place name            | `name["La Cabra"]`                   |
 | `address`  | Match the formatted address as text   | `address["Broadway"]`                |
 | `notes`    | Match the general place note          | `notes[espresso]`                    |
@@ -405,9 +407,9 @@ positionalArgument := comparison? value
 `implicitAnd` requires whitespace and the start of another expression. Filter and
 function arguments share the same syntax and permit whitespace around separators.
 An identifier immediately followed by `[` starts a filter and must name a
-registered field. Arguments without a key bind to positional parameters in their
-declared order. Named arguments use `key:value` and follow any positional arguments;
-a call may contain only named arguments when its registered signature permits it.
+registered field. Arguments without a key fill parameters in declaration order.
+Named arguments use `key:value` and follow any positional arguments; each parameter
+can be supplied once. A call may contain only named arguments.
 Empty argument lists are valid syntax; required parameters are checked during
 validation. An empty string is written `""` and counts as an argument.
 
@@ -438,8 +440,8 @@ const query = parseQuery(
 ```
 
 The filter engine's `prepare(input)` parses syntax and validates it against the
-engine's registrations. Registrations define argument types, positional and named
-parameters, optional parameters, allowed operators, reference support, and custom
+engine's registrations. Registrations define ordered parameters with names,
+argument types, optionality, allowed operators, reference support, and custom
 constraints. Functions declare return types, which determine where they can be
 used. Unknown filters or functions, incompatible types, invalid values, and
 argument errors produce structured diagnostics with source locations before

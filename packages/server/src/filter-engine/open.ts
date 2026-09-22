@@ -228,14 +228,11 @@ export const open = defineFilter({
     },
     {query: '!open[@now]', description: 'Known to be closed at the current instant.'},
   ],
-  positional: [
-    {
-      name: 'time',
+  parameters: {
+    time: {
       description: 'An instant, local clock time, or recurring weekday/time.',
       type: time,
     },
-  ],
-  named: {
     for: {
       description:
         'Required continuous duration. Weekly times use wall-clock minutes; dated times use elapsed minutes. Mutually exclusive with until.',
@@ -254,13 +251,8 @@ export const open = defineFilter({
       return 'open accepts either for or until, not both';
     }
   },
-  compile: ({positional: [start], named}, context: Context) => {
-    const predicate = coverage(
-      start.value,
-      named.until?.value,
-      named.for?.value,
-      context.now,
-    );
+  compile: ({time, until, for: duration}, context: Context) => {
+    const predicate = coverage(time.value, until?.value, duration?.value, context.now);
 
     // Keep containment visible to the planner so weekly queries can use GiST.
     // DISTINCT FROM makes an absent business status neutral; missing hours still

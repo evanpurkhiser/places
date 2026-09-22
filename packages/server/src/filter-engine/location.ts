@@ -23,8 +23,8 @@ export const location = defineFilter({
       description: 'Places inside the given map bounds, including edges.',
     },
   ],
-  positional: [
-    {name: 'condition', description: 'Geographic condition.', type: geographicPredicate},
-  ],
-  compile: ({positional: [condition]}) => condition.value,
+  parameters: {
+    condition: {description: 'Geographic condition.', type: geographicPredicate},
+  },
+  compile: ({condition}) => condition.value,
 });

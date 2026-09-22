@@ -4,30 +4,24 @@ import type {
   SignatureDescription,
 } from '@places/common/filter-engine';
 
-function parameterLabel(parameter: ParameterDescription, named: boolean): string {
-  const value = named ? `${parameter.name}:<${parameter.type}>` : `<${parameter.name}>`;
-  return parameter.optional ? `${value}?` : value;
+function parameterLabel(parameter: ParameterDescription): string {
+  return `${parameter.name}:<${parameter.type}>${parameter.optional ? '?' : ''}`;
 }
 
 function signature(definition: SignatureDescription, kind: 'filter' | 'function') {
-  const parameters = [
-    ...definition.positional.map(parameter => parameterLabel(parameter, false)),
-    ...definition.named.map(parameter => parameterLabel(parameter, true)),
-  ].join(', ');
+  const parameters = definition.parameters.map(parameterLabel).join(', ');
   return kind === 'filter'
     ? `${definition.name}[${parameters}]`
     : `${definition.name}(${parameters})`;
 }
 
 function details(definition: SignatureDescription): string[] {
-  const parameters = [...definition.positional, ...definition.named].flatMap(
-    parameter => [
-      `  ${parameter.name}: ${parameter.type}${parameter.optional ? ' (optional)' : ''} — ${parameter.description}`,
-      ...(parameter.operators.length
-        ? [`    Operators: ${parameter.operators.join(', ')}`]
-        : []),
-    ],
-  );
+  const parameters = definition.parameters.flatMap(parameter => [
+    `  ${parameter.name}: ${parameter.type}${parameter.optional ? ' (optional)' : ''} — ${parameter.description}`,
+    ...(parameter.operators.length
+      ? [`    Operators: ${parameter.operators.join(', ')}`]
+      : []),
+  ]);
   return [
     `  ${definition.description}`,
     ...parameters,
@@ -59,7 +53,7 @@ export function formatFilterDocs(documentation: EngineDescription): string {
     `  name["Joe's (Downtown)"]`,
     String.raw`Inside quotes, \" escapes a quote, \\ a backslash, and \* a literal star.`,
     'An unescaped * matches zero or more characters, even inside quotes.',
-    '<...> marks a parameter; ? marks an optional one.',
+    'Arguments fill parameters in order or by name; ? marks an optional one.',
     ...section(
       'Filters',
       documentation.filters.flatMap(filter => [

@@ -19,7 +19,7 @@ function makeEngine(propertyName: string, presence: (context: Context) => SQL) {
       defineFilter({
         name: propertyName,
         description: 'Test presence property.',
-        positional: [],
+        parameters: {},
         compile: () => sql`true`,
         presence,
       }),

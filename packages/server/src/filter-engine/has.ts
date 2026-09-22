@@ -12,13 +12,12 @@ export const has = defineFilter({
     {query: '!has[notes]', description: 'Places without a general note.'},
     {query: 'has[tag]', description: 'Places with at least one tag.'},
   ],
-  positional: [
-    {
-      name: 'property',
+  parameters: {
+    property: {
       description: 'Property to check, such as notes or tag.',
       type: property,
     },
-  ] as const,
+  },
   validate: ([argument], registry) => {
     const value = argument.value;
 
@@ -26,11 +25,11 @@ export const has = defineFilter({
       return `Presence is not supported for ${value.value}`;
     }
   },
-  compile: ({positional: [argument]}, context: Context, registry): SQL => {
-    const filter = registry.filters.get(argument.value);
+  compile: ({property}, context: Context, registry): SQL => {
+    const filter = registry.filters.get(property.value);
 
     if (!filter?.presence) {
-      throw new InvalidValueError(`Presence is not supported for ${argument.value}`);
+      throw new InvalidValueError(`Presence is not supported for ${property.value}`);
     }
 
     return filter.presence(context);

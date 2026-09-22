@@ -76,16 +76,14 @@ const textFilters = (
     name,
     description,
     examples,
-    positional: [
-      {
-        name: 'pattern',
+    parameters: {
+      pattern: {
         description: 'Text or wildcard pattern to match.',
         type: text,
         operators: equality,
       },
-    ] as const,
-    compile: ({positional: [argument]}): SQL =>
-      matchText(column, argument.value, argument.operator),
+    },
+    compile: ({pattern}): SQL => matchText(column, pattern.value, pattern.operator),
     presence: (): SQL => present(column),
   }),
 );

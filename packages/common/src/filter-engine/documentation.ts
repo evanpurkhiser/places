@@ -21,8 +21,7 @@ export interface SignatureDescription {
   name: string;
   description: string;
   examples: QueryExample[];
-  positional: ParameterDescription[];
-  named: ParameterDescription[];
+  parameters: ParameterDescription[];
 }
 
 export interface FilterDescription extends SignatureDescription {
@@ -63,10 +62,7 @@ export function describeSignature<Context>(
     name: definition.name,
     description: definition.description,
     examples: (definition.examples ?? []).map(example => ({...example})),
-    positional: definition.positional.map(parameter =>
-      describeParameter(parameter.name, parameter),
-    ),
-    named: Object.entries(definition.named ?? {}).map(([name, parameter]) =>
+    parameters: Object.entries(definition.parameters).map(([name, parameter]) =>
       describeParameter(name, parameter),
     ),
   };

@@ -23,7 +23,8 @@ async function compile(query: string) {
 describe('source filters', () => {
   it.each([
     ['source[id:invalid]', 'invalid_value'],
-    ['source[instagram]', 'argument_count'],
+    ['source[instagram, type:instagram]', 'duplicate_argument'],
+    ['source[instagram, other, more, values, extra]', 'argument_count'],
     ['source[type:instagram, type:instagram]', 'duplicate_argument'],
     ['source[unknown:value]', 'unknown_argument'],
     ['source[type:>instagram]', 'invalid_operator'],
@@ -55,6 +56,12 @@ describe('source filters', () => {
       '%100\\%\\_good%',
     ]);
     expect(result.sql).not.toContain("a'b");
+  });
+
+  it('uses the positional argument as the source type', async () => {
+    expect(await compile('source[INSTAGRAM, text:coffee]')).toEqual(
+      await compile('source[type:INSTAGRAM, text:coffee]'),
+    );
   });
 
   it('treats empty type and URL literals as unmatched values', async () => {

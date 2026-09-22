@@ -10,7 +10,6 @@ export type {
   FunctionDefinition,
   Parameter,
   QueryExample,
-  PositionalParameter,
   ResolvedArgument,
   ResolvedArguments,
   Signature,

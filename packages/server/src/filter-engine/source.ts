@@ -31,15 +31,15 @@ function matchSourceType(value: string): SQL {
 export const source = defineFilter({
   name: 'source',
   description:
-    'Match an attached discovery source. All arguments match the same source and its place association. An empty call matches any source; ! excludes places with a matching source.',
+    'Match an attached discovery source. Arguments match the same source and its place association. An empty call matches any source; ! excludes places with a matching source.',
   examples: [
-    {query: 'source[type:instagram]', description: 'Places discovered on Instagram.'},
+    {query: 'source[instagram]', description: 'Places discovered on Instagram.'},
     {
       query: 'source[id:"10000000-0000-4000-8000-000000000001"]',
       description: 'Places attached to a specific source UUID.',
     },
     {
-      query: 'source[type:instagram, text:coffee]',
+      query: 'source[instagram, text:coffee]',
       description: 'Places with Instagram discovery context mentioning coffee.',
     },
     {
@@ -54,8 +54,7 @@ export const source = defineFilter({
     {query: 'has[source]', description: 'Places with at least one attached source.'},
     {query: '!has[source]', description: 'Places without attached sources.'},
   ],
-  positional: [],
-  named: {
+  parameters: {
     type: {
       description:
         'Exact provider type, ignoring case, such as instagram. Unknown types match no places.',
@@ -83,17 +82,17 @@ export const source = defineFilter({
       optional: true,
     },
   },
-  compile: ({named}): SQL =>
+  compile: ({type, id, url, text}): SQL =>
     attachedSource(
       and(
-        named.type ? matchSourceType(named.type.value) : undefined,
-        named.id ? eq(sources.id, named.id.value) : undefined,
-        named.url ? eq(sources.url, named.url.value) : undefined,
-        named.text
+        type ? matchSourceType(type.value) : undefined,
+        id ? eq(sources.id, id.value) : undefined,
+        url ? eq(sources.url, url.value) : undefined,
+        text
           ? or(
-              matchText(sources.description, named.text.value, named.text.operator),
-              matchInstagramCaption(named.text.value, named.text.operator),
-              matchText(placeSources.description, named.text.value, named.text.operator),
+              matchText(sources.description, text.value, text.operator),
+              matchInstagramCaption(text.value, text.operator),
+              matchText(placeSources.description, text.value, text.operator),
             )
           : undefined,
       ),

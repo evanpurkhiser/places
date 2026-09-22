@@ -342,12 +342,14 @@ assignment's note. Exact unknown tags return errors, including under negation.
 `has` supports filters that register a presence check: `tag`, `source`, `name`,
 `address`, and `notes`.
 
-Source filters use named arguments, all matching the same attached source:
+Source filters accept a provider type first, or named arguments. All conditions
+match the same attached source:
 
 ```text
+source[instagram]
 source[type:instagram]
 source[id:"10000000-0000-4000-8000-000000000001"]
-source[type:instagram, text:coffee]
+source[instagram, text:coffee]
 source[url:"https://www.instagram.com/p/POST/"]
 source[text:coffee] source[text:cocktails]
 !has[source]

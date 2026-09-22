@@ -10,7 +10,7 @@ it('renders signatures, optional arguments, capabilities, and examples as text',
         description: 'Match an assigned tag.',
         presence: true,
         examples: [{query: 'tag[type.cafe]', description: 'Find cafes.'}],
-        positional: [
+        parameters: [
           {
             name: 'pattern',
             description: 'Tag pattern.',
@@ -18,8 +18,6 @@ it('renders signatures, optional arguments, capabilities, and examples as text',
             optional: false,
             operators: ['='],
           },
-        ],
-        named: [
           {
             name: 'notes',
             description: 'Assignment note.',
@@ -35,8 +33,7 @@ it('renders signatures, optional arguments, capabilities, and examples as text',
         name: 'label',
         description: 'Resolve a label.',
         returns: 'text',
-        positional: [],
-        named: [],
+        parameters: [],
         examples: [{query: 'tag[label()]'}],
       },
     ],
@@ -45,7 +42,7 @@ it('renders signatures, optional arguments, capabilities, and examples as text',
     ],
   });
 
-  expect(output).toContain('tag[<pattern>, notes:<text>?]');
+  expect(output).toContain('tag[pattern:<text>, notes:<text>?]');
   expect(output).toContain('notes: text (optional) — Assignment note.');
   expect(output).toContain('Operators: =');
   expect(output).toContain('Presence: has[tag]');
@@ -74,8 +71,7 @@ it('only advertises functions registered for each type', () => {
         name: 'origin',
         description: 'Origin point.',
         returns: 'point',
-        positional: [],
-        named: [],
+        parameters: [],
         examples: [],
       },
     ],

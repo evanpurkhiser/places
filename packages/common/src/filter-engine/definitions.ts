@@ -43,13 +43,6 @@ export interface Parameter<T = unknown, Context = unknown> {
   optional?: boolean;
 }
 
-export interface PositionalParameter<T = unknown, Context = unknown> extends Parameter<
-  T,
-  Context
-> {
-  name: string;
-}
-
 /**
  * Read-only access to the filters registered with the invoking engine.
  */
@@ -58,10 +51,10 @@ export interface FilterRegistry<Predicate, Context> {
 }
 
 export interface Signature<Context = unknown> {
-  positional: ReadonlyArray<PositionalParameter<unknown, Context>>;
-  named?: Readonly<Record<string, Parameter<unknown, Context>>>;
+  parameters: Readonly<Record<string, Parameter<unknown, Context>>>;
   /**
-   * Cross-argument constraints run before any asynchronous resolution.
+   * Cross-argument constraints run before resolution. Positional arguments carry
+   * the name of the parameter they fill.
    */
   validate?(
     args: readonly Argument[],
@@ -82,21 +75,9 @@ type ArgumentFor<P> =
       : ResolvedArgument<T>
     : never;
 
-type ResolvedPositional<P extends readonly unknown[]> = {
-  [K in keyof P]: ArgumentFor<P[K]>;
-};
+export type ResolvedArguments<P> = {[K in keyof P]: ArgumentFor<P[K]>};
 
-export type ResolvedArguments<S extends {positional: readonly unknown[]}> = {
-  positional: ResolvedPositional<S['positional']>;
-  named: S extends {named: infer N}
-    ? {[K in keyof N]: ArgumentFor<N[K]>}
-    : Record<never, never>;
-};
-
-export interface RuntimeArguments {
-  positional: ResolvedArgument[];
-  named: Record<string, ResolvedArgument>;
-}
+export type RuntimeArguments = Record<string, ResolvedArgument>;
 
 export interface QueryExample {
   query: string;
@@ -129,23 +110,18 @@ export interface FunctionDefinition<Context> extends Signature<Context> {
 export function defineFilter<
   Predicate,
   Context,
-  const P extends ReadonlyArray<PositionalParameter<unknown, Context>>,
-  const N extends Readonly<Record<string, Parameter<unknown, Context>>> = Record<
-    never,
-    never
-  >,
+  const P extends Readonly<Record<string, Parameter<unknown, Context>>>,
 >(definition: {
   name: string;
   description: string;
   examples?: readonly QueryExample[];
-  positional: P;
-  named?: N;
+  parameters: P;
   validate?(
     args: readonly Argument[],
     registry: FilterRegistry<unknown, Context>,
   ): string | undefined;
   compile(
-    args: ResolvedArguments<{positional: P; named: N}>,
+    args: ResolvedArguments<P>,
     context: Context,
     registry: FilterRegistry<Predicate, Context>,
   ): Predicate;
@@ -157,26 +133,18 @@ export function defineFilter<
 export function defineFunction<
   T,
   Context,
-  const P extends ReadonlyArray<PositionalParameter<unknown, Context>>,
-  const N extends Readonly<Record<string, Parameter<unknown, Context>>> = Record<
-    never,
-    never
-  >,
+  const P extends Readonly<Record<string, Parameter<unknown, Context>>>,
 >(definition: {
   name: string;
   description: string;
   examples?: readonly QueryExample[];
-  positional: P;
-  named?: N;
+  parameters: P;
   validate?(
     args: readonly Argument[],
     registry: FilterRegistry<unknown, Context>,
   ): string | undefined;
   returns: ValueType<T, Context, unknown>;
-  resolve(
-    args: ResolvedArguments<{positional: P; named: N}>,
-    context: Context,
-  ): T | Promise<T>;
+  resolve(args: ResolvedArguments<P>, context: Context): T | Promise<T>;
 }): FunctionDefinition<Context> {
   return definition as unknown as FunctionDefinition<Context>;
 }

@@ -161,22 +161,9 @@ export class FilterEngine<Predicate, Context> {
 
   #validateRegistrations() {
     for (const definition of [...this.#filters.values(), ...this.#functions.values()]) {
-      const parameters = [
-        ...definition.positional,
-        ...Object.values(definition.named ?? {}),
-      ];
-      parameters.forEach(parameter => this.#checkType(parameter.type));
-      let optional = false;
-
-      for (const parameter of definition.positional) {
-        if (optional && !parameter.optional) {
-          throw new Error(
-            `Required positional parameter follows optional parameter: ${definition.name}`,
-          );
-        }
-
-        optional ||= parameter.optional === true;
-      }
+      Object.values(definition.parameters).forEach(parameter =>
+        this.#checkType(parameter.type),
+      );
     }
 
     this.#functions.forEach(definition => this.#checkType(definition.returns));
@@ -249,21 +236,22 @@ export class FilterEngine<Predicate, Context> {
     signature: Signature<Context>,
     source: SourceSpan,
   ): ResolveArguments<Context> {
-    const positional = args.filter(argument => argument.name === null);
-    const required = signature.positional.filter(parameter => !parameter.optional).length;
+    const parameters = Object.entries(signature.parameters);
+    const positionalCount = args.filter(argument => argument.name === null).length;
 
-    if (positional.length < required || positional.length > signature.positional.length) {
+    if (positionalCount > parameters.length) {
       fail(
         'argument_count',
-        `Expected ${required}–${signature.positional.length} positional arguments; got ${positional.length}`,
+        `Expected at most ${parameters.length} positional arguments; got ${positionalCount}`,
         source,
       );
     }
 
     let position = 0;
+    let namedSeen = false;
     const seen = new Set<string>();
     const plans = args.map(argument => {
-      if (argument.name === null && seen.size) {
+      if (argument.name === null && namedSeen) {
         fail(
           'argument_order',
           'Positional arguments must precede named arguments',
@@ -271,24 +259,23 @@ export class FilterEngine<Predicate, Context> {
         );
       }
 
-      if (argument.name !== null && seen.has(argument.name)) {
-        fail('duplicate_argument', `Duplicate argument: ${argument.name}`, argument);
-      }
+      namedSeen ||= argument.name !== null;
 
+      const name = argument.name ?? parameters[position++]?.[0];
       const parameter =
-        argument.name === null
-          ? signature.positional[position++]
-          : Object.hasOwn(signature.named ?? {}, argument.name)
-            ? signature.named![argument.name]
-            : undefined;
+        name && Object.hasOwn(signature.parameters, name)
+          ? signature.parameters[name]
+          : undefined;
 
       if (!parameter) {
         fail('unknown_argument', `Unknown argument: ${argument.name}`, argument);
       }
 
-      if (argument.name !== null) {
-        seen.add(argument.name);
+      if (seen.has(name)) {
+        fail('duplicate_argument', `Duplicate argument: ${name}`, argument);
       }
+
+      seen.add(name);
 
       if (
         argument.operator !== null &&
@@ -301,16 +288,19 @@ export class FilterEngine<Predicate, Context> {
         );
       }
 
-      return {argument, resolve: this.#prepareValue(argument, parameter.type)};
+      return {name, argument, resolve: this.#prepareValue(argument, parameter.type)};
     });
 
-    for (const [name, parameter] of Object.entries(signature.named ?? {})) {
+    for (const [name, parameter] of parameters) {
       if (!parameter.optional && !seen.has(name)) {
         fail('missing_argument', `Missing argument: ${name}`, source);
       }
     }
 
-    const message = signature.validate?.(args, this.#registry);
+    const message = signature.validate?.(
+      plans.map(({argument, name}) => ({...argument, name})),
+      this.#registry,
+    );
 
     if (message) {
       fail('invalid_value', message, source);
@@ -318,20 +308,16 @@ export class FilterEngine<Predicate, Context> {
 
     return async context => {
       const resolvedArgs = await Promise.all(
-        plans.map(async ({argument, resolve}) => ({
+        plans.map(async ({name, argument, resolve}) => ({
+          name,
           value: await resolve(context),
           operator: argument.operator,
           source: argument,
         })),
       );
-      return {
-        positional: resolvedArgs.filter(argument => argument.source.name === null),
-        named: Object.fromEntries(
-          resolvedArgs
-            .filter(argument => argument.source.name !== null)
-            .map(argument => [argument.source.name!, argument]),
-        ),
-      };
+      return Object.fromEntries(
+        resolvedArgs.map(({name, ...argument}) => [name, argument]),
+      );
     };
   }
 

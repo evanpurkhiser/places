@@ -96,12 +96,13 @@ behavior will be designed as part of that work.
 
 ## Source filtering
 
-`source[...]` selects places with an attached source satisfying every named
-argument. All conditions apply to the same source and its association with that
+`source[...]` selects places with an attached source satisfying every argument.
+The first positional argument is the provider type; `type:instagram` is equivalent
+to `instagram`. All conditions apply to the same source and its association with that
 place. Separate predicates can match different sources:
 
 ```text
-source[type:instagram, text:coffee]
+source[instagram, text:coffee]
 source[text:coffee] source[text:cocktails]
 ```
 

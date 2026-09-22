@@ -7,10 +7,13 @@ import {longitude} from '../data-types/longitude.ts';
 export const point = defineFunction({
   name: 'point',
   description: 'A geographic point in longitude, latitude order (WGS84).',
-  positional: [
-    {name: 'longitude', description: 'Longitude in degrees.', type: longitude},
-    {name: 'latitude', description: 'Latitude in degrees.', type: latitude},
-  ],
+  parameters: {
+    longitude: {description: 'Longitude in degrees.', type: longitude},
+    latitude: {description: 'Latitude in degrees.', type: latitude},
+  },
   returns: geographicPoint,
-  resolve: ({positional: [lng, lat]}) => ({longitude: lng.value, latitude: lat.value}),
+  resolve: ({longitude, latitude}) => ({
+    longitude: longitude.value,
+    latitude: latitude.value,
+  }),
 });

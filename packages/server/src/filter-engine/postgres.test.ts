@@ -127,6 +127,9 @@ describe.skipIf(!testUrl)('filter engine with PostgreSQL', () => {
     ['source[]', ['Bar', 'Cafe']],
     ['!has[source]', ['Empty']],
     ['source[type:INSTAGRAM]', ['Bar', 'Cafe']],
+    ['source[INSTAGRAM]', ['Bar', 'Cafe']],
+    ['source[instagram, text:cocktails]', ['Cafe']],
+    ['source[unknown]', []],
     ['source[type:unknown]', []],
     ['source[type:""]', []],
     ['source[url:""]', []],
@@ -147,12 +150,14 @@ describe.skipIf(!testUrl)('filter engine with PostgreSQL', () => {
     ['source[url:"https://www.instagram.com/p/AlicePost"]', []],
     ['source[text:cocktails] OR !has[source]', ['Cafe', 'Empty']],
     ['source[type:instagram] tag[laptop-friendly]', ['Cafe']],
+    ['tag[name:laptop-friendly]', ['Cafe']],
   ])('matches attached sources: %s', async (query, expected) => {
     expect(await names(query)).toEqual(expected);
   });
 
   it('correlates source IDs and nullable metadata without duplicating places', async () => {
     expect(await names(`source[id:${aliceId}]`)).toEqual(['Bar', 'Cafe']);
+    expect(await names(`source[instagram, ${aliceId}]`)).toEqual(['Bar', 'Cafe']);
     expect(await names(`source[id:${bobId}, text:coffee]`)).toEqual([]);
     expect(await names(`source[id:${randomUUID()}]`)).toEqual([]);
     expect(await names(`source[id:${blankId}, text:*]`)).toEqual([]);

@@ -12,8 +12,7 @@ const signature = z.object({
   name: z.string(),
   description: z.string(),
   examples: z.array(z.object({query: z.string(), description: z.string().optional()})),
-  positional: z.array(parameter),
-  named: z.array(parameter),
+  parameters: z.array(parameter),
 });
 
 export const queryDescription = z.object({

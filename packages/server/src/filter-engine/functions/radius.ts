@@ -9,11 +9,11 @@ import {geographicPredicate} from '../data-types/geographic-predicate.ts';
 export const radius = defineFunction({
   name: 'radius',
   description: 'Match places at most the given geographic distance from a point.',
-  positional: [
-    {name: 'origin', description: 'Center point.', type: geographicPoint},
-    {name: 'distance', description: 'Maximum distance from the center.', type: distance},
-  ],
+  parameters: {
+    origin: {description: 'Center point.', type: geographicPoint},
+    distance: {description: 'Maximum distance from the center.', type: distance},
+  },
   returns: geographicPredicate,
-  resolve: ({positional: [origin, distance]}) =>
+  resolve: ({origin, distance}) =>
     sql`ST_DWithin(${places.coordinates}, ST_SetSRID(ST_MakePoint(${origin.value.longitude}, ${origin.value.latitude}), 4326)::geography, ${distance.value})`,
 });

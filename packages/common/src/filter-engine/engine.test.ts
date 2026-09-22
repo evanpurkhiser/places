@@ -39,30 +39,29 @@ const name = defineFilter({
     {query: 'name[cafe, notes:upstairs]'},
   ],
   description: 'Name test registration.',
-  positional: [
-    {name: 'value', description: 'Argument value.', type: text, operators: ['=']},
-  ],
-  named: {notes: {description: 'Argument value.', type: text, optional: true}},
-  compile: ({positional: [value], named}, _context: null) =>
-    `name${value.operator ?? '~'}${value.value.value}${named.notes ? `/${named.notes.value.value}` : ''}`,
+  parameters: {
+    value: {description: 'Argument value.', type: text, operators: ['=']},
+    notes: {description: 'Argument value.', type: text, optional: true},
+  },
+  compile: ({value, notes}, _context: null) =>
+    `name${value.operator ?? '~'}${value.value.value}${notes ? `/${notes.value.value}` : ''}`,
   presence: (_context: null) => 'name IS PRESENT',
 });
 const count = defineFilter({
   name: 'count',
   description: 'Count test registration.',
-  positional: [
-    {name: 'value', description: 'Argument value.', type: number, operators: ['>=']},
-  ],
-  compile: ({positional: [value]}, _context: null) =>
-    `count${value.operator ?? '='}${value.value}`,
+  parameters: {
+    value: {description: 'Argument value.', type: number, operators: ['>=']},
+  },
+  compile: ({value}, _context: null) => `count${value.operator ?? '='}${value.value}`,
 });
 const twice = defineFunction({
   name: 'twice',
   examples: [{query: 'count[twice(2)]'}],
   description: 'Twice test registration.',
-  positional: [{name: 'value', description: 'Argument value.', type: number}],
+  parameters: {value: {description: 'Argument value.', type: number}},
   returns: number,
-  resolve: ({positional: [value]}, _context: null) => value.value * 2,
+  resolve: ({value}, _context: null) => value.value * 2,
 });
 
 function makeEngine() {
@@ -101,7 +100,7 @@ describe('filter engine', () => {
         {query: 'name[cafe, notes:upstairs]'},
       ],
       presence: true,
-      positional: [
+      parameters: [
         {
           name: 'value',
           description: 'Argument value.',
@@ -109,8 +108,6 @@ describe('filter engine', () => {
           optional: false,
           operators: ['='],
         },
-      ],
-      named: [
         {
           name: 'notes',
           description: 'Argument value.',
@@ -127,7 +124,7 @@ describe('filter engine', () => {
         description: twice.description,
         examples: [{query: 'count[twice(2)]'}],
         returns: 'number',
-        positional: [
+        parameters: [
           {
             name: 'value',
             description: 'Argument value.',
@@ -136,7 +133,6 @@ describe('filter engine', () => {
             operators: [],
           },
         ],
-        named: [],
       },
     ]);
     expect(JSON.parse(JSON.stringify(description))).toEqual(description);
@@ -175,7 +171,7 @@ describe('filter engine', () => {
     const engine = makeEngine();
     const description = engine.describe();
     description.filters[0]!.examples.push({query: 'invalid example'});
-    description.filters[0]!.positional[0]!.operators.push('>');
+    description.filters[0]!.parameters[0]!.operators.push('>');
     description.types[0]!.name = 'changed';
     expect(engine.describe()).toEqual(makeEngine().describe());
     expect(() => engine.prepare('name[>x]')).toThrow('Operator > is not allowed');
@@ -209,10 +205,10 @@ describe('filter engine', () => {
         defineFilter({
           name: 'inspect',
           description: 'Inspect test registration.',
-          positional: [
-            {name: 'value', description: 'Argument value.', type: text, operators: ['=']},
-          ],
-          compile: ({positional: [value]}, _ctx: null) => value,
+          parameters: {
+            value: {description: 'Argument value.', type: text, operators: ['=']},
+          },
+          compile: ({value}, _ctx: null) => value,
         }),
       ],
     });
@@ -230,6 +226,8 @@ describe('filter engine', () => {
 
   it('supports optional named parameters', async () => {
     expect(await compile('name[cafe, notes:upstairs]')).toBe('name~cafe/upstairs');
+    expect(await compile('name[value:cafe, notes:upstairs]')).toBe('name~cafe/upstairs');
+    expect(await compile('name[cafe, upstairs]')).toBe('name~cafe/upstairs');
     expect(await compile('name[cafe]')).toBe('name~cafe');
   });
 
@@ -237,20 +235,18 @@ describe('filter engine', () => {
     const difference = defineFunction({
       name: 'difference',
       description: 'Subtract the second value from the first.',
-      positional: [
-        {name: 'first', description: 'First value.', type: number},
-        {name: 'second', description: 'Second value.', type: number},
-      ],
+      parameters: {
+        first: {description: 'First value.', type: number},
+        second: {description: 'Second value.', type: number},
+      },
       returns: number,
-      resolve: ({positional: [first, second]}, _context: null) =>
-        first.value - second.value,
+      resolve: ({first, second}, _context: null) => first.value - second.value,
     });
     const named = defineFilter({
       name: 'named',
       description: 'A filter with only named parameters.',
-      positional: [],
-      named: {value: {description: 'Value to match.', type: number}},
-      compile: ({named: {value}}, _context: null) => `value=${value.value}`,
+      parameters: {value: {description: 'Value to match.', type: number}},
+      compile: ({value}, _context: null) => `value=${value.value}`,
     });
     const engine = createFilterEngine({
       types: [number],
@@ -264,23 +260,25 @@ describe('filter engine', () => {
     );
 
     expect(result).toBe('value=5');
+    expect(await compile('count[value:twice(value:2)]')).toBe('count=4');
     expect(() => engine.prepare('named[]')).toThrow('Missing argument: value');
     expect(() => engine.prepare('named[other:3]')).toThrow('Unknown argument: other');
     expect(() => engine.prepare('named[value:3, value:4]')).toThrow('Duplicate argument');
-    expect(() => engine.prepare('count[value:3]')).toThrow('positional arguments');
+    expect(() => engine.prepare('count[value:3]')).not.toThrow();
+    expect(() => engine.prepare('named[3]')).not.toThrow();
+    expect(() => engine.prepare('named[3, value:4]')).toThrow('Duplicate argument');
   });
 
   it('validates named function parameters, ordering, and cross-argument constraints', async () => {
     const add = defineFunction({
       name: 'add',
       description: 'Add test registration.',
-      positional: [
-        {name: 'value', description: 'Argument value.', type: number, optional: true},
-      ],
-      named: {amount: {description: 'Argument value.', type: number}},
+      parameters: {
+        value: {description: 'Argument value.', type: number, optional: true},
+        amount: {description: 'Argument value.', type: number},
+      },
       returns: number,
-      resolve: ({positional: [value], named}, _context: null) =>
-        (value?.value ?? 0) + named.amount.value,
+      resolve: ({value, amount}, _context: null) => (value?.value ?? 0) + amount.value,
       validate: args =>
         args.length > 1 ? 'Only one argument for this example' : undefined,
     });
@@ -321,17 +319,17 @@ describe('filter engine', () => {
     const value = defineFunction({
       name: 'value',
       description: 'Value test registration.',
-      positional: [],
+      parameters: {},
       returns: type,
       resolve: (_args, _context: null) => 3,
     });
     const filter = defineFilter({
       name: 'value',
       description: 'Value test registration.',
-      positional: [
-        {name: 'value', description: 'Argument value.', type, operators: ['>=']},
-      ],
-      compile: ({positional: [argument]}, _ctx: null) => `${argument.value}`,
+      parameters: {
+        value: {description: 'Argument value.', type, operators: ['>=']},
+      },
+      compile: ({value}, _ctx: null) => `${value.value}`,
     });
     const engine = createFilterEngine({
       types: [type],
@@ -356,7 +354,7 @@ describe('filter engine', () => {
     const filter = defineFilter({
       name: 'broken',
       description: 'Broken test registration.',
-      positional: [],
+      parameters: {},
       compile: (_args, _ctx: null): string => {
         throw error;
       },
@@ -386,18 +384,16 @@ describe('filter engine', () => {
     const add = defineFunction({
       name: 'add',
       description: 'Add numbers.',
-      positional: [
-        {
-          name: 'value',
+      parameters: {
+        value: {
           description: 'Optional base value.',
           type: number,
           optional: true,
         },
-      ],
-      named: {amount: {description: 'Amount to add.', type: number}},
+        amount: {description: 'Amount to add.', type: number},
+      },
       returns: number,
-      resolve: ({positional: [value], named}, _context: null) =>
-        (value?.value ?? 0) + named.amount.value,
+      resolve: ({value, amount}, _context: null) => (value?.value ?? 0) + amount.value,
       validate: args => (args.length > 1 ? 'Only one argument' : undefined),
     });
     const engine = createFilterEngine({
@@ -440,8 +436,9 @@ describe('filter engine', () => {
   it.each([
     ['unknown[x]', 'unknown_filter'],
     ['name[unknown()]', 'unknown_function'],
-    ['name[]', 'argument_count'],
-    ['name[a,b]', 'argument_count'],
+    ['name[]', 'missing_argument'],
+    ['name[a,b,c]', 'argument_count'],
+    ['name[a, value:b]', 'duplicate_argument'],
     ['name[a, other:b]', 'unknown_argument'],
     ['name[a, notes:b, notes:c]', 'duplicate_argument'],
     ['name[notes:b, a]', 'argument_order'],
@@ -475,8 +472,8 @@ describe('filter engine', () => {
         defineFilter({
           name: 'external',
           description: 'External test registration.',
-          positional: [{name: 'value', description: 'Argument value.', type: external}],
-          compile: ({positional: [value]}, _ctx: null) => value.value,
+          parameters: {value: {description: 'Argument value.', type: external}},
+          compile: ({value}, _ctx: null) => value.value,
         }),
       ],
       boolean,
@@ -508,8 +505,8 @@ describe('filter engine', () => {
         defineFilter({
           name: 'at',
           description: 'At test registration.',
-          positional: [{name: 'value', description: 'Argument value.', type: point}],
-          compile: ({positional: [value]}, _ctx: null) => value.value,
+          parameters: {value: {description: 'Argument value.', type: point}},
+          compile: ({value}, _ctx: null) => value.value,
         }),
       ],
       boolean,

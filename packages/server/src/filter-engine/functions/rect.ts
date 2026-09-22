@@ -9,12 +9,12 @@ export const rect = defineFunction({
   name: 'rect',
   description:
     'Match places inside a longitude/latitude rectangle, including its edges. A west longitude greater than east crosses the antimeridian.',
-  positional: [
-    {name: 'topLeft', description: 'Northwest corner.', type: geographicPoint},
-    {name: 'bottomRight', description: 'Southeast corner.', type: geographicPoint},
-  ],
+  parameters: {
+    topLeft: {description: 'Northwest corner.', type: geographicPoint},
+    bottomRight: {description: 'Southeast corner.', type: geographicPoint},
+  },
   returns: geographicPredicate,
-  resolve: ({positional: [topLeft, bottomRight]}) => {
+  resolve: ({topLeft, bottomRight}) => {
     const {longitude: west, latitude: north} = topLeft.value;
     const {longitude: east, latitude: south} = bottomRight.value;
 
