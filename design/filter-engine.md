@@ -3,9 +3,9 @@
 ## Goal
 
 Execute the search language through registered filters and functions, with clean
-boundaries between syntax, meaning, resolution, and database queries. The first
-slice supports text and tag retrieval through `places list --query`. Geographic
-and opening-hours execution follow separately.
+boundaries between syntax, meaning, resolution, and database queries. Registered
+text, tag, presence, geographic, and opening-hours predicates run through
+`places list --query` and `places sync --query`.
 
 The [search grammar](search-grammar.md) defines the language. Its parser produces
 source-located syntax nodes for generic filters, functions, arguments, values,
@@ -14,26 +14,47 @@ and boolean expressions. Application names such as `tag`, `notes`, `has`, and
 
 ## Layers and ownership
 
-| Layer          | Location                            | Responsibility                                                                     |
-| -------------- | ----------------------------------- | ---------------------------------------------------------------------------------- |
-| Search syntax  | `packages/common/src/search`        | PEG grammar, source locations, syntax tree, parsing errors                         |
-| Filter engine  | `packages/common/src/filter-engine` | Registries, type compatibility, argument binding, resolution, boolean composition  |
-| Places filters | `packages/server/src/filter-engine` | Place-specific registrations, database lookups, Drizzle predicates, schema imports |
-| Query runner   | Server RPC                          | Select columns, apply predicate, order results, transport errors                   |
-| CLI            | `packages/cli`                      | Forward query text and display results or diagnostics                              |
+| Layer                  | Location                                                       | Responsibility                                                                                         |
+| ---------------------- | -------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| Search syntax          | `packages/common/src/search`                                   | PEG grammar, source locations, syntax tree, parsing errors                                             |
+| Filter engine          | `packages/common/src/filter-engine`                            | Registries, type compatibility, argument binding, resolution, boolean composition                      |
+| Places definitions     | `packages/common/src/filter-engine/{filters,functions,values}` | Filter signatures, semantic values, literal decoding, functions, examples, and pure validation         |
+| Places implementations | `packages/server/src/filter-engine`                            | External value resolution, database lookups, semantic predicate compilation, and Drizzle filter output |
+| Query runner           | Server RPC                                                     | Select columns, apply predicate, order results, transport errors                                       |
+| CLI                    | `packages/cli`                                                 | Forward query text and display results or diagnostics                                                  |
 
 The shared engine has no database schema, Drizzle, RPC, or provider dependencies.
-Its predicate type and boolean operations are supplied by the host. Server filter
-modules can import Drizzle and the Places schema directly: those dependencies
-belong in implementations that translate domain meaning into SQL.
+Its predicate type and boolean operations are supplied by the host. Shared
+definitions use `defineFilter`, `defineFunction`, and `defineValue`, and
+`defineFilterEngine` collects them into one named catalog. Values include their
+browser-safe literal decoders, and functions evaluate to plain semantic values.
+The `placeFilterEngineDefinition` catalog is the complete executable definition
+available to browser clients. Server implementations own external lookups,
+Drizzle, and the Places schema.
+
+`implementFilterEngine` overlays host behavior on that definition. Its
+`valueResolvers` turn decoded inputs into environment-specific semantic values,
+its filter compilers turn resolved arguments into host predicates, and its boolean
+operations compose those predicates. TypeScript requires every filter compiler,
+every advertised reference resolver, every decoder-to-semantic resolver, and a
+`presence` compiler for each filter that sets `supportsPresence: true`.
+
+Function parameters and results use semantic value types directly. The geographic
+predicate is a shared discriminated union produced by `radius`, `rect`, and
+`sector`. The server translates that union to SQL only when the `location` filter
+is compiled.
 
 ## Registered capabilities
 
 ### Value types
 
-A value type declares its identity and decodes supported literals. It may also
-resolve named references. Types carry the value shape into registration handlers.
-Examples include text patterns, booleans, instants, distances, points, and regions.
+A value definition declares its identity, supported literal and reference forms,
+semantic type, and browser-safe decoder. Server value resolvers perform operations
+that require request context or external data, such as resolving a place name,
+checking an exact tag, or evaluating `@now`.
+Registered types include text, tag names, property names, distances, degrees,
+latitude, longitude, geographic points/predicates, time, and duration. `time`
+resolves `@now`; geographic named references such as `@home` are planned.
 
 Preserve wildcard intent through decoding. An escaped star differs from a
 wildcard, and equality treats stars literally. Comparison operators remain
@@ -42,29 +63,30 @@ literal equality.
 
 ### Functions
 
-A function declares ordered parameters and a return
-type. Its resolver produces a value, potentially asynchronously. Function results
-can feed filters or other functions whose parameter type accepts that result.
+A function definition declares ordered parameters and a return type, then evaluates
+those resolved parameters into a plain semantic value. Function results can feed
+filters or other functions whose parameter type accepts that result.
 
-For example, a future spatial pipeline is:
+The spatial pipeline is:
 
 ```text
-point(number, number) -> Point
-radius(Point, Distance) -> Region
-location[Region] -> Predicate
+point(longitude, latitude) -> geographic point
+radius(geographic point, distance) -> {kind: "radius", origin, distance}
+location[geographic predicate] -> SQL predicate
 ```
 
 Type compatibility determines where functions can appear. Registering a new
-region-producing function makes it available to region-consuming arguments;
+geographic-predicate function makes it available to `location`;
 application-specific grammar edits are unnecessary.
 
-A region can describe a radius, polygon, or route corridor. The location filter
-chooses the suitable SQL operation. A radius representation can retain its center
-and distance until compilation.
+The geographic predicate contains plain data and can be inspected or visualized by
+a browser. `location` exhaustively compiles each predicate variant to Drizzle SQL.
+Polygon and route functions can extend the same semantic type.
 
 ### Filters
 
-A filter declares its arguments and compiles resolved values to a predicate.
+A filter definition declares its arguments. Its server implementation compiles
+resolved values to a predicate.
 Filters and functions share argument syntax. Values without a key fill parameters
 in declaration order; `key:value` fills the parameter with that name. A parameter
 can be supplied once per call, and positional values precede named values.
@@ -72,16 +94,15 @@ Filters may resolve application data before compilation, such as looking up exac
 tag names. `tag`, `notes`, `has`, and `location` use the same registration mechanism.
 
 A filter may expose a presence predicate. `has` discovers these capabilities
-through the registry. Validation handlers receive the registry as their second
-argument; compilation handlers receive application context as their second
-argument and the registry as their third. The registry exposes a read-only map of
-the invoking engine's filters. `has` validates literal property names during
-preparation and checks resolved names during compilation.
+through narrow presence interfaces. Validation can ask whether a named filter
+supports presence. Compilation can retrieve that filter's presence handler.
+`has` validates literal property names during preparation and checks resolved
+names during compilation.
 
-The `notes` implementation owns the meaning of “notes
-exist”; the engine does not maintain a separate switch over field names.
+The `notes` implementation owns the meaning of “notes exist”; the engine does not
+maintain a separate switch over field names.
 
-The query runner owns selected columns, ordering, and pagination. Filter handlers
+The query runner owns selected columns and ordering. Pagination is future work. Filter handlers
 own predicates and any correlated subqueries needed to express membership.
 
 ## Capability documentation
@@ -111,8 +132,9 @@ external resolution.
    operations. The empty query compiles to true.
 5. Run the resulting predicate against the places query.
 
-Preparation completes for the entire tree before any resolver runs. A malformed
-branch cannot trigger lookups in a different branch. Resolution failures terminate
+Preparation completes for the entire tree before any resolver runs. Preparation errors in a branch prevent resolution of the entire query.
+Constraints involving resolved values are checked by resolvers or compilation
+handlers and can fail after lookups. Resolution failures terminate
 the query; they do not become empty result sets. SQL compilation is synchronous
 and performs no external requests.
 
@@ -121,7 +143,7 @@ are programming errors detected when building the engine. User queries produce
 structured diagnostics. Known language features without executable registrations
 must fail explicitly rather than silently broadening the selection.
 
-## Initial Places implementations
+## Places implementations
 
 ### Tag
 
@@ -166,6 +188,19 @@ association with the selected place. This prevents duplicate places, scopes
 association descriptions correctly, and makes negation apply to the whole place.
 Its presence predicate supports `has[source]`. Source matching reads saved data.
 
+### Geography and opening hours
+
+`point`, `radius`, `rect`, and `sector` produce values consumed by `location`.
+Point strings resolve through Google Places; the first text-search result is used.
+Maps inputs and explicit coordinates provide more specific origins. The query
+context shares repeated lookups and resolves independent origins concurrently.
+
+`open` consumes a time and optional `for` duration or `until` endpoint. It checks
+the saved weekly multirange, with business closures taking precedence and unknown
+hours preserving SQL NULL through boolean composition. The context captures
+`@now` once. See [time values](time-values.md) for local versus absolute times,
+continuous coverage, DST behavior, interval limits, and index use.
+
 ## Semantic validation
 
 Registrations define the accepted query surface and its implementations. The PEG
@@ -180,14 +215,15 @@ preparation.
 
 ## Scope and verification
 
-The initial release implements the engine, tag and text filters, presence checks,
-and API/CLI search. Location, hours, saved queries, geocoding, and routing are
-future executable registrations. Test-only functions demonstrate nested typed
-composition and asynchronous resolution without inventing a production function
-that has no current use.
+The engine implements API/CLI retrieval, tag/text/presence filters, geographic
+point/radius/rectangle/sector functions, and opening-hours evaluation. Area
+boundaries, routing, saved locations, saved queries, and query explanations are
+planned; the [grammar status](search-grammar.md#implementation-status) tracks them.
 
-Verify parser-to-engine behavior, registration invariants, full-tree validation
-before resolution, nested function compatibility, boolean composition, and SQL
-parameterization. Database tests verify actual result sets for wildcard escaping,
-null notes, tag-note correlation, unknown tags, and whole-place negation. API and
-CLI tests exercise query forwarding and diagnostic transport.
+Tests cover parser-to-engine behavior, registration invariants, preparation before
+resolution, nested function compatibility, boolean composition, diagnostics, and
+SQL parameterization. PostgreSQL integration tests cover actual spatial and hours
+results, DST transitions, unknown hours, wildcard escaping, absent notes, tag-note
+correlation, and whole-place negation. API and CLI tests exercise filtered results
+and diagnostic transport. Database tests require `TEST_DATABASE_URL` and run in
+isolated databases.

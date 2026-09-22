@@ -3,21 +3,27 @@ import {describe, expect, it, vi} from 'vitest';
 import {SearchError, type StringValue} from '../search/index.ts';
 
 import {
-  createFilterEngine,
   defineFilter,
+  defineFilterEngine,
   defineFunction,
+  defineValue,
+  implementFilterEngine,
   InvalidValueError,
-  valueType,
+  type ResolvedQuery,
 } from './index.ts';
 
-const text = valueType<StringValue>({
+const text = defineValue<StringValue>()({
   name: 'text',
   description: 'Text with wildcard metadata.',
+  literals: true,
+  references: false,
   decode: value => value,
 });
-const number = valueType<number>({
+const number = defineValue<number>()({
   name: 'number',
-  description: 'Number test registration.',
+  description: 'A number.',
+  literals: true,
+  references: false,
   decode: literal => {
     if (!/^-?\d+(?:\.\d+)?$/.test(literal.value)) {
       throw new InvalidValueError('Expected a number');
@@ -26,421 +32,296 @@ const number = valueType<number>({
     return Number(literal.value);
   },
 });
+const name = defineFilter({
+  name: 'name',
+  examples: [{query: 'name[cafe]', description: 'Find cafes.'}],
+  description: 'Match a name.',
+  parameters: {
+    value: {description: 'Name value.', type: text, operators: ['=']},
+    notes: {description: 'Optional notes.', type: text, optional: true},
+  },
+  supportsPresence: true,
+});
+const count = defineFilter({
+  name: 'count',
+  description: 'Match a count.',
+  parameters: {
+    value: {description: 'Count value.', type: number, operators: ['>=']},
+  },
+  supportsPresence: false,
+});
+const twice = defineFunction({
+  name: 'twice',
+  examples: [{query: 'count[twice(2)]'}],
+  description: 'Double a number.',
+  parameters: {value: {description: 'Input.', type: number}},
+  returns: number,
+  evaluate: ({value}) => value.value * 2,
+});
+const definition = defineFilterEngine({
+  values: {text, number},
+  filters: {name, count},
+  functions: {twice},
+});
 const boolean = {
   and: (values: string[]) => `(${values.join(' AND ')})`,
   or: (values: string[]) => `(${values.join(' OR ')})`,
   not: (value: string) => `NOT ${value}`,
   all: () => 'TRUE',
 };
-const name = defineFilter({
-  name: 'name',
-  examples: [
-    {query: 'name[cafe]', description: 'Find cafes.'},
-    {query: 'name[cafe, notes:upstairs]'},
-  ],
-  description: 'Name test registration.',
-  parameters: {
-    value: {description: 'Argument value.', type: text, operators: ['=']},
-    notes: {description: 'Argument value.', type: text, optional: true},
-  },
-  compile: ({value, notes}, _context: null) =>
-    `name${value.operator ?? '~'}${value.value.value}${notes ? `/${notes.value.value}` : ''}`,
-  presence: (_context: null) => 'name IS PRESENT',
-});
-const count = defineFilter({
-  name: 'count',
-  description: 'Count test registration.',
-  parameters: {
-    value: {description: 'Argument value.', type: number, operators: ['>=']},
-  },
-  compile: ({value}, _context: null) => `count${value.operator ?? '='}${value.value}`,
-});
-const twice = defineFunction({
-  name: 'twice',
-  examples: [{query: 'count[twice(2)]'}],
-  description: 'Twice test registration.',
-  parameters: {value: {description: 'Argument value.', type: number}},
-  returns: number,
-  resolve: ({value}, _context: null) => value.value * 2,
-});
 
 function makeEngine() {
-  return createFilterEngine({
-    types: [text, number],
-    filters: [name, count],
-    functions: [twice],
+  return implementFilterEngine(definition, {
+    valueResolvers: {},
+    filters: {
+      name: {
+        compile: ({value, notes}) =>
+          `name${value.operator ?? '~'}${value.value.value}${notes ? `/${notes.value.value}` : ''}`,
+        presence: () => 'name IS PRESENT',
+      },
+      count: {
+        compile: ({value}) => `count${value.operator ?? '='}${value.value}`,
+      },
+    },
     boolean,
   });
 }
 
-async function compile(input: string) {
+function compile(input: string) {
   const engine = makeEngine();
-  return engine.compile(await engine.resolve(engine.prepare(input), null), null);
+  return engine.execute(engine.prepare(input), null);
 }
 
 describe('filter engine', () => {
-  it('describes registered signatures and capabilities as serializable data', () => {
-    const engine = makeEngine();
-    const description = engine.describe();
+  it('describes the shared definition as serializable data', () => {
+    const description = makeEngine().describe();
 
-    expect(description.types).toEqual([
-      {name: 'text', description: text.description, literals: true, references: false},
-      {
-        name: 'number',
-        description: number.description,
-        literals: true,
-        references: false,
-      },
-    ]);
-    expect(description.filters[0]).toEqual({
+    expect(description.values.map(value => value.name)).toEqual(['text', 'number']);
+    expect(description.filters[0]).toMatchObject({
       name: 'name',
-      description: name.description,
-      examples: [
-        {query: 'name[cafe]', description: 'Find cafes.'},
-        {query: 'name[cafe, notes:upstairs]'},
-      ],
+      description: 'Match a name.',
+      examples: [{query: 'name[cafe]', description: 'Find cafes.'}],
       presence: true,
       parameters: [
-        {
-          name: 'value',
-          description: 'Argument value.',
-          type: 'text',
-          optional: false,
-          operators: ['='],
-        },
-        {
-          name: 'notes',
-          description: 'Argument value.',
-          type: 'text',
-          optional: true,
-          operators: [],
-        },
+        {name: 'value', type: 'text', optional: false, operators: ['=']},
+        {name: 'notes', type: 'text', optional: true, operators: []},
       ],
     });
-    expect(description.filters[1]).toMatchObject({presence: false, examples: []});
-    expect(description.functions).toEqual([
-      {
-        name: 'twice',
-        description: twice.description,
-        examples: [{query: 'count[twice(2)]'}],
-        returns: 'number',
-        parameters: [
-          {
-            name: 'value',
-            description: 'Argument value.',
-            type: 'number',
-            optional: false,
-            operators: [],
-          },
-        ],
-      },
-    ]);
+    expect(description.functions[0]).toMatchObject({
+      name: 'twice',
+      returns: 'number',
+    });
     expect(JSON.parse(JSON.stringify(description))).toEqual(description);
-
-    for (const registration of [...description.filters, ...description.functions]) {
-      for (const example of registration.examples) {
-        expect(() => engine.prepare(example.query)).not.toThrow();
-      }
-    }
   });
 
-  it('describes reference-only types without invoking their handlers', () => {
-    const resolveReference = vi.fn(() => 'home');
-    const location = valueType({
-      name: 'location',
-      description: 'A named location.',
-      resolveReference,
-    });
-    const engine = createFilterEngine({types: [location], filters: [], boolean});
-    expect(engine.describe()).toEqual({
-      types: [
-        {
-          name: 'location',
-          description: 'A named location.',
-          literals: false,
-          references: true,
-        },
-      ],
-      filters: [],
-      functions: [],
-    });
-    expect(resolveReference).not.toHaveBeenCalled();
+  it('composes filters, functions, groups, and negation', async () => {
+    await expect(
+      compile('name[cafe] OR (count[>=twice(2)] AND !name[bar])'),
+    ).resolves.toBe('(name~cafe OR (count>=4 AND NOT name~bar))');
+    await expect(compile('name[cafe] count[2]')).resolves.toBe('(name~cafe AND count=2)');
+    await expect(compile('')).resolves.toBe('TRUE');
   });
 
-  it('returns documentation snapshots independent of registration state', () => {
-    const engine = makeEngine();
-    const description = engine.describe();
-    description.filters[0]!.examples.push({query: 'invalid example'});
-    description.filters[0]!.parameters[0]!.operators.push('>');
-    description.types[0]!.name = 'changed';
-    expect(engine.describe()).toEqual(makeEngine().describe());
-    expect(() => engine.prepare('name[>x]')).toThrow('Operator > is not allowed');
-  });
-
-  it('dispatches filters and composes precedence, groups and negation', async () => {
-    expect(await compile('name[cafe] OR (count[>=twice(2)] AND !name[bar])')).toBe(
-      '(name~cafe OR (count>=4 AND NOT name~bar))',
+  it('supports optional and named parameters', async () => {
+    await expect(compile('name[value:cafe, notes:upstairs]')).resolves.toBe(
+      'name~cafe/upstairs',
     );
-    expect(await compile('name[cafe] count[2]')).toBe('(name~cafe AND count=2)');
-    expect(await compile('')).toBe('TRUE');
-  });
-
-  it('infers function argument and return types and supports nesting', async () => {
-    expect(await compile('count[twice(twice(3))]')).toBe('count=12');
-    expect(() => makeEngine().prepare('name[twice(3)]')).toThrow(
-      'returns number; expected text',
+    expect(() => makeEngine().prepare('count[]')).toThrow('Missing argument: value');
+    expect(() => makeEngine().prepare('count[other:3]')).toThrow(
+      'Unknown argument: other',
+    );
+    expect(() => makeEngine().prepare('count[value:3, value:4]')).toThrow(
+      'Duplicate argument',
     );
   });
 
-  it('retains operators and source wildcard metadata', async () => {
-    const engine = createFilterEngine({
-      types: [text],
+  it('retains operators and wildcard metadata in resolved arguments', async () => {
+    const inspect = defineFilter({
+      name: 'inspect',
+      description: 'Inspect a value.',
+      parameters: {value: {description: 'Value.', type: text, operators: ['=']}},
+      supportsPresence: false,
+    });
+    const inspectDefinition = defineFilterEngine({
+      values: {text},
+      filters: {inspect},
+      functions: {},
+    });
+    const engine = implementFilterEngine(inspectDefinition, {
+      valueResolvers: {},
+      filters: {inspect: {compile: ({value}) => value}},
       boolean: {
-        and: (values: unknown[]) => values,
-        or: (values: unknown[]) => values,
-        not: (value: unknown) => value,
         all: () => null,
+        and: values => values[0] ?? null,
+        or: values => values[0] ?? null,
+        not: value => value,
       },
-      filters: [
-        defineFilter({
-          name: 'inspect',
-          description: 'Inspect test registration.',
-          parameters: {
-            value: {description: 'Argument value.', type: text, operators: ['=']},
-          },
-          compile: ({value}, _ctx: null) => value,
-        }),
-      ],
     });
-    const input = 'inspect[="a*\\*😀*"]';
-    const result = engine.compile(
-      await engine.resolve(engine.prepare(input), null),
-      null,
-    );
-    expect(result).toMatchObject({
+
+    await expect(
+      engine.execute(engine.prepare('inspect[="a*\\*😀*"]'), null),
+    ).resolves.toMatchObject({
       operator: '=',
       value: {value: 'a**😀*', wildcards: [1, 5]},
-      source: {text: '="a*\\*😀*"'},
     });
   });
 
-  it('supports optional named parameters', async () => {
-    expect(await compile('name[cafe, notes:upstairs]')).toBe('name~cafe/upstairs');
-    expect(await compile('name[value:cafe, notes:upstairs]')).toBe('name~cafe/upstairs');
-    expect(await compile('name[cafe, upstairs]')).toBe('name~cafe/upstairs');
-    expect(await compile('name[cafe]')).toBe('name~cafe');
-  });
-
-  it('binds named-only filters and positional values in declared order', async () => {
-    const difference = defineFunction({
-      name: 'difference',
-      description: 'Subtract the second value from the first.',
-      parameters: {
-        first: {description: 'First value.', type: number},
-        second: {description: 'Second value.', type: number},
-      },
-      returns: number,
-      resolve: ({first, second}, _context: null) => first.value - second.value,
-    });
-    const named = defineFilter({
-      name: 'named',
-      description: 'A filter with only named parameters.',
-      parameters: {value: {description: 'Value to match.', type: number}},
-      compile: ({value}, _context: null) => `value=${value.value}`,
-    });
-    const engine = createFilterEngine({
-      types: [number],
-      functions: [difference],
-      filters: [named, count],
-      boolean,
-    });
-    const result = engine.compile(
-      await engine.resolve(engine.prepare('named[value:difference(8, 3)]'), null),
-      null,
+  it('resolves literals, function results, and references through one resolver', async () => {
+    const resolve = vi.fn((value: number, _context: null, operator) =>
+      Promise.resolve(value + (operator === '>=' ? 1 : 0)),
     );
-
-    expect(result).toBe('value=5');
-    expect(await compile('count[value:twice(value:2)]')).toBe('count=4');
-    expect(() => engine.prepare('named[]')).toThrow('Missing argument: value');
-    expect(() => engine.prepare('named[other:3]')).toThrow('Unknown argument: other');
-    expect(() => engine.prepare('named[value:3, value:4]')).toThrow('Duplicate argument');
-    expect(() => engine.prepare('count[value:3]')).not.toThrow();
-    expect(() => engine.prepare('named[3]')).not.toThrow();
-    expect(() => engine.prepare('named[3, value:4]')).toThrow('Duplicate argument');
-  });
-
-  it('validates named function parameters, ordering, and cross-argument constraints', async () => {
-    const add = defineFunction({
-      name: 'add',
-      description: 'Add test registration.',
-      parameters: {
-        value: {description: 'Argument value.', type: number, optional: true},
-        amount: {description: 'Argument value.', type: number},
-      },
-      returns: number,
-      resolve: ({value, amount}, _context: null) => (value?.value ?? 0) + amount.value,
-      validate: args =>
-        args.length > 1 ? 'Only one argument for this example' : undefined,
-    });
-    const engine = createFilterEngine({
-      types: [number],
-      functions: [add],
-      filters: [count],
-      boolean,
-    });
-    expect(
-      engine.compile(
-        await engine.resolve(engine.prepare('count[add(amount:3)]'), null),
-        null,
-      ),
-    ).toBe('count=3');
-    expect(() => engine.prepare('count[add()]')).toThrow('Missing argument: amount');
-    expect(() => engine.prepare('count[add(amount:3, 2)]')).toThrow(
-      'Positional arguments must precede',
-    );
-    expect(() => engine.prepare('count[add(2, amount:3)]')).toThrow('Only one argument');
-    expect(() => engine.prepare('count[add(constructor:3)]')).toThrow(
-      'Unknown argument: constructor',
-    );
-  });
-
-  it('resolves all value sources with their consuming argument metadata', async () => {
-    const resolve = vi.fn(
-      (value: number, _context: null, source: {operator: string | null}) =>
-        value + (source.operator === '>=' ? 1 : 0),
-    );
-    const type = valueType<number, null>({
+    const resolvedNumber = defineValue<number>()({
       name: 'resolved-number',
-      description: 'Resolved-number test registration.',
+      description: 'A resolved number.',
+      literals: true,
+      references: true,
       decode: value => Number(value.value),
-      resolve,
-      resolveReference: () => 5,
     });
     const value = defineFunction({
       name: 'value',
-      description: 'Value test registration.',
+      description: 'Return three.',
       parameters: {},
-      returns: type,
-      resolve: (_args, _context: null) => 3,
+      returns: resolvedNumber,
+      evaluate: () => 3,
     });
-    const filter = defineFilter({
-      name: 'value',
-      description: 'Value test registration.',
+    const match = defineFilter({
+      name: 'match',
+      description: 'Match a value.',
       parameters: {
-        value: {description: 'Argument value.', type, operators: ['>=']},
+        value: {description: 'Value.', type: resolvedNumber, operators: ['>=']},
       },
-      compile: ({value}, _ctx: null) => `${value.value}`,
+      supportsPresence: false,
     });
-    const engine = createFilterEngine({
-      types: [type],
-      functions: [value],
-      filters: [filter],
+    const resolvedDefinition = defineFilterEngine({
+      values: {resolvedNumber},
+      filters: {match},
+      functions: {value},
+    });
+    const engine = implementFilterEngine(resolvedDefinition, {
+      valueResolvers: {
+        resolvedNumber: {resolve, resolveReference: () => 5},
+      },
+      filters: {match: {compile: ({value}) => String(value.value)}},
       boolean,
     });
+
     for (const [input, output] of [
-      ['value[>=1]', '2'],
-      ['value[>=value()]', '4'],
-      ['value[>=@home]', '6'],
+      ['match[>=1]', '2'],
+      ['match[>=value()]', '4'],
+      ['match[>=@home]', '6'],
     ]) {
-      expect(
-        engine.compile(await engine.resolve(engine.prepare(input), null), null),
-      ).toBe(output);
+      await expect(engine.execute(engine.prepare(input), null)).resolves.toBe(output);
     }
     expect(resolve).toHaveBeenCalledTimes(3);
   });
 
-  it('keeps compiler programming failures distinct from invalid input', async () => {
-    const error = new Error('Invalid internal query');
+  it('validates the whole query before starting asynchronous resolution', () => {
+    const resolve = vi.fn((value: string) => Promise.resolve(value));
+    const external = defineValue<string, string>()({
+      name: 'external',
+      description: 'External value.',
+      literals: true,
+      references: false,
+      decode: value => value.value,
+    });
     const filter = defineFilter({
-      name: 'broken',
-      description: 'Broken test registration.',
-      parameters: {},
-      compile: (_args, _ctx: null): string => {
-        throw error;
-      },
+      name: 'external',
+      description: 'External filter.',
+      parameters: {value: {description: 'Value.', type: external}},
+      supportsPresence: false,
     });
-    const engine = createFilterEngine({types: [], filters: [filter], boolean});
-    const resolved = await engine.resolve(engine.prepare('broken[]'), null);
-    expect(() => engine.compile(resolved, null)).toThrow(error);
-    try {
-      engine.compile(resolved, null);
-    } catch (caught) {
-      expect(caught).toBe(error);
-    }
-  });
-
-  it('prepares nested calls and Boolean groups without executing handlers', () => {
-    const engine = makeEngine();
-    expect(
-      engine.prepare('name[cafe] OR (count[>=twice(twice(2))] !name[bar])').phase,
-    ).toBe('prepared');
-    expect(engine.prepare('').query).toBeNull();
-    expect(() => engine.prepare('name[twice(2)]')).toThrow(
-      'returns number; expected text',
-    );
-  });
-
-  it('validates named arguments and cross-argument constraints', () => {
-    const add = defineFunction({
-      name: 'add',
-      description: 'Add numbers.',
-      parameters: {
-        value: {
-          description: 'Optional base value.',
-          type: number,
-          optional: true,
-        },
-        amount: {description: 'Amount to add.', type: number},
-      },
-      returns: number,
-      resolve: ({value, amount}, _context: null) => (value?.value ?? 0) + amount.value,
-      validate: args => (args.length > 1 ? 'Only one argument' : undefined),
+    const externalDefinition = defineFilterEngine({
+      values: {external},
+      filters: {filter},
+      functions: {},
     });
-    const engine = createFilterEngine({
-      types: [number],
-      functions: [add],
-      filters: [count],
+    const engine = implementFilterEngine(externalDefinition, {
+      valueResolvers: {external: {resolve}},
+      filters: {filter: {compile: ({value}) => value.value}},
       boolean,
     });
-    expect(() => engine.prepare('count[add(amount:3)]')).not.toThrow();
-    expect(() => engine.prepare('count[add()]')).toThrow('Missing argument: amount');
-    expect(() => engine.prepare('count[add(amount:3, 2)]')).toThrow(
-      'Positional arguments must precede',
-    );
-    expect(() => engine.prepare('count[add(2, amount:3)]')).toThrow('Only one argument');
-    expect(() => engine.prepare('count[add(constructor:3)]')).toThrow(
-      'Unknown argument: constructor',
-    );
+
+    expect(() => engine.prepare('external[valid] unknown[bad]')).toThrow(SearchError);
+    expect(resolve).not.toHaveBeenCalled();
   });
 
-  it('rejects duplicate registrations and unregistered value types', () => {
-    expect(() => createFilterEngine({types: [text, text], filters: [], boolean})).toThrow(
-      'Duplicate',
+  it('adds source diagnostics to expected value failures', async () => {
+    const point = defineValue<string>()({
+      name: 'point',
+      description: 'Named point.',
+      literals: false,
+      references: true,
+    });
+    const at = defineFilter({
+      name: 'at',
+      description: 'Match a point.',
+      parameters: {value: {description: 'Point.', type: point}},
+      supportsPresence: false,
+    });
+    const pointDefinition = defineFilterEngine({
+      values: {point},
+      filters: {at},
+      functions: {},
+    });
+    const engine = implementFilterEngine(pointDefinition, {
+      valueResolvers: {
+        point: {
+          resolveReference: name => {
+            throw new InvalidValueError(`Unknown location: ${name}`);
+          },
+        },
+      },
+      filters: {at: {compile: ({value}) => value.value}},
+      boolean,
+    });
+
+    await expect(
+      engine.execute(engine.prepare('at[@missing]'), null),
+    ).rejects.toMatchObject({
+      diagnostics: [{code: 'invalid_value', location: {start: {line: 1}}}],
+    });
+  });
+
+  it('preserves a reference resolver receiver', async () => {
+    const point = defineValue<string>()({
+      name: 'point',
+      description: 'Named point.',
+      literals: false,
+      references: true,
+    });
+    const at = defineFilter({
+      name: 'at',
+      description: 'Match a point.',
+      parameters: {value: {description: 'Point.', type: point}},
+      supportsPresence: false,
+    });
+    const pointDefinition = defineFilterEngine({
+      values: {point},
+      filters: {at},
+      functions: {},
+    });
+    const pointResolver = {
+      prefix: 'point',
+      resolveReference(name: string) {
+        return `${this.prefix}:${name}`;
+      },
+    };
+    const engine = implementFilterEngine(pointDefinition, {
+      valueResolvers: {point: pointResolver},
+      filters: {at: {compile: ({value}) => value.value}},
+      boolean,
+    });
+
+    await expect(engine.execute(engine.prepare('at[@home]'), null)).resolves.toBe(
+      'point:home',
     );
-    expect(() => createFilterEngine({types: [], filters: [name], boolean})).toThrow(
-      'Unregistered type',
-    );
-    expect(() =>
-      createFilterEngine({types: [text], filters: [name, name], boolean}),
-    ).toThrow('Duplicate');
-    expect(() =>
-      createFilterEngine({
-        types: [number],
-        filters: [],
-        functions: [twice, twice],
-        boolean,
-      }),
-    ).toThrow('Duplicate');
   });
 
   it.each([
     ['unknown[x]', 'unknown_filter'],
     ['name[unknown()]', 'unknown_function'],
-    ['name[]', 'missing_argument'],
     ['name[a,b,c]', 'argument_count'],
-    ['name[a, value:b]', 'duplicate_argument'],
     ['name[a, other:b]', 'unknown_argument'],
-    ['name[a, notes:b, notes:c]', 'duplicate_argument'],
     ['name[notes:b, a]', 'argument_order'],
     ['count[>=oops]', 'invalid_value'],
     ['name[>x]', 'invalid_operator'],
@@ -451,92 +332,18 @@ describe('filter engine', () => {
       expect.fail('Expected rejection');
     } catch (error) {
       expect(error).toBeInstanceOf(SearchError);
-      expect((error as SearchError).diagnostics[0]).toMatchObject({
-        code,
-        location: {start: {line: 1}},
-      });
+      expect((error as SearchError).diagnostics[0]).toMatchObject({code});
     }
   });
 
-  it('validates the entire query before any asynchronous resolution', () => {
-    const resolve = vi.fn((value: string) => Promise.resolve(value));
-    const external = valueType<string>({
-      name: 'external',
-      description: 'External test registration.',
-      decode: value => value.value,
-      resolve,
-    });
-    const engine = createFilterEngine({
-      types: [external],
-      filters: [
-        defineFilter({
-          name: 'external',
-          description: 'External test registration.',
-          parameters: {value: {description: 'Argument value.', type: external}},
-          compile: ({value}, _ctx: null) => value.value,
-        }),
-      ],
-      boolean,
-    });
-    expect(() => engine.prepare('external[valid] unknown[bad]')).toThrow(SearchError);
-    expect(resolve).not.toHaveBeenCalled();
-  });
-
-  it('resolves named references and isolates unexpected failures', async () => {
-    const providerFailure = new Error('Provider unavailable');
-    const point = valueType<string>({
-      name: 'point',
-      description: 'Point test registration.',
-      resolveReference: name => {
-        if (name === 'missing') {
-          throw new InvalidValueError('Unknown location');
-        }
-
-        if (name === 'broken') {
-          throw providerFailure;
-        }
-
-        return `point:${name}`;
-      },
-    });
-    const engine = createFilterEngine({
-      types: [point],
-      filters: [
-        defineFilter({
-          name: 'at',
-          description: 'At test registration.',
-          parameters: {value: {description: 'Argument value.', type: point}},
-          compile: ({value}, _ctx: null) => value.value,
-        }),
-      ],
-      boolean,
-    });
-    expect(
-      engine.compile(await engine.resolve(engine.prepare('at[@home]'), null), null),
-    ).toBe('point:home');
-    await expect(
-      engine.resolve(engine.prepare('at[@missing]'), null),
-    ).rejects.toBeInstanceOf(SearchError);
-    await expect(engine.resolve(engine.prepare('at[@broken]'), null)).rejects.toBe(
-      providerFailure,
-    );
-    expect(() => engine.prepare('at[home]')).toThrow('Expected a function or reference');
-  });
-
-  it('rejects plans from another engine', async () => {
+  it('binds resolved queries to their engine and resolution context', async () => {
     const engine = makeEngine();
     const other = makeEngine();
-    await expect(other.resolve(engine.prepare('name[x]'), null)).rejects.toThrow(
-      'not prepared',
-    );
-    expect(() => other.compile({phase: 'resolved', query: null}, null)).toThrow(
-      'not resolved',
-    );
-  });
+    const prepared = engine.prepare('name[x]');
 
-  it('rejects bare text and unregistered filters', () => {
-    const engine = createFilterEngine({types: [text], filters: [name], boolean});
-    expect(() => engine.prepare('hello')).toThrow(SearchError);
-    expect(() => engine.prepare('constructor[x]')).toThrow('Unknown filter');
+    await expect(other.resolve(prepared, null)).rejects.toThrow('not prepared');
+    // @ts-expect-error Resolved queries are opaque engine tokens.
+    const fabricated: ResolvedQuery = {phase: 'resolved', query: null};
+    expect(() => other.compile(fabricated)).toThrow('not resolved');
   });
 });

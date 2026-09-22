@@ -37,7 +37,7 @@ it('renders signatures, optional arguments, capabilities, and examples as text',
         examples: [{query: 'tag[label()]'}],
       },
     ],
-    types: [
+    values: [
       {name: 'text', description: 'A text pattern.', literals: true, references: true},
     ],
   });
@@ -52,12 +52,12 @@ it('renders signatures, optional arguments, capabilities, and examples as text',
   expect(output).toContain('Accepts: literals, @references, label()');
 });
 
-it('only advertises functions registered for each type', () => {
-  const types = [
+it('only advertises functions registered for each value', () => {
+  const values = [
     {name: 'text', description: 'Text.', literals: true, references: false},
     {name: 'point', description: 'Point.', literals: false, references: true},
   ];
-  const output = formatFilterDocs({filters: [], functions: [], types});
+  const output = formatFilterDocs({filters: [], functions: [], values});
   expect(output).not.toContain('Functions');
   expect(output).not.toContain('functions returning');
   expect(output).toContain('Accepts: literals');
@@ -65,7 +65,7 @@ it('only advertises functions registered for each type', () => {
 
   const withFunction = formatFilterDocs({
     filters: [],
-    types,
+    values,
     functions: [
       {
         name: 'origin',

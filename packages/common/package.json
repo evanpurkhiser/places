@@ -11,7 +11,12 @@
     "./contract/source": "./src/contract/source.ts",
     "./contract/place": "./src/contract/place.ts",
     "./search": "./src/search/index.ts",
-    "./filter-engine": "./src/filter-engine/index.ts"
+    "./filter-engine": "./src/filter-engine/index.ts",
+    "./filter-engine/operators": "./src/filter-engine/operators.ts",
+    "./filter-engine/places": "./src/filter-engine/places.ts",
+    "./filter-engine/filters/*": "./src/filter-engine/filters/*.ts",
+    "./filter-engine/functions/*": "./src/filter-engine/functions/*.ts",
+    "./filter-engine/values/*": "./src/filter-engine/values/*.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

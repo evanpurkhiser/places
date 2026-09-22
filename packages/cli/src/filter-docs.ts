@@ -73,7 +73,7 @@ export function formatFilterDocs(documentation: EngineDescription): string {
     ),
     ...section(
       'Value types',
-      documentation.types.flatMap(type => [
+      documentation.values.flatMap(type => [
         '',
         type.name,
         `  ${type.description}`,

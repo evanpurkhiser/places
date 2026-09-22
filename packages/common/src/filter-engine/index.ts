@@ -1,27 +1,35 @@
 export {
   defineFilter,
+  defineFilterEngine,
   defineFunction,
-  valueType,
+  defineValue,
   InvalidValueError,
 } from './definitions.ts';
 export type {
+  FilterCompilerFor,
+  FilterCompilers,
   FilterDefinition,
-  FilterRegistry,
+  FilterEngineDefinition,
+  FilterEngineImplementation,
   FunctionDefinition,
   Parameter,
+  PresenceDefinitions,
+  PresenceRegistry,
   QueryExample,
   ResolvedArgument,
   ResolvedArguments,
   Signature,
-  ValueType,
+  ValueDefinition,
+  ValueResolverFor,
+  ValueResolvers,
 } from './definitions.ts';
-export {createFilterEngine} from './engine.ts';
-export type {EngineOptions, PreparedQuery, ResolvedQuery} from './engine.ts';
+export {implementFilterEngine} from './engine.ts';
+export type {PreparedQuery, ResolvedQuery} from './engine.ts';
 export type {
   EngineDescription,
   FilterDescription,
   FunctionDescription,
   ParameterDescription,
   SignatureDescription,
-  TypeDescription,
+  ValueDescription,
 } from './documentation.ts';

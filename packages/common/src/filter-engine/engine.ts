@@ -11,32 +11,27 @@ import type {
 import {
   InvalidValueError,
   type FilterDefinition,
-  type FilterRegistry,
+  type FilterEngineDefinition,
+  type FilterEngineImplementation,
   type FunctionDefinition,
+  type PresenceDefinitions,
+  type PresenceRegistry,
   type RuntimeArguments,
-  type Signature,
-  type ValueType,
+  type ValueDefinition,
 } from './definitions.ts';
 import {describeSignature, type EngineDescription} from './documentation.ts';
 
-export interface EngineOptions<Predicate, Context> {
-  types: ReadonlyArray<ValueType<unknown, Context>>;
-  filters: ReadonlyArray<FilterDefinition<Predicate, Context>>;
-  functions?: ReadonlyArray<FunctionDefinition<Context>>;
-  boolean: {
-    and(predicates: Predicate[]): Predicate;
-    or(predicates: Predicate[]): Predicate;
-    not(predicate: Predicate): Predicate;
-    all(): Predicate;
-  };
-}
+const preparedQueryToken = Symbol('prepared query');
+const resolvedQueryToken = Symbol('resolved query');
 
 export interface PreparedQuery {
+  readonly [preparedQueryToken]: true;
   readonly phase: 'prepared';
   readonly query: Query;
 }
 
 export interface ResolvedQuery {
+  readonly [resolvedQueryToken]: true;
   readonly phase: 'resolved';
   readonly query: Query;
 }
@@ -49,13 +44,39 @@ type Tree<T> =
 
 type ResolveValue<C> = (context: C) => Promise<unknown>;
 type ResolveArguments<C> = (context: C) => Promise<RuntimeArguments>;
-interface PreparedCall<P, C> {
-  definition: FilterDefinition<P, C>;
-  source: SourceSpan;
-  resolve: ResolveArguments<C>;
+
+interface RuntimeValue<Context> {
+  definition: ValueDefinition<unknown, unknown>;
+  resolver?: {
+    resolve?(
+      value: unknown,
+      context: Context,
+      operator: Argument['operator'],
+    ): unknown | Promise<unknown>;
+    resolveReference?(name: string, context: Context): unknown | Promise<unknown>;
+  };
 }
-interface ResolvedCall<P, C> {
-  definition: FilterDefinition<P, C>;
+
+interface RuntimeFilter<Predicate, Context> {
+  definition: FilterDefinition;
+  compiler: {
+    compile(
+      args: RuntimeArguments,
+      context: Context,
+      presence: PresenceRegistry<Predicate, Context>,
+    ): Predicate;
+    presence?(context: Context): Predicate;
+  };
+}
+
+interface PreparedCall<Predicate, Context> {
+  filter: RuntimeFilter<Predicate, Context>;
+  source: SourceSpan;
+  resolve: ResolveArguments<Context>;
+}
+
+interface ResolvedCall<Predicate, Context> {
+  filter: RuntimeFilter<Predicate, Context>;
   source: SourceSpan;
   arguments: RuntimeArguments;
 }
@@ -90,61 +111,101 @@ async function withSourceAsync<T>(source: SourceSpan, operation: () => T | Promi
   }
 }
 
-function registry<T extends {name: string}>(kind: string, definitions: readonly T[]) {
+function registry<T>(
+  kind: string,
+  definitions: readonly T[],
+  name: (value: T) => string,
+) {
   const entries = new Map<string, T>();
 
   for (const definition of definitions) {
-    if (!definition.name || entries.has(definition.name)) {
-      throw new Error(`Duplicate or empty ${kind} registration: ${definition.name}`);
+    const key = name(definition);
+
+    if (!key || entries.has(key)) {
+      throw new Error(`Duplicate or empty ${kind} registration: ${key}`);
     }
 
-    entries.set(definition.name, definition);
+    entries.set(key, definition);
   }
 
   return entries;
 }
 
-/**
- * Owns dispatch and boolean composition. Registrations supply all domain behavior.
- */
-export class FilterEngine<Predicate, Context> {
-  readonly #options: EngineOptions<Predicate, Context>;
-  readonly #types: Map<string, ValueType<unknown, Context>>;
-  readonly #filters: Map<string, FilterDefinition<Predicate, Context>>;
-  readonly #registry: FilterRegistry<Predicate, Context>;
-  readonly #functions: Map<string, FunctionDefinition<Context>>;
+/** Executes one shared filter-engine definition using host-provided compilers. */
+export class FilterEngine<Definition extends FilterEngineDefinition, Predicate, Context> {
+  readonly #implementation: FilterEngineImplementation<Definition, Predicate, Context>;
+  readonly #values: Map<string, RuntimeValue<Context>>;
+  readonly #filters: Map<string, RuntimeFilter<Predicate, Context>>;
+  readonly #functions: Map<string, FunctionDefinition>;
+  readonly #presenceDefinitions: PresenceDefinitions;
+  readonly #presence: PresenceRegistry<Predicate, Context>;
   readonly #prepared = new WeakMap<
     PreparedQuery,
     Tree<PreparedCall<Predicate, Context>>
   >();
   readonly #resolved = new WeakMap<
     ResolvedQuery,
-    Tree<ResolvedCall<Predicate, Context>>
+    {tree: Tree<ResolvedCall<Predicate, Context>>; context: Context}
   >();
 
-  constructor(options: EngineOptions<Predicate, Context>) {
-    this.#options = options;
-    this.#types = registry('type', options.types);
-    this.#filters = registry('filter', options.filters);
-    this.#registry = {filters: this.#filters};
-    this.#functions = registry('function', options.functions ?? []);
+  constructor(
+    definition: Definition,
+    implementation: FilterEngineImplementation<Definition, Predicate, Context>,
+  ) {
+    this.#implementation = implementation;
+    this.#values = registry(
+      'value',
+      Object.entries(definition.values).map(([key, value]) => ({
+        definition: value,
+        resolver: (
+          implementation.valueResolvers as Record<
+            string,
+            RuntimeValue<Context>['resolver']
+          >
+        )[key],
+      })),
+      value => value.definition.name,
+    );
+    this.#filters = registry(
+      'filter',
+      Object.entries(definition.filters).map(([key, filter]) => ({
+        definition: filter,
+        compiler: implementation.filters[
+          key as keyof Definition['filters']
+        ] as RuntimeFilter<Predicate, Context>['compiler'],
+      })),
+      filter => filter.definition.name,
+    );
+    this.#functions = registry(
+      'function',
+      Object.values(definition.functions),
+      fn => fn.name,
+    );
+    this.#presenceDefinitions = {
+      supports: name => this.#filters.get(name)?.definition.supportsPresence ?? false,
+    };
+    this.#presence = {
+      get: name => {
+        const compiler = this.#filters.get(name)?.compiler;
+        const presence = compiler?.presence;
+
+        return presence ? context => presence.call(compiler, context) : undefined;
+      },
+    };
     this.#validateRegistrations();
   }
 
-  /**
-   * Describes the available registrations without resolving or compiling queries.
-   */
   describe(): EngineDescription {
     return {
-      types: [...this.#types.values()].map(type => ({
-        name: type.name,
-        description: type.description,
-        literals: Boolean(type.decode),
-        references: Boolean(type.resolveReference),
+      values: [...this.#values.values()].map(({definition}) => ({
+        name: definition.name,
+        description: definition.description,
+        literals: definition.literals,
+        references: definition.references,
       })),
-      filters: [...this.#filters.values()].map(filter => ({
-        ...describeSignature(filter),
-        presence: Boolean(filter.presence),
+      filters: [...this.#filters.values()].map(({definition}) => ({
+        ...describeSignature(definition),
+        presence: definition.supportsPresence,
       })),
       functions: [...this.#functions.values()].map(fn => ({
         ...describeSignature(fn),
@@ -153,35 +214,67 @@ export class FilterEngine<Predicate, Context> {
     };
   }
 
-  #checkType(type: ValueType<unknown, Context>) {
-    if (this.#types.get(type.name) !== type) {
-      throw new Error(`Unregistered type: ${type.name}`);
+  #checkValue(value: ValueDefinition<unknown>) {
+    const registration = this.#values.get(value.name);
+
+    if (!registration || registration.definition !== value) {
+      throw new Error(`Unregistered value: ${value.name}`);
     }
   }
 
   #validateRegistrations() {
-    for (const definition of [...this.#filters.values(), ...this.#functions.values()]) {
+    for (const {definition, resolver} of this.#values.values()) {
+      if (definition.literals !== Boolean(definition.decode)) {
+        throw new Error(`Literal capability does not match decoder: ${definition.name}`);
+      }
+
+      if (definition.references && !resolver?.resolveReference) {
+        throw new Error(`Missing reference resolver: ${definition.name}`);
+      }
+    }
+
+    for (const {definition, compiler} of this.#filters.values()) {
+      if (!compiler) {
+        throw new Error(`Missing filter compiler: ${definition.name}`);
+      }
+
+      if (definition.supportsPresence !== Boolean(compiler.presence)) {
+        throw new Error(
+          `Presence capability does not match compiler: ${definition.name}`,
+        );
+      }
+
       Object.values(definition.parameters).forEach(parameter =>
-        this.#checkType(parameter.type),
+        this.#checkValue(parameter.type),
       );
     }
 
-    this.#functions.forEach(definition => this.#checkType(definition.returns));
+    for (const fn of this.#functions.values()) {
+      Object.values(fn.parameters).forEach(parameter => this.#checkValue(parameter.type));
+      this.#checkValue(fn.returns);
+    }
   }
 
   #prepareValue(
     source: Argument,
-    type: ValueType<unknown, Context>,
+    value: ValueDefinition<unknown>,
   ): ResolveValue<Context> {
-    const resolve = this.#prepareInput(source.value, type);
+    const registration = this.#values.get(value.name)!;
+    const resolveInput = this.#prepareInput(source.value, registration);
+
     return context =>
       withSourceAsync(source.value, async () => {
-        const value = await resolve(context);
-        return type.resolve ? type.resolve(value, context, source) : value;
+        const input = await resolveInput(context);
+        return registration.resolver?.resolve
+          ? registration.resolver.resolve(input, context, source.operator)
+          : input;
       });
   }
 
-  #prepareInput(value: Value, type: ValueType<unknown, Context>): ResolveValue<Context> {
+  #prepareInput(
+    value: Value,
+    registration: RuntimeValue<Context>,
+  ): ResolveValue<Context> {
     if (value.type === 'function') {
       const definition = this.#functions.get(value.name);
 
@@ -189,51 +282,51 @@ export class FilterEngine<Predicate, Context> {
         fail('unknown_function', `Unknown function: ${value.name}`, value);
       }
 
-      if (definition.returns !== type) {
+      if (definition.returns !== registration.definition) {
         fail(
           'invalid_value',
-          `Function ${value.name} returns ${definition.returns.name}; expected ${type.name}`,
+          `Function ${value.name} returns ${definition.returns.name}; expected ${registration.definition.name}`,
           value,
         );
       }
 
       const resolve = this.#prepareArguments(value.arguments, definition, value);
       return context =>
-        withSourceAsync(value, async () =>
-          definition.resolve(await resolve(context), context),
-        );
+        withSourceAsync(value, async () => definition.evaluate(await resolve(context)));
     }
 
     if (value.type === 'reference') {
-      const resolveReference = type.resolveReference;
+      const resolveReference = registration.resolver?.resolveReference;
 
-      if (!resolveReference || !value.name) {
+      if (!registration.definition.references || !resolveReference || !value.name) {
         fail(
           'invalid_value',
-          `Named references are not supported for ${type.name}`,
+          `Named references are not supported for ${registration.definition.name}`,
           value,
         );
       }
 
       return context =>
-        withSourceAsync(value, () => resolveReference(value.name, context));
+        withSourceAsync(value, () =>
+          resolveReference.call(registration.resolver, value.name, context),
+        );
     }
 
-    if (!type.decode) {
+    if (!registration.definition.literals || !registration.definition.decode) {
       fail(
         'invalid_value',
-        `Expected a function or reference producing ${type.name}`,
+        `Expected a function or reference producing ${registration.definition.name}`,
         value,
       );
     }
 
-    const decoded = withSource(value, () => type.decode!(value));
+    const decoded = withSource(value, () => registration.definition.decode!(value));
     return () => Promise.resolve(decoded);
   }
 
   #prepareArguments(
     args: readonly Argument[],
-    signature: Signature<Context>,
+    signature: FilterDefinition | FunctionDefinition,
     source: SourceSpan,
   ): ResolveArguments<Context> {
     const parameters = Object.entries(signature.parameters);
@@ -297,26 +390,29 @@ export class FilterEngine<Predicate, Context> {
       }
     }
 
-    const message = signature.validate?.(
-      plans.map(({argument, name}) => ({...argument, name})),
-      this.#registry,
-    );
+    const validationArguments = plans.map(({argument, name}) => ({
+      ...argument,
+      name,
+    }));
+    const message =
+      'supportsPresence' in signature
+        ? signature.validate?.(validationArguments, this.#presenceDefinitions)
+        : signature.validate?.(validationArguments);
 
     if (message) {
       fail('invalid_value', message, source);
     }
 
     return async context => {
-      const resolvedArgs = await Promise.all(
+      const resolvedArguments = await Promise.all(
         plans.map(async ({name, argument, resolve}) => ({
           name,
           value: await resolve(context),
           operator: argument.operator,
-          source: argument,
         })),
       );
       return Object.fromEntries(
-        resolvedArgs.map(({name, ...argument}) => [name, argument]),
+        resolvedArguments.map(({name, ...argument}) => [name, argument]),
       );
     };
   }
@@ -341,18 +437,22 @@ export class FilterEngine<Predicate, Context> {
       throw new Error(`Unexpected expression: ${expression.type}`);
     }
 
-    const definition = this.#filters.get(expression.key);
+    const filter = this.#filters.get(expression.key);
 
-    if (!definition) {
+    if (!filter) {
       fail('unknown_filter', `Unknown filter: ${expression.key}`, expression);
     }
 
     return {
       kind: 'filter',
       call: {
-        definition,
+        filter,
         source: expression,
-        resolve: this.#prepareArguments(expression.arguments, definition, expression),
+        resolve: this.#prepareArguments(
+          expression.arguments,
+          filter.definition,
+          expression,
+        ),
       },
     };
   }
@@ -368,7 +468,7 @@ export class FilterEngine<Predicate, Context> {
         return {
           kind: 'filter',
           call: {
-            definition: tree.call.definition,
+            filter: tree.call.filter,
             source: tree.call.source,
             arguments: await tree.call.resolve(context),
           },
@@ -392,16 +492,16 @@ export class FilterEngine<Predicate, Context> {
   ): Predicate {
     switch (tree.kind) {
       case 'all':
-        return this.#options.boolean.all();
+        return this.#implementation.boolean.all();
       case 'filter':
         return withSource(tree.call.source, () =>
-          tree.call.definition.compile(tree.call.arguments, context, this.#registry),
+          tree.call.filter.compiler.compile(tree.call.arguments, context, this.#presence),
         );
       case 'not':
-        return this.#options.boolean.not(this.#compileTree(tree.child, context));
+        return this.#implementation.boolean.not(this.#compileTree(tree.child, context));
       case 'and':
       case 'or':
-        return this.#options.boolean[tree.kind](
+        return this.#implementation.boolean[tree.kind](
           tree.children.map(child => this.#compileTree(child, context)),
         );
     }
@@ -409,7 +509,11 @@ export class FilterEngine<Predicate, Context> {
 
   prepare(input: string): PreparedQuery {
     const query = parseQuery(input);
-    const result: PreparedQuery = {phase: 'prepared', query};
+    const result: PreparedQuery = {
+      [preparedQueryToken]: true,
+      phase: 'prepared',
+      query,
+    };
     this.#prepared.set(result, query ? this.#prepareExpression(query) : {kind: 'all'});
     return result;
   }
@@ -421,24 +525,40 @@ export class FilterEngine<Predicate, Context> {
       throw new Error('Query was not prepared by this filter engine');
     }
 
-    const result: ResolvedQuery = {phase: 'resolved', query: query.query};
-    this.#resolved.set(result, await this.#resolveTree(tree, context));
+    const result: ResolvedQuery = {
+      [resolvedQueryToken]: true,
+      phase: 'resolved',
+      query: query.query,
+    };
+    this.#resolved.set(result, {
+      tree: await this.#resolveTree(tree, context),
+      context,
+    });
     return result;
   }
 
-  compile(query: ResolvedQuery, context: Context): Predicate {
-    const tree = this.#resolved.get(query);
+  compile(query: ResolvedQuery): Predicate {
+    const resolved = this.#resolved.get(query);
 
-    if (!tree) {
+    if (!resolved) {
       throw new Error('Query was not resolved by this filter engine');
     }
 
-    return this.#compileTree(tree, context);
+    return this.#compileTree(resolved.tree, resolved.context);
+  }
+
+  async execute(query: PreparedQuery, context: Context): Promise<Predicate> {
+    return this.compile(await this.resolve(query, context));
   }
 }
 
-export function createFilterEngine<Predicate, Context>(
-  options: EngineOptions<Predicate, Context>,
-) {
-  return new FilterEngine(options);
+export function implementFilterEngine<
+  const Definition extends FilterEngineDefinition,
+  Predicate,
+  Context,
+>(
+  definition: Definition,
+  implementation: FilterEngineImplementation<Definition, Predicate, Context>,
+): FilterEngine<Definition, Predicate, Context> {
+  return new FilterEngine(definition, implementation);
 }

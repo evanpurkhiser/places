@@ -482,7 +482,7 @@ describe('query documentation', () => {
       throw new Error('Expected valid arguments');
     }
 
-    const documentation = {filters: [], functions: [], types: []};
+    const documentation = {filters: [], functions: [], values: []};
     const describe = vi.fn().mockResolvedValue(documentation);
     const client = {query: {describe}} as unknown as Client;
     expect(await execute(result.value, client)).toContain('Filter language\n');

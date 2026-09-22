@@ -16,7 +16,7 @@ const signature = z.object({
 });
 
 export const queryDescription = z.object({
-  types: z.array(
+  values: z.array(
     z.object({
       name: z.string(),
       description: z.string(),

@@ -1,4 +1,5 @@
 import {InvalidValueError} from '@places/common/filter-engine';
+import type {Point} from '@places/common/filter-engine/values/geographic-point';
 import {eq} from 'drizzle-orm';
 
 import type {Database} from '../db/index.ts';
@@ -10,11 +11,10 @@ import {
   type GooglePlaces,
 } from '../services/google/index.ts';
 
-export type Point = {longitude: number; latitude: number};
+export type {Point} from '@places/common/filter-engine/values/geographic-point';
 
 export interface Context {
   readonly now: number;
-  google: GooglePlaces;
   tagExists(name: string): Promise<boolean>;
   resolvePoint(name: string): Promise<Point>;
 }
@@ -52,7 +52,6 @@ export function createContext(
 
   const context: Context = {
     now: Date.now(),
-    google,
     resolvePoint(name) {
       const existing = points.get(name);
 
