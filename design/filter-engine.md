@@ -156,7 +156,7 @@ matches the complete field. Unescaped stars provide wildcard matching; SQL `%`,
 
 Absent or empty notes fail positive note matches. Negation includes places whose
 notes are absent. `has[notes]` uses the notes registration's presence predicate.
-`has[tag]` tests whether any tag assignment exists.
+`has[tag]` tests whether any active tag assignment exists.
 
 ### Sources
 

@@ -94,8 +94,9 @@ place associations while preserving places.
 
 Tags have an `archived` boolean, defaulting to false. Archived tags are omitted
 from `tags list` and from the tags returned with places, while their assignments,
-notes, names, and IDs remain available. Filters such as `tag[old-list]`, wildcard
-patterns, and `has[tag]` still include archived tags. Direct lookup with
+notes, names, and IDs remain available. Explicit `tag[...]` filters, including
+wildcard patterns, still match archived tags. `has[tag]` counts active tags only,
+so `!has[tag]` includes places assigned only archived tags. Direct lookup with
 `tags get <id>` returns an archived tag. Archiving keeps the tag name reserved.
 
 ```sh

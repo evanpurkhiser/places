@@ -104,7 +104,10 @@ describe.skipIf(!testUrl)('tag API and CLI against PostgreSQL', () => {
     expect(matches.map(item => item.id)).toEqual([place!.id]);
     expect(matches[0]!.tags).toEqual([]);
     expect(await client.places.list({query: '!tag[old-list]'})).toEqual([]);
-    expect(await client.places.list({query: 'has[tag]'})).toHaveLength(1);
+    expect(await client.places.list({query: 'has[tag]'})).toEqual([]);
+    expect(await client.places.list({query: '!has[tag]'})).toMatchObject([
+      {id: place!.id},
+    ]);
     expect(await db.select().from(placeTags)).toHaveLength(1);
     expect(
       await client.tags.update({id: tag.id, description: 'Historical list'}),
@@ -112,6 +115,10 @@ describe.skipIf(!testUrl)('tag API and CLI against PostgreSQL', () => {
 
     await client.tags.update({id: tag.id, archived: false});
     expect(await client.tags.list()).toHaveLength(1);
+    expect(await client.places.list({query: 'has[tag]'})).toMatchObject([
+      {id: place!.id},
+    ]);
+    expect(await client.places.list({query: '!has[tag]'})).toEqual([]);
     const restored = await client.places.list({query: 'tag[old-list]'});
     expect(restored[0]!.tags).toMatchObject([
       {tag: {id: tag.id, archived: false}, note: 'Keep this context'},

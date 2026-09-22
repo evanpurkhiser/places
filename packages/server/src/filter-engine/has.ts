@@ -10,7 +10,7 @@ export const has = defineFilter({
   examples: [
     {query: 'has[notes]', description: 'Places with a general note.'},
     {query: '!has[notes]', description: 'Places without a general note.'},
-    {query: 'has[tag]', description: 'Places with at least one tag.'},
+    {query: 'has[tag]', description: 'Places with at least one active tag.'},
   ],
   parameters: {
     property: {

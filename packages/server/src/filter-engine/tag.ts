@@ -9,7 +9,9 @@ import {equality} from './operators.ts';
 import {likePattern, matchText} from './text.ts';
 
 export const tagPresence = () => sql`exists (
-  select 1 from ${placeTags} where ${placeTags.placeId} = ${places.id}
+  select 1 from ${placeTags}
+  inner join ${tags} on ${tags.id} = ${placeTags.tagId}
+  where ${placeTags.placeId} = ${places.id} and ${tags.archived} = false
 )`;
 
 export const tag = defineFilter({

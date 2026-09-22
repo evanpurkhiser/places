@@ -115,9 +115,9 @@ spaces or square brackets, such as `tag["gmaps-list.[NYC] Coffee"]`.
 | `location` | Evaluate a geographic function        | `location[within("Manhattan, NYC")]` |
 | `hours`    | Evaluate opening hours                | `hours[open(now)]`                   |
 
-`has[tag]` means at least one tag is assigned. `!has[tag]` means no tag
-assignments at all, including original import-list tags. Visit status stays in
-user-managed tags.
+`has[tag]` means at least one active tag is assigned. `!has[tag]` includes places
+with no tags or only archived tags. Explicit `tag[...]` queries still match
+archived assignments. Visit status stays in user-managed tags.
 
 `has[notes]` means a nonempty general place note exists. `!has[notes]` selects
 places with an absent or empty general note, regardless of tag-assignment notes.
