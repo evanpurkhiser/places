@@ -29,7 +29,7 @@ const tagWrite = implement({
 
 export const tagRouter = api.router({
   list: api.list.handler(({context: {db}}) =>
-    db.select().from(tags).orderBy(asc(tags.name)),
+    db.select().from(tags).where(eq(tags.archived, false)).orderBy(asc(tags.name)),
   ),
   get: api.get.handler(async ({input, context: {db}, errors}) => {
     const [tag] = await db.select().from(tags).where(eq(tags.id, input.id));
@@ -70,6 +70,7 @@ export const tagRouter = api.router({
           name: input.name,
           icon: input.icon,
           description: input.description,
+          archived: input.archived,
           ...membership,
         })
         .where(eq(tags.id, input.id))

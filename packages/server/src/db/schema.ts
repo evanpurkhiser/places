@@ -3,6 +3,7 @@ import type {TagIcon} from '@places/common/contract/tag';
 import {inArray, sql} from 'drizzle-orm';
 import {
   check,
+  boolean,
   customType,
   index,
   integer,
@@ -96,6 +97,7 @@ export const tags = pgTable(
   {
     id: uuid('id').defaultRandom().primaryKey(),
     name: text('name').notNull().unique(),
+    archived: boolean('archived').default(false).notNull(),
     namespaceId: uuid('namespace_id').references(() => namespaces.id, {
       onDelete: 'restrict',
     }),

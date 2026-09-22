@@ -81,9 +81,12 @@ export const placeRouter = api.router({
       .from(placeTags)
       .innerJoin(tags, eq(placeTags.tagId, tags.id))
       .where(
-        inArray(
-          placeTags.placeId,
-          rows.map(place => place.id),
+        and(
+          eq(tags.archived, false),
+          inArray(
+            placeTags.placeId,
+            rows.map(place => place.id),
+          ),
         ),
       )
       .orderBy(tags.name, tags.id);

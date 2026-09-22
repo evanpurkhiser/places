@@ -71,6 +71,13 @@
       "when": 1790025046380,
       "tag": "0009_dot_tag_namespaces",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1790035484479,
+      "tag": "0010_archive_tags",
+      "breakpoints": true
     }
   ]
 }

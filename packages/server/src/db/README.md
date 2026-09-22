@@ -97,3 +97,7 @@ imports are not automatically backfilled.
 Migration `0009_dot_tag_namespaces` replaces existing dots in tag and namespace
 names with dashes, then converts namespace separators from colons to dots and
 updates the name constraints. Tag IDs and associations are preserved.
+
+Migration `0010_archive_tags` adds the `archived` boolean with a default of false.
+Archived tags retain their IDs and associations and remain usable in filters.
+Catalog and place-response tag lists select active tags.

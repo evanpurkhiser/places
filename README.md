@@ -92,6 +92,20 @@ namespace, and `places tags update <id> coffee` removes namespace membership.
 Listing returns tags sorted by their qualified name. Deleting a tag removes its
 place associations while preserving places.
 
+Tags have an `archived` boolean, defaulting to false. Archived tags are omitted
+from `tags list` and from the tags returned with places, while their assignments,
+notes, names, and IDs remain available. Filters such as `tag[old-list]`, wildcard
+patterns, and `has[tag]` still include archived tags. Direct lookup with
+`tags get <id>` returns an archived tag. Archiving keeps the tag name reserved.
+
+```sh
+pnpm places tags update <id> --archive
+pnpm places tags update <id> --unarchive
+```
+
+New tags start active. Restoring a tag makes it and its existing place assignments
+visible in lists again.
+
 Create and update accept `--icon EMOJI` and `--description TEXT`. Update accepts
 an optional name and preserves omitted fields. Pass an empty string with
 `--icon ''` or `--description ''` to set that field to null. Updates require

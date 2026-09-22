@@ -79,6 +79,56 @@ describe.skipIf(!testUrl)('tag API and CLI against PostgreSQL', () => {
     await admin.end();
   });
 
+  it('hides archived tags while preserving lookup, assignments, and filtering', async () => {
+    const tag = await client.tags.create({name: 'old-list'});
+    expect(tag.archived).toBe(false);
+    const [place] = await db
+      .insert(places)
+      .values({
+        googlePlaceId: 'archived-test',
+        name: 'Cafe',
+        formattedAddress: 'NYC',
+        coordinates: 'SRID=4326;POINT(-74 40)',
+      })
+      .returning();
+    await client.places.tag({
+      placeId: place!.id,
+      tag: tag.id,
+      notes: 'Keep this context',
+    });
+    await client.tags.update({id: tag.id, archived: true});
+
+    expect(await client.tags.list()).toEqual([]);
+    expect(await client.tags.get({id: tag.id})).toMatchObject({archived: true});
+    const matches = await client.places.list({query: 'tag[old-list]'});
+    expect(matches.map(item => item.id)).toEqual([place!.id]);
+    expect(matches[0]!.tags).toEqual([]);
+    expect(await client.places.list({query: '!tag[old-list]'})).toEqual([]);
+    expect(await client.places.list({query: 'has[tag]'})).toHaveLength(1);
+    expect(await db.select().from(placeTags)).toHaveLength(1);
+    expect(
+      await client.tags.update({id: tag.id, description: 'Historical list'}),
+    ).toMatchObject({archived: true});
+
+    await client.tags.update({id: tag.id, archived: false});
+    expect(await client.tags.list()).toHaveLength(1);
+    const restored = await client.places.list({query: 'tag[old-list]'});
+    expect(restored[0]!.tags).toMatchObject([
+      {tag: {id: tag.id, archived: false}, note: 'Keep this context'},
+    ]);
+  });
+
+  it('keeps archived tag names reserved', async () => {
+    const created = await client.tags.create({name: 'historical'});
+    const tag = await client.tags.update({id: created.id, archived: true});
+    expect(tag.archived).toBe(true);
+    expect(await client.tags.list()).toEqual([]);
+    await expect(client.tags.create({name: 'historical'})).rejects.toMatchObject({
+      code: 'CONFLICT',
+    });
+    expect(await client.tags.delete({id: tag.id})).toMatchObject({archived: true});
+  });
+
   it('normalizes, lists, reads, renames, and deletes tags through RPC', async () => {
     const cafe = await client.tags.create({name: '  CAFE\t'});
     const bakery = await client.tags.create({name: 'bakery'});
@@ -248,6 +298,14 @@ describe.skipIf(!testUrl)('tag API and CLI against PostgreSQL', () => {
       expect(JSON.parse(getOutput.stdout)).toEqual(tag);
       const updatedOutput = await cli('update', tag.id, 'Coffee');
       expect(JSON.parse(updatedOutput.stdout).name).toBe('coffee');
+      await cli('update', tag.id, '--archive');
+      const archivedList = await cli('list');
+      const archivedTag = await cli('get', tag.id);
+      expect(JSON.parse(archivedList.stdout)).toEqual([]);
+      expect(JSON.parse(archivedTag.stdout).archived).toBe(true);
+      await cli('update', tag.id, '--unarchive');
+      const restoredList = await cli('list');
+      expect(JSON.parse(restoredList.stdout)).toHaveLength(1);
       await expect(cli('create', 'coffee')).rejects.toMatchObject({code: 1});
       await cli('delete', tag.id);
       await expect(cli('get', tag.id)).rejects.toMatchObject({code: 1});

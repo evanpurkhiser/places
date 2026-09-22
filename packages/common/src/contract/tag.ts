@@ -21,6 +21,7 @@ export const tag = z.object({
     {message: 'Use a tag name or namespace.tag with nonempty, trimmed parts'},
   ),
   namespaceId: z.uuid().nullable(),
+  archived: z.boolean(),
   icon: tagIcon.nullable(),
   description: z.string().nullable(),
   createdAt: z.date(),
@@ -47,14 +48,15 @@ export const tagContract = {
     .errors({NOT_FOUND: {message: 'Tag not found'}})
     .input(
       tag
-        .pick({id: true, name: true, icon: true, description: true})
-        .partial({name: true, icon: true, description: true})
+        .pick({id: true, name: true, icon: true, description: true, archived: true})
+        .partial({name: true, icon: true, description: true, archived: true})
         .refine(
           input =>
             input.name !== undefined ||
             input.icon !== undefined ||
-            input.description !== undefined,
-          {message: 'Provide a name, icon, or description to update'},
+            input.description !== undefined ||
+            input.archived !== undefined,
+          {message: 'Provide a name, icon, description, or archived state to update'},
         ),
     )
     .output(tag),

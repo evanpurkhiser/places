@@ -312,6 +312,23 @@ describe('tag metadata', () => {
     });
   });
 
+  it.each([
+    ['--archive', true],
+    ['--unarchive', false],
+  ] as const)('sets archived with %s without renaming', (flag, archived) => {
+    const {tags, run} = setup(['update', id, flag]);
+    run();
+    expect(tags.update).toHaveBeenCalledWith(expect.objectContaining({id, archived}));
+  });
+
+  it('rejects both archive flags at parse time', () => {
+    expect(
+      parse(parser, ['tags', 'update', id, '--archive', '--unarchive']),
+    ).toMatchObject({
+      success: false,
+    });
+  });
+
   it('updates metadata without renaming the tag', () => {
     const {tags, run} = setup(['update', id, '--icon', '☕', '--description', 'Coffee.']);
     run();
@@ -361,7 +378,9 @@ describe('tag metadata', () => {
   it('rejects empty updates before calling the server', () => {
     const {tags, run} = setup(['update', id]);
 
-    expect(run).toThrow('Provide a name, --icon, or --description.');
+    expect(run).toThrow(
+      'Provide a name, --icon, --description, --archive, or --unarchive.',
+    );
     expect(tags.update).not.toHaveBeenCalled();
   });
 

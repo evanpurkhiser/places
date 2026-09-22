@@ -52,6 +52,21 @@ const tagMetadata = {
   ),
 };
 
+const tagArchive = optional(
+  or(
+    object({
+      archive: option('--archive', {
+        description: message`Hide the tag from lists while keeping its assignments.`,
+      }),
+    }),
+    object({
+      unarchive: option('--unarchive', {
+        description: message`Show the tag and its assignments in lists again.`,
+      }),
+    }),
+  ),
+);
+
 const namespaceId = argument(zod(namespace.shape.id, {metavar: 'ID', placeholder: ''}), {
   description: message`Namespace UUID, shown by namespace list or namespace create.`,
 });
@@ -272,7 +287,7 @@ export const parser = merge(
       'tags',
       or(
         command('list', object({action: constant('list')}), {
-          description: message`List all tags sorted by name.`,
+          description: message`List active tags sorted by name.`,
         }),
         command('get', object({action: constant('get'), id}), {
           description: message`Show a tag by ID.`,
@@ -287,6 +302,7 @@ export const parser = merge(
             id,
             name: optional(name),
             ...tagMetadata,
+            archive: tagArchive,
           }),
           {
             description: message`Update a tag's name, icon, or description, preserving its ID and place associations.`,
@@ -390,17 +406,21 @@ function updateTag(
   args: Extract<InferValue<typeof parser>, {action: 'update'}>,
   client: Client,
 ) {
+  const archived = args.archive ? 'archive' in args.archive : undefined;
+
   if (
     args.name === undefined &&
     args.icon === undefined &&
-    args.description === undefined
+    args.description === undefined &&
+    archived === undefined
   ) {
-    throw new Error('Provide a name, --icon, or --description.');
+    throw new Error('Provide a name, --icon, --description, --archive, or --unarchive.');
   }
 
   return client.tags.update({
     id: args.id,
     name: args.name,
+    ...(archived === undefined ? {} : {archived}),
     icon: iconPayload(args.icon),
     description: args.description === '' ? null : args.description,
   });
