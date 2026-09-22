@@ -24,11 +24,12 @@ const sourceFields = z.object({
 
 /**
  * Validate source metadata together with the provider that defines its shape.
+ * Sources saved without provider metadata have null data.
  */
 export const source = z.discriminatedUnion('type', [
   sourceFields.extend({
     type: sourceType,
-    data: instagramSourceData,
+    data: instagramSourceData.nullable(),
   }),
 ]);
 export type Source = z.infer<typeof source>;

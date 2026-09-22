@@ -1,6 +1,7 @@
 import {oc} from '@orpc/contract';
 import {z} from 'zod';
 
+import {source} from './source.ts';
 import {tag, tagReference} from './tag.ts';
 
 export const placeTag = z.object({
@@ -10,6 +11,17 @@ export const placeTag = z.object({
   createdAt: z.date(),
 });
 export type PlaceTag = z.infer<typeof placeTag>;
+
+export const placeSource = z.object({
+  placeId: z.uuid(),
+  sourceId: z.uuid(),
+  description: z.string().nullable(),
+  data: z.record(z.string(), z.json()).nullable(),
+  createdAt: z.date(),
+  updatedAt: z.date(),
+  source,
+});
+export type PlaceSource = z.infer<typeof placeSource>;
 
 export const place = z.object({
   id: z.uuid(),
@@ -29,6 +41,7 @@ export const place = z.object({
   createdAt: z.date(),
   updatedAt: z.date(),
   tags: z.array(placeTag.extend({tag})),
+  sources: z.array(placeSource),
 });
 
 export const googleSearchQuery = z.string().trim().min(1).max(4096);

@@ -30,6 +30,7 @@ describe('source contract', () => {
       data: {caption: '', username: null, postedAt: null, thumbnailUrl: null},
     };
     expect(source.parse(value)).toEqual(value);
+    expect(source.parse({...value, data: null})).toEqual({...value, data: null});
   });
 
   it('rejects an unsupported source type', () => {

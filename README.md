@@ -149,6 +149,13 @@ missing IDs return 404. Schemas are exported from
 a tag returns all associations on each matching place; untagged places have an
 empty array.
 
+`places.list` also includes a `sources` array on each place. Each association
+contains its place-specific `description` and `data`, timestamps, and the complete
+nested `source` record. Associations are ordered newest first. Filtering by a
+source returns all source associations on each matching place; places without
+sources have an empty array. Sources saved without provider metadata have null
+`source.data`.
+
 Apply existing tags to saved places using the place UUID from `list` or
 `import-status` and a tag name or UUID:
 

@@ -1,11 +1,12 @@
 import {implement, ORPCError} from '@orpc/server';
 import {contract} from '@places/common/contract';
+import {placeSource} from '@places/common/contract/place';
 import {SearchError} from '@places/common/search';
 import {and, desc, eq, getTableColumns, inArray, or, sql} from 'drizzle-orm';
 import {z} from 'zod';
 
 import type {Database} from '../db/index.ts';
-import {places, placeTags, tags} from '../db/schema.ts';
+import {places, placeSources, placeTags, sources, tags} from '../db/schema.ts';
 import {compilePlaceQuery} from '../filter-engine/index.ts';
 import {enqueueImport, getImportStatus} from '../importers/index.ts';
 import {syncQueue, syncPayload} from '../jobs/gmaps-sync.ts';
@@ -91,11 +92,30 @@ export const placeRouter = api.router({
       )
       .orderBy(tags.name, tags.id);
     const tagsByPlace = Map.groupBy(assignments, assignment => assignment.placeId);
+    const sourceAssignments = await db
+      .select({...getTableColumns(placeSources), source: getTableColumns(sources)})
+      .from(placeSources)
+      .innerJoin(sources, eq(placeSources.sourceId, sources.id))
+      .where(
+        inArray(
+          placeSources.placeId,
+          rows.map(place => place.id),
+        ),
+      )
+      .orderBy(desc(placeSources.createdAt), desc(placeSources.sourceId));
+    const sourcesByPlace = Map.groupBy(
+      sourceAssignments,
+      assignment => assignment.placeId,
+    );
 
     return rows.map(({latitude, longitude, ...place}) => ({
       ...place,
       coordinates: {latitude, longitude},
       tags: tagsByPlace.get(place.id) ?? [],
+      sources: (sourcesByPlace.get(place.id) ?? []).map(assignment => ({
+        ...assignment,
+        data: placeSource.shape.data.parse(assignment.data),
+      })),
     }));
   }),
   sync: api.sync.handler(async ({input, context: {db, google, jobs, config}}) => {

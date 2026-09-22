@@ -337,6 +337,66 @@ describe.skipIf(!testUrl)('place import with PostgreSQL and pg-boss', () => {
     expect(untaggedPlaces[0]?.tags).toHaveLength(1);
   });
 
+  it('lists every source association and its source metadata on filtered places', async () => {
+    const {
+      placeIds: [placeId],
+    } = await importPlace(db, google, 'ChIJtest');
+    const [otherPlace] = await db
+      .insert(places)
+      .values({
+        googlePlaceId: 'other',
+        name: 'Other',
+        formattedAddress: '',
+        coordinates: 'SRID=4326;POINT(-74 40)',
+      })
+      .returning();
+    const [first, second] = await db
+      .insert(sources)
+      .values([
+        {
+          type: 'instagram',
+          externalId: 'first',
+          url: 'https://www.instagram.com/p/first/',
+          description: 'A cafe post',
+          data: {
+            caption: 'Coffee',
+            username: 'alice',
+            postedAt: null,
+            thumbnailUrl: null,
+          },
+        },
+        {type: 'instagram', externalId: 'second'},
+      ])
+      .returning();
+    const [firstAssignment, secondAssignment] = await db
+      .insert(placeSources)
+      .values([
+        {
+          placeId: placeId!,
+          sourceId: first!.id,
+          description: 'Order the coffee',
+          data: {evidence: 'Caption mentions coffee'},
+          createdAt: new Date('2026-09-20T00:00:00Z'),
+        },
+        {
+          placeId: placeId!,
+          sourceId: second!.id,
+          createdAt: new Date('2026-09-21T00:00:00Z'),
+        },
+      ])
+      .returning();
+
+    const all = await client.places.list();
+    expect(all.find(place => place.id === otherPlace!.id)?.sources).toEqual([]);
+
+    const filtered = await client.places.list({query: 'source[text:coffee]'});
+    expect(filtered).toHaveLength(1);
+    expect(filtered[0]?.sources).toEqual([
+      {...secondAssignment, source: second},
+      {...firstAssignment, source: first},
+    ]);
+  });
+
   it('resolves names and IDs, deduplicates tags, and preserves tags on reimport', async () => {
     const cafe = await client.tags.create({name: 'cafe'});
     const favorite = await client.tags.create({name: 'favorite'});
