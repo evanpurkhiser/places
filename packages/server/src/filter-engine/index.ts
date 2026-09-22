@@ -60,11 +60,11 @@ export const placeFilterEngine = implementFilterEngine(
   implementation,
 );
 
-export function compilePlaceQuery(
+export async function compilePlaceQuery(
   query: string,
   {db, google}: {db: Database; google?: GooglePlaces},
 ): Promise<SQL> {
   const prepared = placeFilterEngine.prepare(query);
   const context = createContext(db, google);
-  return placeFilterEngine.execute(prepared, context);
+  return await placeFilterEngine.execute(prepared, context);
 }
