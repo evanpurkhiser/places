@@ -18,6 +18,7 @@ import {tagName} from './data-types/tag-name.ts';
 import {textLiteral} from './data-types/text-literal.ts';
 import {text} from './data-types/text.ts';
 import {time} from './data-types/time.ts';
+import {uuid} from './data-types/uuid.ts';
 import {point} from './functions/point.ts';
 import {radius} from './functions/radius.ts';
 import {rect} from './functions/rect.ts';
@@ -91,6 +92,7 @@ const textFilters = (
 export const placeFilterEngine = createFilterEngine<SQL, Context>({
   types: [
     text,
+    uuid,
     textLiteral,
     tagName,
     property,
