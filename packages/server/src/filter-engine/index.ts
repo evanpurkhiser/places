@@ -15,6 +15,7 @@ import {latitude} from './data-types/latitude.ts';
 import {longitude} from './data-types/longitude.ts';
 import {property} from './data-types/property.ts';
 import {tagName} from './data-types/tag-name.ts';
+import {textLiteral} from './data-types/text-literal.ts';
 import {text} from './data-types/text.ts';
 import {time} from './data-types/time.ts';
 import {point} from './functions/point.ts';
@@ -90,6 +91,7 @@ const textFilters = (
 export const placeFilterEngine = createFilterEngine<SQL, Context>({
   types: [
     text,
+    textLiteral,
     tagName,
     property,
     distance,
