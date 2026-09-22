@@ -94,5 +94,6 @@ Migration `0008_import_runs` creates the table. Runs are recorded when imports a
 enqueued or begin execution. Status lookup requires a recorded run; historical
 imports are not automatically backfilled.
 
-Migration `0009_dot_tag_namespaces` converts namespaced tag names to the dot
-separator and updates the name constraints. Tag IDs and associations are preserved.
+Migration `0009_dot_tag_namespaces` replaces existing dots in tag and namespace
+names with dashes, then converts namespace separators from colons to dots and
+updates the name constraints. Tag IDs and associations are preserved.
