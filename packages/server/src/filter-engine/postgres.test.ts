@@ -7,7 +7,7 @@ import {randomUUID} from 'node:crypto';
 import {fileURLToPath} from 'node:url';
 
 import {createDatabase} from '../db/index.ts';
-import {places, placeTags, tags} from '../db/schema.ts';
+import {places, placeSources, sources, placeTags, tags} from '../db/schema.ts';
 
 import {compilePlaceQuery} from './index.ts';
 
@@ -21,6 +21,9 @@ describe.skipIf(!testUrl)('filter engine with PostgreSQL', () => {
   url.pathname = `/${databaseName}`;
 
   const db = createDatabase(url.href);
+  const aliceId = randomUUID();
+  const bobId = randomUUID();
+  const blankId = randomUUID();
 
   beforeAll(async () => {
     await admin.query(`CREATE DATABASE "${databaseName}"`);
@@ -58,6 +61,43 @@ describe.skipIf(!testUrl)('filter engine with PostgreSQL', () => {
       .values([{name: 'cafe'}, {name: 'laptop-friendly'}])
       .returning();
 
+    await db.insert(sources).values([
+      {
+        id: aliceId,
+        type: 'instagram',
+        url: 'https://www.instagram.com/p/AlicePost/',
+        description: 'Neighborhood favorites',
+        data: {
+          caption: 'Coffee crawl 100%_good',
+          username: 'Alice',
+          postedAt: null,
+          thumbnailUrl: null,
+        },
+      },
+      {
+        id: bobId,
+        type: 'instagram',
+        description: 'Date night',
+        data: {caption: 'Cocktails', username: 'bob', postedAt: null, thumbnailUrl: null},
+      },
+      {
+        id: blankId,
+        type: 'instagram',
+        data: {caption: '', username: null, postedAt: null, thumbnailUrl: null},
+      },
+      {
+        type: 'instagram',
+        description: 'Unattached source',
+        data: {caption: 'Secret', username: 'orphan', postedAt: null, thumbnailUrl: null},
+      },
+    ]);
+    await db.insert(placeSources).values([
+      {placeId: saved[0]!.id, sourceId: aliceId},
+      {placeId: saved[0]!.id, sourceId: bobId},
+      {placeId: saved[0]!.id, sourceId: blankId},
+      {placeId: saved[1]!.id, sourceId: aliceId, description: 'Quiet patio'},
+    ]);
+
     await db.insert(placeTags).values([
       {placeId: saved[0]!.id, tagId: assigned[0]!.id, note: 'upstairs'},
       {placeId: saved[0]!.id, tagId: assigned[1]!.id, note: 'outlets'},
@@ -81,6 +121,47 @@ describe.skipIf(!testUrl)('filter engine with PostgreSQL', () => {
 
     return rows.map(row => row.name);
   }
+
+  it.each([
+    ['has[source]', ['Bar', 'Cafe']],
+    ['source[]', ['Bar', 'Cafe']],
+    ['!has[source]', ['Empty']],
+    ['source[type:INSTAGRAM]', ['Bar', 'Cafe']],
+    ['source[type:unknown]', []],
+    ['source[type:""]', []],
+    ['source[url:""]', []],
+    ['source[text:cocktails]', ['Cafe']],
+    ['!source[text:cocktails]', ['Bar', 'Empty']],
+    ['source[text:coffee] source[text:cocktails]', ['Cafe']],
+    ['source[text:coffee]', ['Bar', 'Cafe']],
+    ['source[text:neighborhood]', ['Bar', 'Cafe']],
+    ['source[text:patio]', ['Bar']],
+    ['source[text:"date night"]', ['Cafe']],
+    ['source[text:="date night"]', ['Cafe']],
+    ['source[text:=night]', []],
+    ['source[text:"100%_good"]', ['Bar', 'Cafe']],
+    ['source[text:"cof*crawl"]', ['Bar', 'Cafe']],
+    ['source[text:"Secret"]', []],
+    ['source[url:"https://www.instagram.com/p/AlicePost/"]', ['Bar', 'Cafe']],
+    ['source[url:"https://www.instagram.com/p/alicepost/"]', []],
+    ['source[url:"https://www.instagram.com/p/AlicePost"]', []],
+    ['source[text:cocktails] OR !has[source]', ['Cafe', 'Empty']],
+    ['source[type:instagram] tag[laptop-friendly]', ['Cafe']],
+  ])('matches attached sources: %s', async (query, expected) => {
+    expect(await names(query)).toEqual(expected);
+  });
+
+  it('correlates source IDs and nullable metadata without duplicating places', async () => {
+    expect(await names(`source[id:${aliceId}]`)).toEqual(['Bar', 'Cafe']);
+    expect(await names(`source[id:${bobId}, text:coffee]`)).toEqual([]);
+    expect(await names(`source[id:${randomUUID()}]`)).toEqual([]);
+    expect(await names(`source[id:${blankId}, text:*]`)).toEqual([]);
+    expect(await names(`!source[id:${blankId}, text:*]`)).toEqual([
+      'Bar',
+      'Cafe',
+      'Empty',
+    ]);
+  });
 
   it('matches whole-place tag negation and avoids duplicate results', async () => {
     expect(await names('tag[cafe*] OR tag[laptop-*]')).toEqual(['Bar', 'Cafe']);

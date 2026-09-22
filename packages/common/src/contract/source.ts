@@ -11,6 +11,8 @@ export const instagramSourceData = z.strictObject({
 });
 export type InstagramSourceData = z.infer<typeof instagramSourceData>;
 
+export const sourceType = z.literal('instagram');
+
 const sourceFields = z.object({
   id: z.uuid(),
   externalId: z.string().min(1).nullable(),
@@ -25,7 +27,7 @@ const sourceFields = z.object({
  */
 export const source = z.discriminatedUnion('type', [
   sourceFields.extend({
-    type: z.literal('instagram'),
+    type: sourceType,
     data: instagramSourceData,
   }),
 ]);

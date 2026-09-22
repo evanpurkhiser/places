@@ -49,6 +49,12 @@ matching and exact equality. Unsupported combinations are errors.
 `!field[=value]` excludes an exact match. For tags, `!tag[=type.cafe]`
 selects places without that tag, regardless of other assigned tags.
 
+Source predicates use named arguments: `source[type:instagram, text:coffee]`
+requires one attached source matching both conditions. `source[text:coffee]`
+searches discovery context. `has[source]` requires any source; `!has[source]`
+selects places without sources. See [source filtering](sources.md#source-filtering)
+for matching rules and supported fields.
+
 ## Strings and wildcards
 
 Double quotes delimit strings containing whitespace or grammar punctuation.

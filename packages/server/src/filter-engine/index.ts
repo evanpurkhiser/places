@@ -27,6 +27,7 @@ import {has} from './has.ts';
 import {location} from './location.ts';
 import {open} from './open.ts';
 import {equality} from './operators.ts';
+import {source} from './source.ts';
 import {tag} from './tag.ts';
 import {matchText, present} from './text.ts';
 
@@ -105,7 +106,7 @@ export const placeFilterEngine = createFilterEngine<SQL, Context>({
     geographicPoint,
     geographicPredicate,
   ],
-  filters: [tag, ...textFilters, has, location, open],
+  filters: [tag, source, ...textFilters, has, location, open],
   functions: [point, radius, rect, sector],
   boolean: {
     all: () => sql`true`,

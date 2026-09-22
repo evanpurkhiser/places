@@ -158,6 +158,14 @@ Absent or empty notes fail positive note matches. Negation includes places whose
 notes are absent. `has[notes]` uses the notes registration's presence predicate.
 `has[tag]` tests whether any tag assignment exists.
 
+### Sources
+
+`source` accepts named conditions and compiles them inside a correlated `EXISTS`
+over `place_sources` and `sources`. All conditions match one source and its
+association with the selected place. This prevents duplicate places, scopes
+association descriptions correctly, and makes negation apply to the whole place.
+Its presence predicate supports `has[source]`. Source matching reads saved data.
+
 ## Semantic validation
 
 Registrations define the accepted query surface and its implementations. The PEG

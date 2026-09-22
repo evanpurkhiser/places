@@ -335,12 +335,32 @@ pnpm places list --query 'open[@now, for:2h]'
 pnpm places list --query 'open["mon 6pm", until:"tue 2am"]'
 ```
 
-Supported filters are `tag`, `name`, `address`, `notes`, `has`, `location`, and `open`.
+Supported filters are `tag`, `source`, `name`, `address`, `notes`, `has`, `location`, and `open`.
 Tags support exact
 names and wildcard patterns; `notes:` within a tag predicate matches that same
 assignment's note. Exact unknown tags return errors, including under negation.
-`has` supports filters that register a presence check: `tag`, `name`, `address`,
-and `notes`.
+`has` supports filters that register a presence check: `tag`, `source`, `name`,
+`address`, and `notes`.
+
+Source filters use named arguments, all matching the same attached source:
+
+```text
+source[type:instagram]
+source[id:"10000000-0000-4000-8000-000000000001"]
+source[type:instagram, text:coffee]
+source[url:"https://www.instagram.com/p/POST/"]
+source[text:coffee] source[text:cocktails]
+!has[source]
+```
+
+Type matches a complete value ignoring case. IDs and saved URLs match exactly,
+including URL case and trailing slashes.
+Unknown IDs and types match no places. `text` searches source descriptions,
+Instagram captions, and descriptions on that place's source association using
+substring matching, `*` wildcards, or `=` for complete literal matches. Separate
+source predicates can match different sources attached to the place. `source[]`
+and `has[source]` both require any attached source; `!source[...]` excludes places
+with a matching source. See [Sources](design/sources.md#source-filtering).
 
 `location` supports `radius(point(longitude, latitude), distance)` and
 `rect(topLeft, bottomRight)`. Points also accept place names, addresses, and

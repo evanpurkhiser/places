@@ -93,3 +93,35 @@ behavior will be designed as part of that work.
 - Whether source tags are manual or derived from attached source records.
 - Whether to track the ingestion mechanism separately from discovery sources.
 - Provider payload retention and refresh behavior.
+
+## Source filtering
+
+`source[...]` selects places with an attached source satisfying every named
+argument. All conditions apply to the same source and its association with that
+place. Separate predicates can match different sources:
+
+```text
+source[type:instagram, text:coffee]
+source[text:coffee] source[text:cocktails]
+```
+
+Supported arguments:
+
+- `type`: exact provider type, ignoring case. Instagram is the current provider.
+- `id`: exact source UUID. Unknown UUIDs match no places.
+- `url`: exact stored URL, including case and trailing slash.
+- `text`: source description, Instagram caption, or the description on the matching
+  place/source association. Uses case-insensitive substring matching and `*`
+  wildcards; `text:="date night"` matches a complete field literally.
+
+`source[]` and `has[source]` both require any attached source. `!has[source]`
+selects places without sources. `!source[text:coffee]` selects places with no
+source mentioning coffee, including places without sources. Multiple matching
+sources return each place once. Unattached sources do not affect place results.
+
+IDs must be valid UUIDs. Unknown types match no places. Literal identity fields
+treat `*` literally. Missing source metadata fails a positive condition. Text
+matches each field independently and only searches the association belonging to
+the selected place.
+
+Source dates, counts, and external-ID filtering remain future work.

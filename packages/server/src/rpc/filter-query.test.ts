@@ -16,7 +16,7 @@ import {promisify} from 'node:util';
 import {createApp} from '../app.ts';
 import {configSchema} from '../config.ts';
 import {createDatabase} from '../db/index.ts';
-import {places, placeTags, tags} from '../db/schema.ts';
+import {places, placeSources, sources, placeTags, tags} from '../db/schema.ts';
 import {testConfig} from '../fixtures/config.ts';
 import {GoogleUnavailableError} from '../services/google/errors.ts';
 import {createGooglePlaces} from '../services/google/index.ts';
@@ -70,6 +70,14 @@ describe.skipIf(!testUrl)('place filtering through API and CLI', () => {
         coordinates: 'SRID=4326;POINT(-74 40)',
       },
     ]);
+    const [source] = await db
+      .insert(sources)
+      .values({
+        type: 'instagram',
+        data: {caption: 'Coffee', username: 'alice', postedAt: null, thumbnailUrl: null},
+      })
+      .returning();
+    await db.insert(placeSources).values({placeId: cafeId, sourceId: source!.id});
     const [tag] = await db.insert(tags).values({name: 'cafe'}).returning();
     await db
       .insert(placeTags)
@@ -80,6 +88,15 @@ describe.skipIf(!testUrl)('place filtering through API and CLI', () => {
     await db.$client.end();
     await admin.query(`DROP DATABASE IF EXISTS "${databaseName}" WITH (FORCE)`);
     await admin.end();
+  });
+
+  it('filters sources through the API', async () => {
+    const matches = await client.places.list({
+      query: 'source[type:instagram, text:coffee]',
+    });
+    expect(matches.map(place => place.id)).toEqual([cafeId]);
+    const without = await client.places.list({query: '!has[source]'});
+    expect(without.map(place => place.id)).toEqual([bakeryId]);
   });
 
   it('preserves unfiltered list calls and the existing place response', async () => {
@@ -250,9 +267,14 @@ describe.skipIf(!testUrl)('place filtering through API and CLI', () => {
       expect(JSON.parse(openPlaces).map((place: {id: string}) => place.id)).toEqual([
         cafeId,
       ]);
+      const {stdout: sourced} = await cli('list', '--query', 'source[text:coffee]');
+      expect(JSON.parse(sourced).map((place: {id: string}) => place.id)).toEqual([
+        cafeId,
+      ]);
       const {stdout: documentation} = await cli('docs', 'filter');
       expect(documentation).toMatch(/^Filter language\n/);
       expect(documentation).toContain('Example: tag[favorite]');
+      expect(documentation).toContain('Example: source[type:instagram]');
       expect(documentation).not.toMatch(/^"/);
 
       try {
