@@ -104,8 +104,26 @@ function PlacesApp({
       }
     }
 
+    function updateShift(event: KeyboardEvent) {
+      document.documentElement.toggleAttribute('data-shift-pressed', event.shiftKey);
+    }
+
+    function releaseShift() {
+      document.documentElement.removeAttribute('data-shift-pressed');
+    }
+
     window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+    window.addEventListener('keydown', updateShift);
+    window.addEventListener('keyup', updateShift);
+    window.addEventListener('blur', releaseShift);
+
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      window.removeEventListener('keydown', updateShift);
+      window.removeEventListener('keyup', updateShift);
+      window.removeEventListener('blur', releaseShift);
+      releaseShift();
+    };
   }, [setSelected]);
 
   function resetFilters() {
