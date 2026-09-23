@@ -279,10 +279,10 @@ curl -i https://places.prk.network/api/imports \
 curl https://places.prk.network/api/imports/<job-id>
 ```
 
-Submission returns `202 Accepted`, the import's `jobId` and `type`, and the status
-resource in both the `Location` header and a `statusUrl` field. Status returns
-`state`, `placeIds`, `error`, and `sourceId`. The source ID is available for
-Instagram imports after capture; Google Maps imports return `null`.
+Submission returns `202 Accepted` with the import's `jobId` and `type`. Poll
+`/api/imports/<jobId>` for `state`, `placeIds`, `error`, and `sourceId`. The source
+ID is available for Instagram imports after capture; Google Maps imports return
+`null`.
 
 ## Sync Google place metadata
 

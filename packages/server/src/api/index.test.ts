@@ -18,7 +18,7 @@ const context = {} as Context;
 describe('import HTTP API', () => {
   beforeEach(() => vi.resetAllMocks());
 
-  it('queues an import and returns its status location', async () => {
+  it('queues an import', async () => {
     const jobId = randomUUID();
     importers.enqueueImport.mockResolvedValue({jobId, type: 'instagram'});
     const app = createApp(context);
@@ -29,13 +29,9 @@ describe('import HTTP API', () => {
     });
 
     expect(response.status).toBe(202);
-    expect(response.headers.get('Location')).toBe(
-      `http://places.test/api/imports/${jobId}`,
-    );
     await expect(response.json()).resolves.toEqual({
       jobId,
       type: 'instagram',
-      statusUrl: `http://places.test/api/imports/${jobId}`,
     });
     expect(importers.enqueueImport).toHaveBeenCalledExactlyOnceWith(
       'https://www.instagram.com/p/example/',

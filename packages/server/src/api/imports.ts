@@ -44,11 +44,7 @@ importApi
       return c.json({error: 'A valid URL is required.'}, 400);
     }
 
-    const result = await enqueueImport(request.data.url, c.var);
-    const statusUrl = new URL(`/api/imports/${result.jobId}`, c.req.url).href;
-    c.header('Location', statusUrl);
-
-    return c.json({...result, statusUrl}, 202);
+    return c.json(await enqueueImport(request.data.url, c.var), 202);
   })
   .get('/:jobId', async c => {
     const jobId = importId.safeParse(c.req.param('jobId'));
