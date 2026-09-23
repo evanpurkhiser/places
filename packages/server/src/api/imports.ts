@@ -1,8 +1,10 @@
 import {importInput} from '@places/common/contract/place';
+import {inArray} from 'drizzle-orm';
 import {Hono} from 'hono';
 import {z} from 'zod';
 
 import type {Context} from '../context.ts';
+import {places} from '../db/schema.ts';
 import {
   ImportNotFoundError,
   ImportUnavailableError,
@@ -13,6 +15,23 @@ import {GoogleInputError, GoogleUnavailableError} from '../services/google/error
 
 const importRequest = z.object({url: importInput});
 const importId = z.uuid();
+
+async function getPlaceNames(placeIds: string[], context: Pick<Context, 'db'>) {
+  if (placeIds.length === 0) {
+    return [];
+  }
+
+  const records = await context.db
+    .select({id: places.id, name: places.name})
+    .from(places)
+    .where(inArray(places.id, placeIds));
+  const namesById = new Map(records.map(place => [place.id, place.name]));
+
+  return placeIds.flatMap(id => {
+    const name = namesById.get(id);
+    return name === undefined ? [] : [name];
+  });
+}
 
 export const importApi = new Hono<{Variables: Context}>();
 
@@ -54,5 +73,10 @@ importApi
     }
 
     c.header('Cache-Control', 'no-store');
-    return c.json(await getImportStatus(jobId.data, c.var));
+    const status = await getImportStatus(jobId.data, c.var);
+
+    return c.json({
+      ...status,
+      placeNames: await getPlaceNames(status.placeIds, c.var),
+    });
   });

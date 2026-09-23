@@ -39,10 +39,22 @@ describe('import HTTP API', () => {
     );
   });
 
-  it('returns import status with its source ID', async () => {
+  it('returns import status with its source ID and place names', async () => {
     const jobId = randomUUID();
     const sourceId = randomUUID();
     const placeIds = [randomUUID(), randomUUID()];
+    const statusContext = {
+      db: {
+        select: () => ({
+          from: () => ({
+            where: async () => [
+              {id: placeIds[1], name: 'Second Place'},
+              {id: placeIds[0], name: 'First Place'},
+            ],
+          }),
+        }),
+      },
+    } as unknown as Context;
     importers.getImportStatus.mockResolvedValue({
       jobId,
       type: 'instagram',
@@ -51,7 +63,7 @@ describe('import HTTP API', () => {
       placeIds,
       error: null,
     });
-    const app = createApp(context);
+    const app = createApp(statusContext);
     const response = await app.request(`/api/imports/${jobId}`);
 
     expect(response.status).toBe(200);
@@ -62,9 +74,13 @@ describe('import HTTP API', () => {
       sourceId,
       state: 'completed',
       placeIds,
+      placeNames: ['First Place', 'Second Place'],
       error: null,
     });
-    expect(importers.getImportStatus).toHaveBeenCalledExactlyOnceWith(jobId, context);
+    expect(importers.getImportStatus).toHaveBeenCalledExactlyOnceWith(
+      jobId,
+      statusContext,
+    );
   });
 
   it('rejects invalid requests before importing', async () => {
