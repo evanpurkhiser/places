@@ -157,7 +157,7 @@ sources have an empty array. Sources saved without provider metadata have null
 `source.data`.
 
 Apply existing tags to saved places using the place UUID from `list` or
-`import-status` and a tag name or UUID:
+`import runs` and a tag name or UUID:
 
 ```sh
 pnpm places tag <place-id> attr.nice-bathroom
@@ -195,13 +195,15 @@ pnpm places import 'https://www.instagram.com/p/SHORTCODE/' --wait --tag type.ca
 pnpm places import 'gmaps:ChIJ...' --tag type.cafe --tag <tag-id>
 pnpm places import 'gmaps:ChIJ...' --notes 'Try the espresso tonic'
 pnpm places import 'gmaps:ChIJ...' --tag-note attr.nice-bathroom 'Code 1234'
-pnpm places import-status <job-id>
+pnpm places import runs
+pnpm places import runs --limit 100
+pnpm places import runs <job-id>
 pnpm places list
 ```
 
 Instagram post and reel URLs use the Instagram capture worker, which requires the
 Instagram/OpenAI configuration. Each matched place is queued for Google import.
-`import-status` and `--wait` track the complete operation and return all saved
+`import runs <job-id>` and `--wait` track the complete operation and return all saved
 place IDs. Status includes partial results while children run and reports failed
 or cancelled children. A repeated post skips capture and follows retained child
 jobs, including failures; after those jobs expire, it returns the source's saved

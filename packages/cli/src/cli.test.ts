@@ -52,6 +52,8 @@ describe('tag arguments', () => {
 });
 
 describe('import arguments', () => {
+  const jobId = '9a53fa46-9d9d-4dac-b0b2-f3a8334900ef';
+
   it.each([undefined, '', '  Try the espresso tonic.\nAsk for oat milk.  '])(
     'forwards notes verbatim: %j',
     notes => {
@@ -156,6 +158,69 @@ describe('import arguments', () => {
   ])('rejects invalid tag arguments: %j', (...args) => {
     expect(parse(parser, args)).toMatchObject({success: false});
   });
+
+  it('gets an import run by job ID', async () => {
+    const result = parse(parser, ['import', 'runs', jobId]);
+    expect(result).toMatchObject({
+      success: true,
+      value: {action: 'import-runs', selection: {jobId}},
+    });
+
+    if (!result.success) {
+      throw new Error('Expected valid arguments');
+    }
+
+    const getImportRun = vi.fn();
+    await execute(result.value, {places: {getImportRun}} as unknown as Client);
+
+    expect(getImportRun).toHaveBeenCalledExactlyOnceWith({jobId});
+  });
+
+  it('lists import runs', async () => {
+    const result = parse(parser, ['import', 'runs']);
+    expect(result).toMatchObject({
+      success: true,
+      value: {action: 'import-runs', selection: undefined},
+    });
+
+    if (!result.success) {
+      throw new Error('Expected valid arguments');
+    }
+
+    const listImportRuns = vi.fn();
+    await execute(result.value, {places: {listImportRuns}} as unknown as Client);
+
+    expect(listImportRuns).toHaveBeenCalledExactlyOnceWith({limit: 50});
+  });
+
+  it('limits listed import runs', async () => {
+    const result = parse(parser, ['import', 'runs', '--limit', '10']);
+
+    if (!result.success) {
+      throw new Error('Expected valid arguments');
+    }
+
+    const listImportRuns = vi.fn();
+    await execute(result.value, {places: {listImportRuns}} as unknown as Client);
+
+    expect(listImportRuns).toHaveBeenCalledExactlyOnceWith({limit: 10});
+    expect(parse(parser, ['import', 'runs', '--limit', '0'])).toMatchObject({
+      success: false,
+    });
+    expect(parse(parser, ['import', 'runs', jobId, '--limit', '10'])).toMatchObject({
+      success: false,
+    });
+  });
+
+  it('rejects the old status commands and invalid run IDs', () => {
+    expect(parse(parser, ['import-status', jobId])).toMatchObject({success: false});
+    expect(parse(parser, ['import', 'status', 'invalid'])).toMatchObject({
+      success: false,
+    });
+    expect(parse(parser, ['import', 'runs', 'invalid'])).toMatchObject({
+      success: false,
+    });
+  });
 });
 
 describe('waiting for imports', () => {
@@ -183,7 +248,7 @@ describe('waiting for imports', () => {
 
     const places = {
       import: vi.fn().mockResolvedValue({jobId, type: 'gmaps'}),
-      importStatus: vi.fn().mockResolvedValue(completed),
+      getImportRun: vi.fn().mockResolvedValue(completed),
     };
 
     return {places, run: () => execute(result.value, {places} as unknown as Client)};
@@ -193,14 +258,14 @@ describe('waiting for imports', () => {
     const {places, run} = setup(false);
 
     await expect(run()).resolves.toEqual({jobId, type: 'gmaps'});
-    expect(places.importStatus).not.toHaveBeenCalled();
+    expect(places.getImportRun).not.toHaveBeenCalled();
   });
 
   it('returns saved place IDs immediately for an already completed job', async () => {
     const {places, run} = setup();
 
     await expect(run()).resolves.toEqual(completed);
-    expect(places.importStatus).toHaveBeenCalledExactlyOnceWith({jobId});
+    expect(places.getImportRun).toHaveBeenCalledExactlyOnceWith({jobId});
   });
 
   it('polls through pending states and retries once per second', async () => {
@@ -208,7 +273,7 @@ describe('waiting for imports', () => {
     const {places, run} = setup();
 
     for (const state of ['created', 'active', 'retry']) {
-      places.importStatus.mockResolvedValueOnce({
+      places.getImportRun.mockResolvedValueOnce({
         ...completed,
         state,
         placeIds: [],
@@ -218,21 +283,21 @@ describe('waiting for imports', () => {
 
     const pending = run();
     await vi.advanceTimersByTimeAsync(0);
-    expect(places.importStatus).toHaveBeenCalledTimes(1);
+    expect(places.getImportRun).toHaveBeenCalledTimes(1);
     await vi.advanceTimersByTimeAsync(999);
-    expect(places.importStatus).toHaveBeenCalledTimes(1);
+    expect(places.getImportRun).toHaveBeenCalledTimes(1);
     await vi.advanceTimersByTimeAsync(2001);
 
     await expect(pending).resolves.toEqual(completed);
-    expect(places.importStatus).toHaveBeenCalledTimes(4);
+    expect(places.getImportRun).toHaveBeenCalledTimes(4);
   });
 
   it.each(['failed', 'cancelled'])('rejects a %s job', async state => {
     const {places, run} = setup();
-    places.importStatus.mockResolvedValue({...completed, state, error: null});
+    places.getImportRun.mockResolvedValue({...completed, state, error: null});
 
     await expect(run()).rejects.toThrow(`Import ${jobId} ${state}.`);
-    expect(places.importStatus).toHaveBeenCalledTimes(1);
+    expect(places.getImportRun).toHaveBeenCalledTimes(1);
   });
 
   it('waits for an Instagram import and returns multiple places', async () => {
@@ -254,7 +319,7 @@ describe('waiting for imports', () => {
     };
     const places = {
       import: vi.fn().mockResolvedValue({jobId, type: 'instagram'}),
-      importStatus: vi
+      getImportRun: vi
         .fn()
         .mockResolvedValueOnce({...status, state: 'active', placeIds: []})
         .mockResolvedValue(status),
@@ -271,7 +336,7 @@ describe('waiting for imports', () => {
 
   it('reports status request errors', async () => {
     const {places, run} = setup();
-    places.importStatus.mockRejectedValue(new Error('Import not found.'));
+    places.getImportRun.mockRejectedValue(new Error('Import not found.'));
 
     await expect(run()).rejects.toThrow('Import not found.');
     expect(places.import).toHaveBeenCalledTimes(1);

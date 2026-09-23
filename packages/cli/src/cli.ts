@@ -3,7 +3,7 @@ import {message} from '@optique/core/message';
 import {multiple, optional} from '@optique/core/modifiers';
 import type {InferValue} from '@optique/core/parser';
 import {argument, command, constant, option} from '@optique/core/primitives';
-import {string} from '@optique/core/valueparser';
+import {integer, string} from '@optique/core/valueparser';
 import {zod} from '@optique/zod';
 import {createORPCClient} from '@orpc/client';
 import {RPCLink} from '@orpc/client/fetch';
@@ -25,7 +25,7 @@ const name = argument(zod(tag.shape.name, {metavar: 'NAME', placeholder: ''}), {
 
 const assignmentArguments = {
   placeId: argument(zod(place.shape.id, {metavar: 'PLACE_ID', placeholder: ''}), {
-    description: message`Saved place UUID, shown by list or import-status.`,
+    description: message`Saved place UUID, shown by list or import runs.`,
   }),
   tag: argument(zod(tagReference, {metavar: 'NAME_OR_ID', placeholder: ''}), {
     description: message`Existing tag name or UUID.`,
@@ -130,39 +130,64 @@ export const parser = merge(
     ),
     command(
       'import',
-      object({
-        action: constant('import'),
-        wait: option('--wait', {
-          description: message`Wait for completion and return the import status with saved place IDs.`,
-        }),
-        notes: optional(
-          option('--notes', string({metavar: 'TEXT'}), {
-            description: message`Notes for the place. Replaces existing notes; an empty string clears them.`,
-          }),
-        ),
-        tags: multiple(
-          option('--tag', zod(tagReference, {metavar: 'NAME_OR_ID', placeholder: ''}), {
-            description: message`Existing tag name or UUID. Repeat to apply multiple tags.`,
-          }),
-        ),
-        tagNotes: multiple(
-          seq(
-            option(
-              '--tag-note',
-              zod(tagReference, {metavar: 'NAME_OR_ID', placeholder: ''}),
-              {
-                description: message`Apply an existing tag with a note. Repeat for multiple tags; an empty note clears it.`,
-              },
+      or(
+        command(
+          'runs',
+          object({
+            action: constant('import-runs'),
+            selection: optional(
+              or(
+                object({
+                  jobId: argument(zod(z.uuid(), {metavar: 'JOB_ID', placeholder: ''}), {
+                    description: message`Import job UUID.`,
+                  }),
+                }),
+                object({
+                  limit: option('--limit', integer({metavar: 'COUNT', min: 1}), {
+                    description: message`Maximum runs to list.`,
+                  }),
+                }),
+              ),
             ),
-            argument(string({metavar: 'NOTE'}), {
-              description: message`Note for the preceding --tag-note tag. An empty string clears it.`,
+          }),
+          {
+            description: message`List recorded imports, or show one by job ID.`,
+          },
+        ),
+        object({
+          action: constant('import'),
+          wait: option('--wait', {
+            description: message`Wait for completion and return the import status with saved place IDs.`,
+          }),
+          notes: optional(
+            option('--notes', string({metavar: 'TEXT'}), {
+              description: message`Notes for the place. Replaces existing notes; an empty string clears them.`,
             }),
           ),
-        ),
-        input: argument(zod(importInput, {metavar: 'INPUT', placeholder: ''}), {
-          description: message`URL or provider reference to import. Supports Google Maps URLs, gmaps:<place_id>, and Instagram post or reel URLs.`,
+          tags: multiple(
+            option('--tag', zod(tagReference, {metavar: 'NAME_OR_ID', placeholder: ''}), {
+              description: message`Existing tag name or UUID. Repeat to apply multiple tags.`,
+            }),
+          ),
+          tagNotes: multiple(
+            seq(
+              option(
+                '--tag-note',
+                zod(tagReference, {metavar: 'NAME_OR_ID', placeholder: ''}),
+                {
+                  description: message`Apply an existing tag with a note. Repeat for multiple tags; an empty note clears it.`,
+                },
+              ),
+              argument(string({metavar: 'NOTE'}), {
+                description: message`Note for the preceding --tag-note tag. An empty string clears it.`,
+              }),
+            ),
+          ),
+          input: argument(zod(importInput, {metavar: 'INPUT', placeholder: ''}), {
+            description: message`URL or provider reference to import. Supports Google Maps URLs, gmaps:<place_id>, and Instagram post or reel URLs.`,
+          }),
         }),
-      }),
+      ),
       {
         description: message`Import places from a supported URL or provider reference. Returns an import type and job ID.`,
       },
@@ -221,16 +246,6 @@ export const parser = merge(
         jobId: argument(zod(z.uuid(), {metavar: 'JOB_ID', placeholder: ''})),
       }),
       {description: message`Show a sync job's status and result.`},
-    ),
-    command(
-      'import-status',
-      object({
-        action: constant('import-status'),
-        jobId: argument(zod(z.uuid(), {metavar: 'JOB_ID', placeholder: ''})),
-      }),
-      {
-        description: message`Show an import's recorded status and resulting place IDs, including after queue cleanup.`,
-      },
     ),
     command(
       'namespace',
@@ -353,8 +368,10 @@ export function execute(args: InferValue<typeof parser>, client: Client) {
       return client.places.sync({query: args.query});
     case 'sync-status':
       return client.places.syncStatus({jobId: args.jobId});
-    case 'import-status':
-      return client.places.importStatus({jobId: args.jobId});
+    case 'import-runs':
+      return args.selection && 'jobId' in args.selection
+        ? client.places.getImportRun({jobId: args.selection.jobId})
+        : client.places.listImportRuns({limit: args.selection?.limit ?? 50});
     case 'namespace-list':
       return client.namespaces.list();
     case 'namespace-get':
@@ -388,7 +405,7 @@ export function execute(args: InferValue<typeof parser>, client: Client) {
 
 async function waitForImport(jobId: string, client: Client) {
   while (true) {
-    const status = await client.places.importStatus({jobId});
+    const status = await client.places.getImportRun({jobId});
 
     if (status.state === 'completed') {
       return status;

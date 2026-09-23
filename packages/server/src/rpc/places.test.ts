@@ -91,13 +91,13 @@ describe.skipIf(!testUrl)('place import with PostgreSQL and pg-boss', () => {
   async function waitForState(jobId: string, state: 'completed' | 'failed') {
     await vi.waitFor(
       async () => {
-        const status = await client.places.importStatus({jobId});
+        const status = await client.places.getImportRun({jobId});
         expect(status.state).toBe(state);
       },
       {timeout: 15000, interval: 100},
     );
 
-    return client.places.importStatus({jobId});
+    return client.places.getImportRun({jobId});
   }
 
   it('attaches source details through the import worker', async () => {
@@ -591,8 +591,10 @@ describe.skipIf(!testUrl)('place import with PostgreSQL and pg-boss', () => {
     await expect(
       client.places.import({input: 'https://evil.test/'}),
     ).rejects.toMatchObject({code: 'BAD_REQUEST'});
-    await expect(client.places.importStatus({jobId: randomUUID()})).rejects.toMatchObject(
-      {code: 'NOT_FOUND'},
+    await expect(client.places.getImportRun({jobId: randomUUID()})).rejects.toMatchObject(
+      {
+        code: 'NOT_FOUND',
+      },
     );
   }, 20000);
 
@@ -620,8 +622,12 @@ describe.skipIf(!testUrl)('place import with PostgreSQL and pg-boss', () => {
       const submitted = JSON.parse(importOutput.stdout);
 
       await waitForState(submitted.jobId, 'completed');
-      const statusOutput = await cli('import-status', submitted.jobId);
+      const statusOutput = await cli('import', 'runs', submitted.jobId);
       expect(JSON.parse(statusOutput.stdout).state).toBe('completed');
+      const statusListOutput = await cli('import', 'runs');
+      expect(JSON.parse(statusListOutput.stdout)).toContainEqual(
+        expect.objectContaining({jobId: submitted.jobId, state: 'completed'}),
+      );
       const listOutput = await cli('list');
       expect(JSON.parse(listOutput.stdout)).toHaveLength(1);
       const notesOutput = await cli('list');

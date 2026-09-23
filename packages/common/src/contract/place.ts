@@ -49,6 +49,16 @@ export const googleSearchQuery = z.string().trim().min(1).max(4096);
 export const importInput = z.string().trim().min(1).max(4096);
 export const importType = z.enum(['gmaps', 'instagram']);
 export const importResult = z.object({placeIds: z.array(z.uuid())});
+export const importStatus = z.object({
+  jobId: z.uuid(),
+  type: importType,
+  state: z.enum(['created', 'retry', 'active', 'completed', 'cancelled', 'failed']),
+  placeIds: importResult.shape.placeIds,
+  error: z.string().nullable(),
+});
+const importRunsInput = z
+  .object({limit: z.number().int().positive().default(50)})
+  .default({limit: 50});
 
 const assignmentInput = z.object({placeId: place.shape.id, tag: tagReference});
 export const importTag = z.object({
@@ -143,16 +153,9 @@ export const placeContract = {
         type: importType,
       }),
     ),
-  importStatus: oc
+  getImportRun: oc
     .errors({NOT_FOUND: {message: 'Import not found.'}})
     .input(z.object({jobId: z.uuid()}))
-    .output(
-      z.object({
-        jobId: z.uuid(),
-        type: importType,
-        state: z.enum(['created', 'retry', 'active', 'completed', 'cancelled', 'failed']),
-        placeIds: importResult.shape.placeIds,
-        error: z.string().nullable(),
-      }),
-    ),
+    .output(importStatus),
+  listImportRuns: oc.input(importRunsInput).output(z.array(importStatus)),
 };

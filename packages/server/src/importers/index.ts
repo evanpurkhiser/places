@@ -1,5 +1,5 @@
 import type {ImportTag} from '@places/common/contract/place';
-import {eq} from 'drizzle-orm';
+import {desc, eq} from 'drizzle-orm';
 
 import type {Context} from '../context.ts';
 import {importRuns} from '../db/schema.ts';
@@ -10,8 +10,9 @@ import {
   InvalidImportInputError,
 } from './errors.ts';
 import {googleImporter} from './gmaps.ts';
-import {instagramImporter} from './instagram.ts';
+import {getInstagramStatuses, instagramImporter} from './instagram.ts';
 import {resolveTags} from './tags.ts';
+import type {ImportRun, ImportStatus} from './types.ts';
 
 const importers = [googleImporter, instagramImporter];
 
@@ -51,11 +52,51 @@ export async function getImportStatus(jobId: string, context: Pick<Context, 'db'
     throw new ImportNotFoundError('Import not found.');
   }
 
+  const [status] = await resolveImportStatuses([run], context);
+
+  return status!;
+}
+
+export async function listImportStatuses(context: Pick<Context, 'db'>, limit = 50) {
+  const runs = await context.db
+    .select()
+    .from(importRuns)
+    .orderBy(desc(importRuns.createdAt), desc(importRuns.id))
+    .limit(limit);
+
+  return resolveImportStatuses(runs, context, runs);
+}
+
+async function resolveImportStatuses(
+  runs: ImportRun[],
+  context: Pick<Context, 'db'>,
+  preloadedRuns?: ImportRun[],
+) {
+  const instagramStatuses = await getInstagramStatuses(
+    runs.filter(run => run.type === 'instagram'),
+    context,
+    preloadedRuns,
+  );
+
+  return Promise.all(
+    runs.map(run =>
+      run.type === 'instagram'
+        ? statusResponse(run, instagramStatuses.get(run.id)!)
+        : importStatus(run, context),
+    ),
+  );
+}
+
+async function importStatus(run: ImportRun, context: Pick<Context, 'db'>) {
   const importer = importers.find(importer => importer.type === run.type)!;
+  return statusResponse(run, await importer.getStatus(run, context));
+}
+
+function statusResponse(run: ImportRun, status: ImportStatus) {
   return {
     jobId: run.id,
     type: run.type,
     sourceId: run.sourceId,
-    ...(await importer.getStatus(run, context)),
+    ...status,
   };
 }

@@ -129,7 +129,8 @@ middleware model for server-wide concerns.
 
 Serve typed RPC at `/rpc`. Tag operations are
 create, list, get, update, and delete; the CLI exposes them under `places tags`.
-Place imports use `places.import` and `places.importStatus`, and saved places
+Place imports use `places.import`, `places.getImportRun`, and
+`places.listImportRuns`, and saved places
 are listed through `places.list`. The import request resolves a Maps input to a
 Google Place ID before enqueueing `{googlePlaceId}`. The worker retrieves required
 metadata and inserts the complete canonical place. pg-boss provides temporary
