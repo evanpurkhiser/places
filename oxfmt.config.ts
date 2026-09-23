@@ -3,5 +3,5 @@ import {defineConfig} from 'oxfmt';
 
 export default defineConfig({
   ...oxfmt,
-  ignorePatterns: ['design/map-prototype/**', 'packages/common/src/search/generated.js'],
+  ignorePatterns: ['packages/common/src/search/generated.js'],
 });

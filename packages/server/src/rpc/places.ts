@@ -1,8 +1,8 @@
 import {implement, ORPCError} from '@orpc/server';
 import {contract} from '@places/common/contract';
-import {placeSource} from '@places/common/contract/place';
+import {type PlaceSort, placeSource} from '@places/common/contract/place';
 import {SearchError} from '@places/common/search';
-import {and, desc, eq, getTableColumns, inArray, or, sql} from 'drizzle-orm';
+import {and, asc, desc, eq, getTableColumns, inArray, or, sql} from 'drizzle-orm';
 import {z} from 'zod';
 
 import type {Context} from '../context.ts';
@@ -72,7 +72,7 @@ export const placeRouter = api.router({
       })
       .from(places)
       .where(predicate)
-      .orderBy(desc(places.createdAt), desc(places.id));
+      .orderBy(...placeOrder(input?.sort ?? 'recently-saved'));
 
     if (!rows.length) {
       return [];
@@ -196,6 +196,25 @@ export const placeRouter = api.router({
     listImportStatuses(context, input.limit),
   ),
 });
+
+const latestRecommendation = sql<Date>`coalesce(
+  (select max(${placeSources.createdAt})
+   from ${placeSources}
+   where ${placeSources.placeId} = ${places.id}),
+  ${places.createdAt}
+)`;
+
+function placeOrder(sort: PlaceSort) {
+  if (sort === 'name') {
+    return [asc(places.name), asc(places.id)];
+  }
+
+  if (sort === 'recently-recommended') {
+    return [desc(latestRecommendation), asc(places.name), asc(places.id)];
+  }
+
+  return [desc(places.createdAt), asc(places.name), asc(places.id)];
+}
 
 async function resolvePlaceTag(
   db: Pick<Database, 'select'>,

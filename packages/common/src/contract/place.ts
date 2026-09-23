@@ -44,6 +44,9 @@ export const place = z.object({
   sources: z.array(placeSource),
 });
 
+export const placeSort = z.enum(['name', 'recently-saved', 'recently-recommended']);
+export type PlaceSort = z.infer<typeof placeSort>;
+
 export const googleSearchQuery = z.string().trim().min(1).max(4096);
 
 export const importInput = z.string().trim().min(1).max(4096);
@@ -107,7 +110,9 @@ export const placeContract = {
       BAD_REQUEST: {message: 'Invalid place query.', data: queryErrorData},
       SERVICE_UNAVAILABLE: {message: 'Place resolution is unavailable.'},
     })
-    .input(z.object({query: z.string().optional()}).optional())
+    .input(
+      z.object({query: z.string().optional(), sort: placeSort.optional()}).optional(),
+    )
     .output(z.array(place)),
   sync: oc
     .errors({
