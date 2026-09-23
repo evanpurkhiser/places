@@ -55,6 +55,7 @@ export async function getImportStatus(jobId: string, context: Pick<Context, 'db'
   return {
     jobId: run.id,
     type: run.type,
+    sourceId: run.sourceId,
     ...(await importer.getStatus(run, context)),
   };
 }

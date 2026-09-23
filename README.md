@@ -267,8 +267,22 @@ Instagram job completion means capture and dispatch have finished.
 
 The Instagram queue defaults to one worker with a batch size of one. Local
 workers need `ffmpeg` and `ffprobe` on PATH; the container image includes them.
-Thumbnail metadata contains Instagram's remote cover URL. CLI and public API
-entry points for Instagram ingestion are planned.
+Thumbnail metadata contains Instagram's remote cover URL.
+
+The HTTP import API accepts an Instagram post or reel URL, a Google Maps place
+URL, or a `gmaps:<place_id>` input:
+
+```sh
+curl -i https://places.prk.network/api/imports \
+  -H 'Content-Type: application/json' \
+  -d '{"url":"https://www.instagram.com/p/SHORTCODE/"}'
+curl https://places.prk.network/api/imports/<job-id>
+```
+
+Submission returns `202 Accepted`, the import's `jobId` and `type`, and the status
+resource in both the `Location` header and a `statusUrl` field. Status returns
+`state`, `placeIds`, `error`, and `sourceId`. The source ID is available for
+Instagram imports after capture; Google Maps imports return `null`.
 
 ## Sync Google place metadata
 

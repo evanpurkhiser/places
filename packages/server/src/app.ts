@@ -1,6 +1,7 @@
 import {RPCHandler} from '@orpc/server/fetch';
 import {Hono} from 'hono';
 
+import {api} from './api/index.ts';
 import type {Context} from './context.ts';
 import {router} from './rpc/index.ts';
 
@@ -17,6 +18,7 @@ export function createApp(context: Context) {
   });
 
   app.get('/health', c => c.json({status: 'ok'}));
+  app.route('/api', api);
   app.use('/rpc/*', async (c, next) => {
     const {matched, response} = await rpc.handle(c.req.raw, {
       prefix: '/rpc',
