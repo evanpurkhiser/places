@@ -5,6 +5,7 @@
 !package.json
 !pnpm-lock.yaml
 !pnpm-workspace.yaml
+!tsconfig.json
 !packages/
 !packages/server/
 !packages/server/package.json
@@ -16,4 +17,11 @@
 !packages/common/package.json
 !packages/common/src/
 !packages/common/src/**
+!packages/web/
+!packages/web/package.json
+!packages/web/index.html
+!packages/web/tsconfig.json
+!packages/web/vite.config.ts
+!packages/web/src/
+!packages/web/src/**
 **/*.test.ts

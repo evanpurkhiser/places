@@ -6,5 +6,11 @@ export default defineConfig({
     port: 5187,
     strictPort: true,
     allowedHosts: ['5187.prk.network'],
+    proxy: {
+      '/rpc': {
+        target: 'http://127.0.0.1:5188',
+        changeOrigin: true,
+      },
+    },
   },
 });
