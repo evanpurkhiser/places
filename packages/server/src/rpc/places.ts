@@ -5,14 +5,15 @@ import {SearchError} from '@places/common/search';
 import {and, desc, eq, getTableColumns, inArray, or, sql} from 'drizzle-orm';
 import {z} from 'zod';
 
+import type {Context} from '../context.ts';
 import type {Database} from '../db/index.ts';
 import {places, placeSources, placeTags, sources, tags} from '../db/schema.ts';
 import {compilePlaceQuery} from '../filter-engine/index.ts';
 import {enqueueImport, getImportStatus} from '../importers/index.ts';
 import {syncQueue, syncPayload} from '../jobs/gmaps-sync.ts';
 
-import type {Context} from './context.ts';
 import {rethrowGoogleError} from './google-errors.ts';
+import {rethrowImportError} from './import-errors.ts';
 
 const api = implement(contract.places).$context<Context>();
 
@@ -185,11 +186,11 @@ export const placeRouter = api.router({
   }),
   import: api.import.handler(({input, context}) =>
     enqueueImport(input.input, context, input.tags, input.notes).catch(
-      rethrowGoogleError,
+      rethrowImportError,
     ),
   ),
   importStatus: api.importStatus.handler(({input, context}) =>
-    getImportStatus(input.jobId, context),
+    getImportStatus(input.jobId, context).catch(rethrowImportError),
   ),
 });
 

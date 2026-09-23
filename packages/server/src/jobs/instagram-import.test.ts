@@ -17,6 +17,7 @@ import {
   sources,
   tags,
 } from '../db/schema.ts';
+import {ImportUnavailableError, InvalidImportInputError} from '../importers/errors.ts';
 import {
   importInstagramPost,
   type InstagramImportDependencies,
@@ -288,17 +289,17 @@ describe.skipIf(!testUrl)('Instagram ingestion with PostgreSQL and pg-boss', () 
   });
 
   it('rejects unknown tags before enqueueing Instagram capture', async () => {
-    await expect(enqueueImport(url, context(), [{tag: 'missing'}])).rejects.toMatchObject(
-      {code: 'BAD_REQUEST'},
+    await expect(enqueueImport(url, context(), [{tag: 'missing'}])).rejects.toThrow(
+      InvalidImportInputError,
     );
     expect(await jobs.findJobs(importQueue)).toHaveLength(0);
   });
 
   it('rejects duplicate queued imports without losing their original options', async () => {
     await enqueueImport(url, context(), [{tag: 'imported'}]);
-    await expect(
-      enqueueImport(url, context(), [{tag: 'needs-review'}]),
-    ).rejects.toMatchObject({code: 'SERVICE_UNAVAILABLE'});
+    await expect(enqueueImport(url, context(), [{tag: 'needs-review'}])).rejects.toThrow(
+      ImportUnavailableError,
+    );
     const queued = await jobs.findJobs(importQueue);
     expect(queued).toHaveLength(1);
     expect(queued[0]!.data).toMatchObject({tags: [{tagId: importedTagId}]});

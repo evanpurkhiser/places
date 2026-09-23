@@ -1,8 +1,8 @@
 import type {z} from 'zod';
 
+import type {Context} from '../context.ts';
 import type {importRuns} from '../db/schema.ts';
 import type {importPayload} from '../jobs/gmaps-import.ts';
-import type {Context} from '../rpc/context.ts';
 
 export type ImportOptions = Pick<z.infer<typeof importPayload>, 'tags' | 'notes'>;
 

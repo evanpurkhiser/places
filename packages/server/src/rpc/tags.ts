@@ -2,11 +2,10 @@ import {implement} from '@orpc/server';
 import {contract} from '@places/common/contract';
 import {asc, eq} from 'drizzle-orm';
 
+import type {Context} from '../context.ts';
 import {isUniqueViolation} from '../db/errors.ts';
 import type {Database} from '../db/index.ts';
 import {namespaces, tags} from '../db/schema.ts';
-
-import type {Context} from './context.ts';
 
 const api = implement(contract.tags).$context<Context>();
 

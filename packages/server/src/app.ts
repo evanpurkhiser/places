@@ -1,7 +1,7 @@
 import {RPCHandler} from '@orpc/server/fetch';
 import {Hono} from 'hono';
 
-import type {Context} from './rpc/context.ts';
+import type {Context} from './context.ts';
 import {router} from './rpc/index.ts';
 
 export function createApp(context: Context) {
