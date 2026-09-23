@@ -206,6 +206,7 @@ kbd {
   scrollbar-width: thin;
 }
 .place-row {
+  position: relative;
   display: flex;
   width: 100%;
   align-items: flex-start;
@@ -213,6 +214,10 @@ kbd {
   padding: 8px 10px;
   text-align: left;
   border-bottom: 1px solid #eef0ec;
+}
+.place-row:hover,
+.place-row:has(.place-open:focus-visible) {
+  background: #f0f3ef;
 }
 .place-category {
   display: grid;
@@ -242,6 +247,21 @@ kbd {
   padding: 0;
   text-align: left;
 }
+.place-open:hover {
+  background: transparent;
+}
+.place-open::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+}
+.place-open:focus-visible {
+  outline: none;
+}
+.place-open:focus-visible::before {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
 .place-open > span {
   font-size: 11px;
   color: var(--muted);
@@ -252,8 +272,40 @@ kbd {
   flex-wrap: wrap;
   gap: 3px;
 }
-.place-tag {
+.place-row .place-tags {
   position: relative;
+  z-index: 1;
+}
+.place-locate {
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
+  width: 22px;
+  height: 22px;
+  align-self: center;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  border: 1px solid #d8ddd4;
+  border-radius: 4px;
+  background: #fff;
+  color: var(--accent);
+  opacity: 0;
+  pointer-events: none;
+}
+.place-row:hover .place-locate,
+.place-locate:focus-visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+.place-locate:hover {
+  background: #eef2eb;
+}
+.place-tag-wrap {
+  position: relative;
+  display: inline-flex;
+}
+.place-tag {
   display: inline-flex;
   align-items: center;
   gap: 3px;
@@ -268,26 +320,27 @@ kbd {
 .place-tag:hover {
   background: #e5e9e1;
 }
-.tag-remove-indicator {
+.tag-remove {
   position: absolute;
-  top: -5px;
-  right: -5px;
+  inset: 0 0 0 auto;
   display: none;
-  width: 12px;
-  height: 12px;
+  aspect-ratio: 1;
   align-items: center;
   justify-content: center;
-  border: 1px solid #fff;
-  border-radius: 50%;
+  border: 0;
+  border-left: 1px solid #913d36;
+  border-radius: 0 3px 3px 0;
   background: #a44a42;
   color: #fff;
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 700;
   line-height: 1;
-  pointer-events: none;
 }
-html[data-shift-pressed] .place-tag:not(:disabled) .tag-remove-indicator {
+html[data-shift-pressed] .tag-remove:not(:disabled) {
   display: inline-flex;
+}
+.tag-remove:hover {
+  background: #84362f;
 }
 .panel-footer {
   padding: 6px 10px;
@@ -609,6 +662,8 @@ html[data-shift-pressed] .place-tag:not(:disabled) .tag-remove-indicator {
   font-size: 11px;
 }
 .source-trigger {
+  position: relative;
+  z-index: 1;
   display: inline-flex;
   align-items: center;
   justify-content: center;

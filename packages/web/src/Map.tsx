@@ -26,11 +26,12 @@ const home = {longitude: -74.002, latitude: 40.726, zoom: 13.2};
 interface Props {
   places: Place[];
   selected: Place | null;
+  target: {place: Place; request: number} | null;
   onSelect: (place: Place) => void;
   onBoundsChange: (bounds: Bounds) => void;
 }
 
-export function MapView({places, selected, onSelect, onBoundsChange}: Props) {
+export function MapView({places, selected, target, onSelect, onBoundsChange}: Props) {
   const map = useRef<MapRef>(null);
   const container = useRef<HTMLDivElement>(null);
 
@@ -96,6 +97,19 @@ export function MapView({places, selected, onSelect, onBoundsChange}: Props) {
       duration: 850,
     });
   }, [selected]);
+
+  useEffect(() => {
+    if (!map.current || !target) {
+      return;
+    }
+
+    const {longitude, latitude} = target.place.coordinates;
+    map.current.flyTo({
+      center: [longitude, latitude],
+      zoom: Math.max(map.current.getZoom(), 15),
+      duration: 850,
+    });
+  }, [target]);
 
   function fit() {
     if (!map.current || !places.length) {

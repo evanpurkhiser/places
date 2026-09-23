@@ -5,7 +5,7 @@ import {Input} from '@base-ui/react/input';
 import {ORPCError} from '@orpc/client';
 import type {PlaceSort} from '@places/common/contract/place';
 import {keepPreviousData, skipToken, useQuery} from '@tanstack/react-query';
-import {Compass, PanelLeft, Search, X} from 'lucide-react';
+import {Compass, LocateFixed, PanelLeft, Search, X} from 'lucide-react';
 
 import {MapView} from './Map.tsx';
 import {PlaceDetails} from './PlaceDetails.tsx';
@@ -36,6 +36,10 @@ function PlacesApp({
   setSelected: (place: Place | null) => void;
 }) {
   const [bounds, setBounds] = useState<Bounds | null>(null);
+  const [mapTarget, setMapTarget] = useState<{
+    place: Place;
+    request: number;
+  } | null>(null);
   const {search, setSearch} = useSearch();
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [collapsed, setCollapsed] = useState(false);
@@ -129,6 +133,10 @@ function PlacesApp({
   function resetFilters() {
     setSearch('');
     setDebouncedSearch('');
+  }
+
+  function showOnMap(place: Place) {
+    setMapTarget(current => ({place, request: (current?.request ?? 0) + 1}));
   }
 
   return (
@@ -238,6 +246,14 @@ function PlacesApp({
                       <PlaceTags place={place} />
                     </span>
                     <PlaceSources place={place} />
+                    <Button
+                      className="place-locate"
+                      title="Show on map"
+                      aria-label={`Show ${place.name} on map`}
+                      onClick={() => showOnMap(place)}
+                    >
+                      <LocateFixed size={14} />
+                    </Button>
                   </div>
                 ))}
                 {result.isSuccess && !pending && !places.length && (
@@ -264,6 +280,7 @@ function PlacesApp({
           <MapView
             places={places}
             selected={selected}
+            target={mapTarget}
             onSelect={select}
             onBoundsChange={setBounds}
           />

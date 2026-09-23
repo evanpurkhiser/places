@@ -15,27 +15,28 @@ export function TagChip({
   const {addTag} = useSearch();
 
   return (
-    <Button
-      className="place-tag"
-      title={tag.description ?? undefined}
-      aria-label={`Filter by ${tag.name}`}
-      disabled={removing}
-      onClick={event => {
-        if (event.shiftKey && onRemove) {
-          onRemove();
-          return;
-        }
-
-        addTag(tag.name);
-      }}
-    >
-      {tag.icon?.emoji && <span aria-hidden="true">{tag.icon.emoji}</span>}
-      {tag.name}
+    <span className="place-tag-wrap">
+      <Button
+        className="place-tag"
+        title={tag.description ?? undefined}
+        aria-label={`Filter by ${tag.name}`}
+        disabled={removing}
+        onClick={() => addTag(tag.name)}
+      >
+        {tag.icon?.emoji && <span aria-hidden="true">{tag.icon.emoji}</span>}
+        {tag.name}
+      </Button>
       {onRemove && (
-        <span className="tag-remove-indicator" aria-hidden="true">
+        <Button
+          className="tag-remove"
+          aria-label={`Remove ${tag.name}`}
+          title={`Remove ${tag.name}`}
+          disabled={removing}
+          onClick={onRemove}
+        >
           ×
-        </span>
+        </Button>
       )}
-    </Button>
+    </span>
   );
 }
