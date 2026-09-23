@@ -322,15 +322,15 @@ kbd {
 }
 .tag-remove {
   position: absolute;
-  inset: 0 0 0 auto;
+  inset: 1px 1px 1px auto;
   display: none;
   aspect-ratio: 1;
   align-items: center;
   justify-content: center;
   border: 0;
-  border-left: 1px solid #913d36;
-  border-radius: 0 3px 3px 0;
-  background: #a44a42;
+  border-left: 1px solid #805754;
+  border-radius: 0 2px 2px 0;
+  background: #956562;
   color: #fff;
   font-size: 11px;
   font-weight: 700;
@@ -340,7 +340,7 @@ html[data-shift-pressed] .tag-remove:not(:disabled) {
   display: inline-flex;
 }
 .tag-remove:hover {
-  background: #84362f;
+  background: #7f504d;
 }
 .panel-footer {
   padding: 6px 10px;
