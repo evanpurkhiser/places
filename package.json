@@ -13,7 +13,8 @@
     "test": "vitest run",
     "server": "pnpm --filter @places/server start",
     "places": "pnpm --filter @places/cli start",
-    "worker": "pnpm --filter @places/server worker"
+    "worker": "pnpm --filter @places/server worker",
+    "web": "pnpm --filter @places/web dev"
   },
   "devDependencies": {
     "@evanpurkhiser/oxc-config": "^0.16.0",
