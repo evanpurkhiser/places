@@ -207,8 +207,12 @@ function coverage(
 }
 
 export const openCompiler = {
-  compile: ({time, until, for: duration}, context: Context) => {
-    const predicate = coverage(time.value, until?.value, duration?.value, context.now);
+  compile: ({time, in: delay, until, for: duration}, context: Context) => {
+    const start = time?.value ?? {
+      kind: 'instant' as const,
+      epochMilliseconds: context.now + delay!.value,
+    };
+    const predicate = coverage(start, until?.value, duration?.value, context.now);
 
     // Keep containment visible to the planner so weekly queries can use GiST.
     // DISTINCT FROM makes an absent business status neutral; missing hours still

@@ -156,6 +156,20 @@ describe.skipIf(!testUrl)('opening hours with PostgreSQL', () => {
     }
   });
 
+  it('evaluates delayed checks from the current instant', async () => {
+    const clock = vi
+      .spyOn(Date, 'now')
+      .mockReturnValue(Date.parse('2026-09-21T21:30:00Z'));
+
+    try {
+      expect(await matches('monday', 'open[in:30m]')).toBe(true);
+      expect(await matches('monday', 'open[in:30m, for:2h]')).toBe(true);
+      expect(await matches('monday', 'open[in:3h]')).toBe(false);
+    } finally {
+      clock.mockRestore();
+    }
+  });
+
   it('keeps nonexistent local clock times unknown', async () => {
     const clock = vi
       .spyOn(Date, 'now')

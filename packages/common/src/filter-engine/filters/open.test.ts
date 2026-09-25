@@ -32,6 +32,11 @@ it('rejects competing interval endpoints', () => {
   );
 });
 
+it('requires exactly one start selector', () => {
+  expect(() => engine.prepare('open[]')).toThrow('exactly one of time or in');
+  expect(() => engine.prepare('open[@now, in:30m]')).toThrow('exactly one of time or in');
+});
+
 it('accepts every documented argument shape', () => {
   for (const example of open.examples) {
     expect(() => engine.prepare(example.query)).not.toThrow();
