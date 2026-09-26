@@ -1,6 +1,7 @@
 import {Button} from '@base-ui/react/button';
 import {ArrowLeft, ArrowUpRight, MapPin} from 'lucide-react';
 
+import {googleMapsUrl} from './google-maps.ts';
 import {PlaceIcon} from './PlaceIcon.tsx';
 import {PlaceSources} from './PlaceSources.tsx';
 import {PlaceTags} from './PlaceTags.tsx';
@@ -15,11 +16,6 @@ export function PlaceDetails({
   onClose: () => void;
   onUpdate: (place: Place) => void;
 }) {
-  const mapsUrl = new URL('https://www.google.com/maps/search/');
-  mapsUrl.searchParams.set('api', '1');
-  mapsUrl.searchParams.set('query', place.name);
-  mapsUrl.searchParams.set('query_place_id', place.googlePlaceId);
-
   return (
     <>
       <div className="detail-top">
@@ -60,7 +56,12 @@ export function PlaceDetails({
             })}
           </p>
         </section>
-        <a className="external-link" href={mapsUrl.href} target="_blank" rel="noreferrer">
+        <a
+          className="external-link"
+          href={googleMapsUrl(place)}
+          target="_blank"
+          rel="noreferrer"
+        >
           Open in Google Maps
           <ArrowUpRight size={17} />
         </a>

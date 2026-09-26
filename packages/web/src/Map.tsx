@@ -14,6 +14,7 @@ import Map, {
   type MapRef,
 } from 'react-map-gl/maplibre';
 
+import {googleMapsUrl} from './google-maps.ts';
 import {labelLayout, pinImage, pinImageId} from './map-symbols.ts';
 import {placeEmoji} from './place-icon.ts';
 import type {Bounds} from './query.ts';
@@ -145,9 +146,16 @@ export function MapView({places, selected, target, onSelect, onBoundsChange}: Pr
           const id = event.features?.[0]?.properties.id;
           const place = places.find(place => place.id === id);
 
-          if (place) {
-            onSelect(place);
+          if (!place) {
+            return;
           }
+
+          if (event.originalEvent.metaKey) {
+            window.open(googleMapsUrl(place), '_blank', 'noopener,noreferrer');
+            return;
+          }
+
+          onSelect(place);
         }}
         onLoad={event => {
           event.target.on('styleimagemissing', missing => {
