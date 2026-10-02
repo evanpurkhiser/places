@@ -1,4 +1,4 @@
-import {useCallback, useEffect, useState} from 'react';
+import {useCallback, useEffect, useMemo, useState} from 'react';
 
 import {Button} from '@base-ui/react/button';
 import {Input} from '@base-ui/react/input';
@@ -12,7 +12,7 @@ import {PlaceDetails} from './PlaceDetails.tsx';
 import {PlaceIcon} from './PlaceIcon.tsx';
 import {PlaceSources} from './PlaceSources.tsx';
 import {PlaceTags} from './PlaceTags.tsx';
-import {placesQuery, type Bounds} from './query.ts';
+import {parseSearch, placesQuery, type Bounds} from './query.ts';
 import {rpc, type Place} from './rpc.ts';
 import {SearchProvider, useSearch} from './SearchContext.tsx';
 
@@ -41,12 +41,14 @@ function PlacesApp({
     request: number;
   } | null>(null);
   const {search, setSearch} = useSearch();
+  const parsedSearch = useMemo(() => parseSearch(search), [search]);
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [collapsed, setCollapsed] = useState(false);
   const [sort, setSort] = useState<PlaceSort>('name');
   const result = useQuery(
     rpc.places.list.queryOptions({
       input: bounds ? {query: placesQuery(bounds, debouncedSearch, ''), sort} : skipToken,
+      enabled: !parsedSearch.error && search === debouncedSearch,
       placeholderData: keepPreviousData,
       retry: (count, error) =>
         !(error instanceof ORPCError && error.code === 'BAD_REQUEST') && count < 1,
@@ -60,12 +62,17 @@ function PlacesApp({
     },
     [setSelected],
   );
-  const pending = result.isFetching || search !== debouncedSearch;
+  const pending =
+    !parsedSearch.error && (result.isFetching || search !== debouncedSearch);
 
   useEffect(() => {
+    if (parsedSearch.error) {
+      return;
+    }
+
     const timeout = window.setTimeout(() => setDebouncedSearch(search), 600);
     return () => window.clearTimeout(timeout);
-  }, [search]);
+  }, [search, parsedSearch]);
 
   useEffect(() => {
     function onKey(event: KeyboardEvent) {
@@ -185,6 +192,8 @@ function PlacesApp({
                 <Input
                   id="search"
                   aria-label="Filter saved places"
+                  aria-invalid={Boolean(parsedSearch.error)}
+                  aria-describedby={parsedSearch.error ? 'search-error' : undefined}
                   placeholder="name[coffee] or tag[type.cafe]"
                   value={search}
                   onChange={event => setSearch(event.target.value)}
@@ -197,9 +206,16 @@ function PlacesApp({
                   <kbd>/</kbd>
                 )}
               </div>
+              {parsedSearch.error && (
+                <div id="search-error" className="query-error" role="status">
+                  <p>{parsedSearch.error.message}</p>
+                </div>
+              )}
               <div className="results-heading" role="status">
                 <span>
-                  {pending ? (
+                  {parsedSearch.error ? (
+                    'Search is incomplete or invalid'
+                  ) : pending ? (
                     'Updating places…'
                   ) : bounds ? (
                     <>
@@ -226,7 +242,7 @@ function PlacesApp({
                 </span>
               </div>
               <div className="place-list" aria-busy={pending}>
-                {result.isError && (
+                {result.isError && !parsedSearch.error && (
                   <div className="query-error" role="alert">
                     <p>Could not load places.</p>
                     <p>{result.error.message}</p>
@@ -256,18 +272,21 @@ function PlacesApp({
                     </Button>
                   </div>
                 ))}
-                {result.isSuccess && !pending && !places.length && (
-                  <div className="empty">
-                    <Search size={26} />
-                    <h2>No places here yet</h2>
-                    <p>
-                      Move the map or zoom out
-                      {search ? ', or clear your filters' : ''} to explore your saved
-                      places.
-                    </p>
-                    {search && <Button onClick={resetFilters}>Clear filters</Button>}
-                  </div>
-                )}
+                {result.isSuccess &&
+                  !parsedSearch.error &&
+                  !pending &&
+                  !places.length && (
+                    <div className="empty">
+                      <Search size={26} />
+                      <h2>No places here yet</h2>
+                      <p>
+                        Move the map or zoom out
+                        {search ? ', or clear your filters' : ''} to explore your saved
+                        places.
+                      </p>
+                      {search && <Button onClick={resetFilters}>Clear filters</Button>}
+                    </div>
+                  )}
               </div>
               <div className="panel-footer">
                 <span className="green-dot" />

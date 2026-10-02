@@ -1,3 +1,17 @@
+import {parseQuery, SearchError} from '@places/common/search';
+
+export function parseSearch(search: string) {
+  try {
+    return {query: parseQuery(search), error: null};
+  } catch (error) {
+    if (error instanceof SearchError) {
+      return {query: null, error};
+    }
+
+    throw error;
+  }
+}
+
 export interface Bounds {
   west: number;
   north: number;

@@ -3,9 +3,30 @@ import {describe, expect, it} from 'vitest';
 
 import {placeFilterEngine} from '../../server/src/filter-engine/index.ts';
 
-import {appendTagFilter, normalizeBounds, placesQuery} from './query.ts';
+import {appendTagFilter, normalizeBounds, parseSearch, placesQuery} from './query.ts';
 
 const bounds = {west: -74.03, north: 40.76, east: -73.95, south: 40.7};
+
+describe('live search parsing', () => {
+  it.each(['', '   '])('accepts an empty search: %j', search => {
+    expect(parseSearch(search)).toEqual({query: null, error: null});
+  });
+
+  it.each(['name[', 'name[coffee] OR', '(tag[cafe]', 'name["coffee'])(
+    'returns local diagnostics for incomplete input: %s',
+    search => {
+      expect(parseSearch(search).error?.diagnostics[0]?.code).toBe('syntax');
+    },
+  );
+
+  it('returns the AST when an incomplete search is completed', () => {
+    expect(parseSearch('name[coffee').error).not.toBeNull();
+    expect(parseSearch('name[coffee]')).toMatchObject({
+      query: {type: 'filter', key: 'name'},
+      error: null,
+    });
+  });
+});
 
 it('adds an exact tag to every branch of an existing search', () => {
   const query = appendTagFilter('name[coffee] OR notes[espresso]', 'star.*');
