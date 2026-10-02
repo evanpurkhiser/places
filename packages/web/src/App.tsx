@@ -5,13 +5,11 @@ import {Input} from '@base-ui/react/input';
 import {ORPCError} from '@orpc/client';
 import type {PlaceSort} from '@places/common/contract/place';
 import {keepPreviousData, skipToken, useQuery} from '@tanstack/react-query';
-import {Compass, LocateFixed, PanelLeft, Search, X} from 'lucide-react';
+import {Compass, PanelLeft, Search, X} from 'lucide-react';
 
 import {MapView} from './Map.tsx';
 import {PlaceDetails} from './PlaceDetails.tsx';
-import {PlaceIcon} from './PlaceIcon.tsx';
-import {PlaceSources} from './PlaceSources.tsx';
-import {PlaceTags} from './PlaceTags.tsx';
+import {PlaceList} from './PlaceList.tsx';
 import {parseSearch, placesQuery, type Bounds} from './query.ts';
 import {rpc, type Place} from './rpc.ts';
 import {SearchProvider, useSearch} from './SearchContext.tsx';
@@ -241,37 +239,20 @@ function PlacesApp({
                   </label>
                 </span>
               </div>
-              <div className="place-list" aria-busy={pending}>
-                {result.isError && !parsedSearch.error && (
-                  <div className="query-error" role="alert">
-                    <p>Could not load places.</p>
-                    <p>{result.error.message}</p>
-                    <Button onClick={() => void result.refetch()}>Try again</Button>
-                  </div>
-                )}
-                {places.map(place => (
-                  <div className="place-row" key={place.id}>
-                    <span className="place-category">
-                      <PlaceIcon place={place} size={18} />
-                    </span>
-                    <span className="place-text">
-                      <Button className="place-open" onClick={() => select(place)}>
-                        <strong>{place.name}</strong>
-                        <span>{place.formattedAddress}</span>
-                      </Button>
-                      <PlaceTags place={place} />
-                    </span>
-                    <PlaceSources place={place} />
-                    <Button
-                      className="place-locate"
-                      title="Show on map"
-                      aria-label={`Show ${place.name} on map`}
-                      onClick={() => showOnMap(place)}
-                    >
-                      <LocateFixed size={14} />
-                    </Button>
-                  </div>
-                ))}
+              {result.isError && !parsedSearch.error && (
+                <div className="query-error" role="alert">
+                  <p>Could not load places.</p>
+                  <p>{result.error.message}</p>
+                  <Button onClick={() => void result.refetch()}>Try again</Button>
+                </div>
+              )}
+              <PlaceList
+                key={`${debouncedSearch}:${sort}`}
+                places={places}
+                pending={pending}
+                onSelect={select}
+                onLocate={showOnMap}
+              >
                 {result.isSuccess &&
                   !parsedSearch.error &&
                   !pending &&
@@ -287,7 +268,7 @@ function PlacesApp({
                       {search && <Button onClick={resetFilters}>Clear filters</Button>}
                     </div>
                   )}
-              </div>
+              </PlaceList>
               <div className="panel-footer">
                 <span className="green-dot" />
                 Search updates with the map.
