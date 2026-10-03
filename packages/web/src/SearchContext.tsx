@@ -1,9 +1,11 @@
-import {createContext, useContext, useState, type ReactNode} from 'react';
+import {createContext, useContext, type ReactNode} from 'react';
+
+import {useQueryState} from 'nuqs';
 
 import {appendTagFilter} from './query.ts';
 
 function useSearchState(onTagAdded: () => void) {
-  const [search, setSearch] = useState('');
+  const [search, setSearch] = useQueryState('q', {defaultValue: ''});
 
   function addTag(name: string) {
     setSearch(current => appendTagFilter(current, name));
