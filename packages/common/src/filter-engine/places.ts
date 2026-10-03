@@ -1,5 +1,6 @@
 import {defineFilterEngine} from './definitions.ts';
 import {has} from './filters/has.ts';
+import {id} from './filters/id.ts';
 import {location} from './filters/location.ts';
 import {open} from './filters/open.ts';
 import {source} from './filters/source.ts';
@@ -47,6 +48,6 @@ export const placeFilterEngineDefinition = defineFilterEngine({
     geographicPoint,
     geographicPredicate,
   },
-  filters: {tag, source, name, address, notes, has, location, open},
+  filters: {id, tag, source, name, address, notes, has, location, open},
   functions: {point, radius, rect, sector},
 });

@@ -23,6 +23,7 @@ it('serves serializable documentation for the registered query capabilities', as
 
   expect(documentation).toEqual(placeFilterEngine.describe());
   expect(documentation.filters.map(filter => filter.name)).toEqual([
+    'id',
     'tag',
     'source',
     'name',

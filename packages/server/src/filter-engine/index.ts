@@ -12,6 +12,7 @@ import {places} from '../db/schema.ts';
 import type {GooglePlaces} from '../services/google/index.ts';
 
 import {hasCompiler} from './compiler/has.ts';
+import {idCompiler} from './compiler/id.ts';
 import {locationCompiler} from './compiler/location.ts';
 import {openCompiler} from './compiler/open.ts';
 import {sourceCompiler} from './compiler/source.ts';
@@ -38,6 +39,7 @@ const implementation = {
     geographicPoint: geographicPointResolver,
   },
   filters: {
+    id: idCompiler,
     tag: tagCompiler,
     source: sourceCompiler,
     name: textCompiler(places.name),

@@ -99,6 +99,12 @@ describe.skipIf(!testUrl)('place filtering through API and CLI', () => {
     expect(without.map(place => place.id)).toEqual([bakeryId]);
   });
 
+  it('filters saved place IDs through the API', async () => {
+    const matches = await client.places.list({query: `id[${cafeId}]`});
+
+    expect(matches.map(place => place.id)).toEqual([cafeId]);
+  });
+
   it('preserves unfiltered list calls and the existing place response', async () => {
     const result = await client.places.list();
     expect(result).toHaveLength(2);
