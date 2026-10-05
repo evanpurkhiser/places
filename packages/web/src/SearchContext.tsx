@@ -1,18 +1,32 @@
-import {createContext, useContext, type ReactNode} from 'react';
+import {createContext, useContext, useState, type ReactNode} from 'react';
 
 import {useQueryState} from 'nuqs';
 
 import {appendTagFilter} from './query.ts';
 
 function useSearchState(onTagAdded: () => void) {
-  const [search, setSearch] = useQueryState('q', {defaultValue: ''});
+  const [appliedSearch, setQuerySearch] = useQueryState('q', {
+    defaultValue: '',
+    history: 'push',
+  });
+  const [search, setSearch] = useState(appliedSearch);
+  const [previousAppliedSearch, setPreviousAppliedSearch] = useState(appliedSearch);
+
+  if (appliedSearch !== previousAppliedSearch) {
+    setPreviousAppliedSearch(appliedSearch);
+    setSearch(appliedSearch);
+  }
+
+  function applySearch(value: string) {
+    void setQuerySearch(value);
+  }
 
   function addTag(name: string) {
     setSearch(current => appendTagFilter(current, name));
     onTagAdded();
   }
 
-  return {search, setSearch, addTag};
+  return {search, setSearch, appliedSearch, applySearch, addTag};
 }
 
 const SearchContext = createContext<ReturnType<typeof useSearchState> | null>(null);

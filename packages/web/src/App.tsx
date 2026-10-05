@@ -38,9 +38,9 @@ function PlacesApp({
     place: Place;
     request: number;
   } | null>(null);
-  const {search, setSearch} = useSearch();
+  const {search, setSearch, appliedSearch, applySearch} = useSearch();
   const parsedSearch = useMemo(() => parseSearch(search), [search]);
-  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState(appliedSearch);
   const [collapsed, setCollapsed] = useState(false);
   const [sort, setSort] = useState<PlaceSort>('name');
   const result = useQuery(
@@ -68,9 +68,12 @@ function PlacesApp({
       return;
     }
 
-    const timeout = window.setTimeout(() => setDebouncedSearch(search), 600);
+    const timeout = window.setTimeout(() => {
+      setDebouncedSearch(search);
+      applySearch(search);
+    }, 600);
     return () => window.clearTimeout(timeout);
-  }, [search, parsedSearch]);
+  }, [search, parsedSearch, applySearch]);
 
   useEffect(() => {
     function onKey(event: KeyboardEvent) {
@@ -138,6 +141,7 @@ function PlacesApp({
   function resetFilters() {
     setSearch('');
     setDebouncedSearch('');
+    applySearch('');
   }
 
   function showOnMap(place: Place) {
