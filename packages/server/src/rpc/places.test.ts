@@ -413,7 +413,7 @@ describe.skipIf(!testUrl)('place import with PostgreSQL and pg-boss', () => {
           name: 'Alpha',
           formattedAddress: '',
           coordinates: 'SRID=4326;POINT(-74 40)',
-          createdAt: new Date('2026-01-02T00:00:00Z'),
+          createdAt: new Date('2026-01-03T00:00:00Z'),
         },
         {
           googlePlaceId: 'gamma',
@@ -434,7 +434,7 @@ describe.skipIf(!testUrl)('place import with PostgreSQL and pg-boss', () => {
       {
         placeId: savedByName.get('Beta')!.id,
         sourceId: recommendations[0]!.id,
-        createdAt: new Date('2026-02-01T00:00:00Z'),
+        createdAt: new Date('2026-03-01T00:00:00Z'),
       },
       {
         placeId: savedByName.get('Alpha')!.id,
@@ -443,16 +443,33 @@ describe.skipIf(!testUrl)('place import with PostgreSQL and pg-boss', () => {
       },
     ]);
 
-    const names = async (sort?: 'name' | 'recently-saved' | 'recently-recommended') => {
+    const names = async (
+      sort?:
+        | 'name'
+        | 'name-asc'
+        | 'name-desc'
+        | 'recently-saved'
+        | 'recently-saved-asc'
+        | 'recently-saved-desc'
+        | 'recently-recommended'
+        | 'recently-recommended-asc'
+        | 'recently-recommended-desc',
+    ) => {
       const listed = await client.places.list(sort ? {sort} : undefined);
 
       return listed.map(place => place.name);
     };
 
     expect(await names('name')).toEqual(['Alpha', 'Beta', 'Gamma']);
-    expect(await names()).toEqual(['Gamma', 'Beta', 'Alpha']);
-    expect(await names('recently-saved')).toEqual(['Gamma', 'Beta', 'Alpha']);
+    expect(await names('name-asc')).toEqual(['Alpha', 'Beta', 'Gamma']);
+    expect(await names('name-desc')).toEqual(['Gamma', 'Beta', 'Alpha']);
+    expect(await names()).toEqual(['Gamma', 'Alpha', 'Beta']);
+    expect(await names('recently-saved')).toEqual(['Gamma', 'Alpha', 'Beta']);
+    expect(await names('recently-saved-asc')).toEqual(['Alpha', 'Beta', 'Gamma']);
+    expect(await names('recently-saved-desc')).toEqual(['Gamma', 'Alpha', 'Beta']);
     expect(await names('recently-recommended')).toEqual(['Gamma', 'Alpha', 'Beta']);
+    expect(await names('recently-recommended-asc')).toEqual(['Alpha', 'Beta', 'Gamma']);
+    expect(await names('recently-recommended-desc')).toEqual(['Gamma', 'Alpha', 'Beta']);
   });
 
   it('resolves names and IDs, deduplicates tags, and preserves tags on reimport', async () => {

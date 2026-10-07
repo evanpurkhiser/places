@@ -9,7 +9,12 @@ import {createORPCClient} from '@orpc/client';
 import {RPCLink} from '@orpc/client/fetch';
 import type {Client} from '@places/common/contract';
 import {namespace} from '@places/common/contract/namespace';
-import {googleSearchQuery, importInput, place} from '@places/common/contract/place';
+import {
+  googleSearchQuery,
+  importInput,
+  place,
+  placeSort,
+} from '@places/common/contract/place';
 import {tag, tagIcon, tagReference} from '@places/common/contract/tag';
 import {z} from 'zod';
 
@@ -217,13 +222,20 @@ export const parser = merge(
       'list',
       object({
         action: constant('places-list'),
+        sort: optional(
+          option('--sort', zod(placeSort, {metavar: 'ORDER', placeholder: ''}), {
+            description: message`Order by name, recently-saved, or recently-recommended. Append -asc or -desc to set direction. Bare name is ascending; bare recency sorts are descending.`,
+          }),
+        ),
         query: optional(
           option('--query', string({metavar: 'QUERY'}), {
             description: message`Filter places using tags, notes, and boolean expressions.`,
           }),
         ),
       }),
-      {description: message`List saved places, newest first.`},
+      {
+        description: message`List saved places, optionally filtering and sorting the results.`,
+      },
     ),
     command(
       'sync',
@@ -361,9 +373,10 @@ export function execute(args: InferValue<typeof parser>, client: Client) {
     case 'place-untag':
       return client.places.untag({placeId: args.placeId, tag: args.tag});
     case 'places-list':
-      return args.query === undefined
-        ? client.places.list()
-        : client.places.list({query: args.query});
+      return client.places.list({
+        query: args.query,
+        sort: placeSort.parse(args.sort ?? 'recently-saved'),
+      });
     case 'sync':
       return client.places.sync({query: args.query});
     case 'sync-status':

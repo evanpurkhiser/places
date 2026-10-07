@@ -526,16 +526,43 @@ describe('place query arguments', () => {
       const places = {list: vi.fn()};
       execute(result.value, {places} as unknown as Client);
 
-      if (query === undefined) {
-        expect(places.list).toHaveBeenCalledWith();
-      } else {
-        expect(places.list).toHaveBeenCalledWith({query});
-      }
+      expect(places.list).toHaveBeenCalledWith({
+        query,
+        sort: 'recently-saved',
+      });
     },
   );
 
   it('requires a query value', () => {
     expect(parse(parser, ['list', '--query'])).toMatchObject({success: false});
+  });
+
+  it.each([
+    'name',
+    'name-asc',
+    'name-desc',
+    'recently-saved',
+    'recently-saved-asc',
+    'recently-saved-desc',
+    'recently-recommended',
+    'recently-recommended-asc',
+    'recently-recommended-desc',
+  ] as const)('forwards the %s sort', sort => {
+    const result = parse(parser, ['list', '--sort', sort]);
+
+    if (!result.success) {
+      throw new Error('Expected valid arguments');
+    }
+
+    const places = {list: vi.fn()};
+    execute(result.value, {places} as unknown as Client);
+
+    expect(places.list).toHaveBeenCalledWith({query: undefined, sort});
+  });
+
+  it('rejects unknown sorts', () => {
+    expect(parse(parser, ['list', '--sort', 'nearest'])).toMatchObject({success: false});
+    expect(parse(parser, ['list', '--sort', 'name-up'])).toMatchObject({success: false});
   });
 });
 

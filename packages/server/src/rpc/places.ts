@@ -205,15 +205,24 @@ const latestRecommendation = sql<Date>`coalesce(
 )`;
 
 function placeOrder(sort: PlaceSort) {
-  if (sort === 'name') {
-    return [asc(places.name), asc(places.id)];
+  const explicitDirection = sort.endsWith('-asc')
+    ? 'asc'
+    : sort.endsWith('-desc')
+      ? 'desc'
+      : undefined;
+  const field = sort.replace(/-(asc|desc)$/, '');
+  const direction = explicitDirection ?? (field === 'name' ? 'asc' : 'desc');
+  const order = direction === 'asc' ? asc : desc;
+
+  if (field === 'name') {
+    return [order(places.name), order(places.id)];
   }
 
-  if (sort === 'recently-recommended') {
-    return [desc(latestRecommendation), asc(places.name), asc(places.id)];
+  if (field === 'recently-recommended') {
+    return [order(latestRecommendation), asc(places.name), asc(places.id)];
   }
 
-  return [desc(places.createdAt), asc(places.name), asc(places.id)];
+  return [order(places.createdAt), asc(places.name), asc(places.id)];
 }
 
 async function resolvePlaceTag(

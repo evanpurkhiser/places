@@ -44,7 +44,12 @@ export const place = z.object({
   sources: z.array(placeSource),
 });
 
-export const placeSort = z.enum(['name', 'recently-saved', 'recently-recommended']);
+export const placeSortField = z.enum(['name', 'recently-saved', 'recently-recommended']);
+export const placeSortDirection = z.enum(['asc', 'desc']);
+export const placeSort = z.union([
+  placeSortField,
+  z.templateLiteral([placeSortField, '-', placeSortDirection]),
+]);
 export type PlaceSort = z.infer<typeof placeSort>;
 
 export const googleSearchQuery = z.string().trim().min(1).max(4096);
