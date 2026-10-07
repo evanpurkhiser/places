@@ -1,7 +1,6 @@
 import {useCallback, useEffect, useMemo, useState} from 'react';
 
 import {Button} from '@base-ui/react/button';
-import {Input} from '@base-ui/react/input';
 import {ORPCError} from '@orpc/client';
 import type {PlaceSort} from '@places/common/contract/place';
 import type {Point} from '@places/common/filter-engine/values/geographic-point';
@@ -208,8 +207,9 @@ function PlacesApp({
               </div>
               <div className="search-wrap">
                 <Search size={18} />
-                <Input
+                <textarea
                   id="search"
+                  rows={1}
                   aria-label="Filter saved places"
                   aria-invalid={Boolean(parsedSearch.error)}
                   aria-describedby={parsedSearch.error ? 'search-error' : undefined}

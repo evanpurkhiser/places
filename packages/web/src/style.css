@@ -16,6 +16,7 @@ body {
 }
 button,
 input,
+textarea,
 select {
   font: inherit;
   color: inherit;
@@ -36,6 +37,7 @@ a {
 button:focus-visible,
 a:focus-visible,
 input:focus-visible,
+textarea:focus-visible,
 select:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: -2px;
@@ -127,36 +129,54 @@ kbd {
 }
 .search-wrap {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 6px;
   margin: 0 8px 8px;
-  min-height: 30px;
-  padding: 0 7px;
+  min-height: 38px;
+  max-height: 156px;
+  padding: 7px;
   border: 1px solid #ccd2c9;
   border-radius: 3px;
   color: var(--muted);
+  overflow-y: auto;
 }
 .search-wrap:focus-within {
   outline: 1px solid var(--accent);
   border-color: var(--accent);
 }
-.search-wrap input {
+.search-wrap > svg {
+  flex: 0 0 auto;
+  margin-top: 1px;
+}
+.search-wrap textarea {
   flex: 1;
   min-width: 0;
   width: 100%;
-  height: 28px;
+  min-height: 19px;
+  max-height: 142px;
   padding: 0;
   border: 0;
   outline: none;
   background: transparent;
-  font-size: 11px;
+  color: #292d29;
+  field-sizing: content;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+  resize: none;
 }
-.search-wrap input:focus-visible {
+.search-wrap textarea:focus-visible {
   outline: none;
 }
 .search-wrap button {
   padding: 2px;
   display: flex;
+}
+.search-wrap > button,
+.search-wrap > kbd {
+  flex: 0 0 auto;
+  margin-top: 1px;
 }
 .results-heading {
   display: flex;
