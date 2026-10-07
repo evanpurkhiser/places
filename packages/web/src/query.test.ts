@@ -3,7 +3,13 @@ import {describe, expect, it} from 'vitest';
 
 import {placeFilterEngine} from '../../server/src/filter-engine/index.ts';
 
-import {appendTagFilter, normalizeBounds, parseSearch, placesQuery} from './query.ts';
+import {
+  appendTagFilter,
+  normalizeBounds,
+  parseSearch,
+  placesQuery,
+  withUserLocation,
+} from './query.ts';
 
 const bounds = {west: -74.03, north: 40.76, east: -73.95, south: 40.7};
 
@@ -130,5 +136,28 @@ describe('viewport queries', () => {
       '',
     );
     expect(() => placeFilterEngine.prepare(query)).not.toThrow();
+  });
+});
+
+describe('user location ordering', () => {
+  it('uses the first user location as the reference and switches to distance', () => {
+    expect(
+      withUserLocation({sort: 'name'}, {longitude: -73.985, latitude: 40.726}),
+    ).toEqual({
+      sort: 'distance',
+      referenceLocation: 'point(-73.985, 40.726)',
+    });
+  });
+
+  it('updates the reference without overriding a later sort selection', () => {
+    expect(
+      withUserLocation(
+        {sort: 'recently-saved', referenceLocation: 'point(-73.985, 40.726)'},
+        {longitude: -73.98, latitude: 40.72},
+      ),
+    ).toEqual({
+      sort: 'recently-saved',
+      referenceLocation: 'point(-73.98, 40.72)',
+    });
   });
 });

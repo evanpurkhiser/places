@@ -3,6 +3,7 @@ import 'maplibre-gl/dist/maplibre-gl.css';
 import {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 
 import {Button} from '@base-ui/react/button';
+import type {Point} from '@places/common/filter-engine/values/geographic-point';
 import {House, Layers, Maximize, Minus, Plus} from 'lucide-react';
 import * as maplibregl from 'maplibre-gl';
 import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url';
@@ -30,10 +31,19 @@ interface Props {
   target: {place: Place; request: number} | null;
   onSelect: (place: Place) => void;
   onBoundsChange: (bounds: Bounds) => void;
+  onUserLocationChange: (location: Point) => void;
 }
 
-export function MapView({places, selected, target, onSelect, onBoundsChange}: Props) {
+export function MapView({
+  places,
+  selected,
+  target,
+  onSelect,
+  onBoundsChange,
+  onUserLocationChange,
+}: Props) {
   const map = useRef<MapRef>(null);
+  const geolocate = useRef<maplibregl.GeolocateControl>(null);
   const container = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -166,6 +176,7 @@ export function MapView({places, selected, target, onSelect, onBoundsChange}: Pr
             }
           });
           reportBounds();
+          geolocate.current?.trigger();
         }}
         onMoveEnd={reportBounds}
         onResize={reportBounds}
@@ -175,19 +186,26 @@ export function MapView({places, selected, target, onSelect, onBoundsChange}: Pr
         onIdle={() => setError('')}
       >
         <GeolocateControl
+          ref={geolocate}
           position="top-right"
           positionOptions={{enableHighAccuracy: true}}
           trackUserLocation
           showUserLocation
           showAccuracyCircle
-          onGeolocate={() => setLocationError('')}
-          onError={event =>
+          onGeolocate={event => {
+            setLocationError('');
+            onUserLocationChange({
+              longitude: event.coords.longitude,
+              latitude: event.coords.latitude,
+            });
+          }}
+          onError={event => {
             setLocationError(
               event.code === 1
                 ? 'Location access is blocked. Allow location access in your browser settings, then try again.'
                 : 'Your location could not be found. Try the location button again.',
-            )
-          }
+            );
+          }}
         />
         <Source id="places" type="geojson" data={data}>
           <Layer

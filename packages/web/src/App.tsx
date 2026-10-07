@@ -4,13 +4,20 @@ import {Button} from '@base-ui/react/button';
 import {Input} from '@base-ui/react/input';
 import {ORPCError} from '@orpc/client';
 import type {PlaceSort} from '@places/common/contract/place';
+import type {Point} from '@places/common/filter-engine/values/geographic-point';
 import {keepPreviousData, skipToken, useQuery} from '@tanstack/react-query';
 import {Compass, PanelLeft, Search, X} from 'lucide-react';
 
 import {MapView} from './Map.tsx';
 import {PlaceDetails} from './PlaceDetails.tsx';
 import {PlaceList} from './PlaceList.tsx';
-import {parseSearch, placesQuery, type Bounds} from './query.ts';
+import {
+  parseSearch,
+  placesQuery,
+  withUserLocation,
+  type Bounds,
+  type PlacesOrdering,
+} from './query.ts';
 import {rpc, type Place} from './rpc.ts';
 import {SearchProvider, useSearch} from './SearchContext.tsx';
 
@@ -42,10 +49,17 @@ function PlacesApp({
   const parsedSearch = useMemo(() => parseSearch(search), [search]);
   const [debouncedSearch, setDebouncedSearch] = useState(appliedSearch);
   const [collapsed, setCollapsed] = useState(false);
-  const [sort, setSort] = useState<PlaceSort>('name');
+  const [ordering, setOrdering] = useState<PlacesOrdering>({sort: 'name'});
+  const {sort, referenceLocation} = ordering;
   const result = useQuery(
     rpc.places.list.queryOptions({
-      input: bounds ? {query: placesQuery(bounds, debouncedSearch, ''), sort} : skipToken,
+      input: bounds
+        ? {
+            query: placesQuery(bounds, debouncedSearch, ''),
+            sort,
+            referenceLocation,
+          }
+        : skipToken,
       enabled: !parsedSearch.error && search === debouncedSearch,
       placeholderData: keepPreviousData,
       retry: (count, error) =>
@@ -147,6 +161,9 @@ function PlacesApp({
   function showOnMap(place: Place) {
     setMapTarget(current => ({place, request: (current?.request ?? 0) + 1}));
   }
+  const updateUserLocation = useCallback((location: Point) => {
+    setOrdering(current => withUserLocation(current, location));
+  }, []);
 
   return (
     <main>
@@ -234,11 +251,22 @@ function PlacesApp({
                     <select
                       aria-label="Sort places"
                       value={sort}
-                      onChange={event => setSort(event.target.value as PlaceSort)}
+                      onChange={event =>
+                        setOrdering(current => ({
+                          ...current,
+                          sort: event.target.value as PlaceSort,
+                        }))
+                      }
                     >
                       <option value="name">Name</option>
                       <option value="recently-saved">Recently saved</option>
                       <option value="recently-recommended">Recently recommended</option>
+                      {referenceLocation && (
+                        <>
+                          <option value="distance">Nearest</option>
+                          <option value="distance-desc">Farthest</option>
+                        </>
+                      )}
                     </select>
                   </label>
                 </span>
@@ -287,6 +315,7 @@ function PlacesApp({
             target={mapTarget}
             onSelect={select}
             onBoundsChange={setBounds}
+            onUserLocationChange={updateUserLocation}
           />
         </section>
       </div>

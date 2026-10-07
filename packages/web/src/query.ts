@@ -1,3 +1,5 @@
+import type {PlaceSort} from '@places/common/contract/place';
+import type {Point} from '@places/common/filter-engine/values/geographic-point';
 import {parseQuery, SearchError} from '@places/common/search';
 
 export function parseSearch(search: string) {
@@ -17,6 +19,21 @@ export interface Bounds {
   north: number;
   east: number;
   south: number;
+}
+
+export interface PlacesOrdering {
+  sort: PlaceSort;
+  referenceLocation?: string;
+}
+
+export function withUserLocation(
+  current: PlacesOrdering,
+  {longitude, latitude}: Point,
+): PlacesOrdering {
+  return {
+    sort: current.referenceLocation ? current.sort : 'distance',
+    referenceLocation: `point(${longitude}, ${latitude})`,
+  };
 }
 
 function wrapLongitude(value: number) {
