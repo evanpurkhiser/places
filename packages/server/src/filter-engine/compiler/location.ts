@@ -5,10 +5,7 @@ import {sql, type SQL} from 'drizzle-orm';
 
 import {places} from '../../db/schema.ts';
 import type {Context} from '../context.ts';
-
-function point({longitude, latitude}: {longitude: number; latitude: number}): SQL {
-  return sql`ST_SetSRID(ST_MakePoint(${longitude}, ${latitude}), 4326)::geography`;
-}
+import {geographyPoint} from '../geography.ts';
 
 function createSector(center: SQL, heading: SQL, range: SQL, spread: number): SQL {
   return sql`(
@@ -28,7 +25,7 @@ function createSector(center: SQL, heading: SQL, range: SQL, spread: number): SQ
 
 function compileGeographicPredicate(predicate: GeographicPredicate): SQL {
   if (predicate.kind === 'radius') {
-    return sql`ST_DWithin(${places.coordinates}, ${point(predicate.origin)}, ${predicate.distance})`;
+    return sql`ST_DWithin(${places.coordinates}, ${geographyPoint(predicate.origin)}, ${predicate.distance})`;
   }
 
   if (predicate.kind === 'rect') {
@@ -44,10 +41,10 @@ function compileGeographicPredicate(predicate: GeographicPredicate): SQL {
     return sql`(${latitude} between ${south} and ${north} and ${longitudeRange})`;
   }
 
-  const center = point(predicate.origin);
+  const center = geographyPoint(predicate.origin);
   const {range, heading} = (() => {
     if ('towards' in predicate) {
-      const target = point(predicate.towards);
+      const target = geographyPoint(predicate.towards);
       return {
         range:
           predicate.range === undefined

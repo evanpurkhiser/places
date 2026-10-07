@@ -44,7 +44,12 @@ export const place = z.object({
   sources: z.array(placeSource),
 });
 
-export const placeSortField = z.enum(['name', 'recently-saved', 'recently-recommended']);
+export const placeSortField = z.enum([
+  'name',
+  'recently-saved',
+  'recently-recommended',
+  'distance',
+]);
 export const placeSortDirection = z.enum(['asc', 'desc']);
 export const placeSort = z.union([
   placeSortField,
@@ -98,6 +103,15 @@ const queryInput = z.object({
   query: z.string().optional(),
   referenceLocation: referenceLocation.optional(),
 });
+const placeListInput = queryInput
+  .extend({sort: placeSort.optional()})
+  .refine(
+    input => !input.sort?.startsWith('distance') || input.referenceLocation !== undefined,
+    {
+      message: 'Distance sorting requires a reference location.',
+      path: ['referenceLocation'],
+    },
+  );
 
 export const placeContract = {
   searchGoogle: oc
@@ -121,7 +135,7 @@ export const placeContract = {
       BAD_REQUEST: {message: 'Invalid place query.', data: queryErrorData},
       SERVICE_UNAVAILABLE: {message: 'Place resolution is unavailable.'},
     })
-    .input(queryInput.extend({sort: placeSort.optional()}).optional())
+    .input(placeListInput.optional())
     .output(z.array(place)),
   sync: oc
     .errors({

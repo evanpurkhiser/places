@@ -235,7 +235,7 @@ export const parser = merge(
         action: constant('places-list'),
         sort: optional(
           option('--sort', zod(placeSort, {metavar: 'ORDER', placeholder: ''}), {
-            description: message`Order by name, recently-saved, or recently-recommended. Append -asc or -desc to set direction. Bare name is ascending; bare recency sorts are descending.`,
+            description: message`Order by name, distance from the reference location, recently-saved, or recently-recommended. Append -asc or -desc to set direction. Bare name and distance are ascending; bare recency sorts are descending.`,
           }),
         ),
         query: optional(

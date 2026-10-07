@@ -548,6 +548,9 @@ describe('place query arguments', () => {
     'recently-recommended',
     'recently-recommended-asc',
     'recently-recommended-desc',
+    'distance',
+    'distance-asc',
+    'distance-desc',
   ] as const)('forwards the %s sort', sort => {
     const result = parse(parser, ['list', '--sort', sort]);
 
@@ -568,7 +571,13 @@ describe('place query arguments', () => {
   it.each(['Union Square, NYC', 'point(-73.985, 40.726)'])(
     'forwards the reference location value: %s',
     referenceLocation => {
-      const result = parse(parser, ['list', '--reference-location', referenceLocation]);
+      const result = parse(parser, [
+        'list',
+        '--reference-location',
+        referenceLocation,
+        '--sort',
+        'distance',
+      ]);
 
       if (!result.success) {
         throw new Error('Expected valid arguments');
@@ -579,7 +588,7 @@ describe('place query arguments', () => {
 
       expect(places.list).toHaveBeenCalledWith({
         query: undefined,
-        sort: 'recently-saved',
+        sort: 'distance',
         referenceLocation,
       });
     },

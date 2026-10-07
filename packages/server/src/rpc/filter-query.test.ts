@@ -168,7 +168,7 @@ describe.skipIf(!testUrl)('place filtering through API and CLI', () => {
     expect(google.search).toHaveBeenCalledWith('Origin, NYC');
   });
 
-  it('uses a parsed geographic point as @ref', async () => {
+  it('uses a parsed geographic point as @ref and for distance sorting', async () => {
     google.search.mockClear();
     const referenceLocation = 'point(-74, 40)';
     const nearby = await client.places.list({
@@ -177,6 +177,14 @@ describe.skipIf(!testUrl)('place filtering through API and CLI', () => {
     });
 
     expect(nearby.map(place => place.id)).toEqual([cafeId]);
+    const nearest = await client.places.list({referenceLocation, sort: 'distance'});
+    const farthest = await client.places.list({
+      referenceLocation,
+      sort: 'distance-desc',
+    });
+
+    expect(nearest.map(place => place.id)).toEqual([cafeId, bakeryId]);
+    expect(farthest.map(place => place.id)).toEqual([bakeryId, cafeId]);
     expect(google.search).not.toHaveBeenCalled();
   });
 
@@ -199,6 +207,12 @@ describe.skipIf(!testUrl)('place filtering through API and CLI', () => {
 
     expect(result.map(place => place.id)).toEqual([cafeId]);
     expect(google.search).toHaveBeenCalledExactlyOnceWith('Origin, NYC');
+  });
+
+  it('requires a reference location for distance sorting', async () => {
+    await expect(client.places.list({sort: 'distance'})).rejects.toThrow(
+      'Distance sorting requires a reference location.',
+    );
   });
 
   it('returns query diagnostics for unmatched origins and service errors for outages', async () => {

@@ -1,6 +1,7 @@
 import {implement, ORPCError} from '@orpc/server';
 import {contract} from '@places/common/contract';
 import {type PlaceSort, placeSource} from '@places/common/contract/place';
+import type {Point} from '@places/common/filter-engine/values/geographic-point';
 import {SearchError} from '@places/common/search';
 import {and, asc, desc, eq, getTableColumns, inArray, or, sql} from 'drizzle-orm';
 import {z} from 'zod';
@@ -8,6 +9,7 @@ import {z} from 'zod';
 import type {Context} from '../context.ts';
 import type {Database} from '../db/index.ts';
 import {places, placeSources, placeTags, sources, tags} from '../db/schema.ts';
+import {geographyPoint} from '../filter-engine/geography.ts';
 import {preparePlaceQuery} from '../filter-engine/index.ts';
 import {enqueueImport, getImportStatus, listImportStatuses} from '../importers/index.ts';
 import {syncQueue, syncPayload} from '../jobs/gmaps-sync.ts';
@@ -63,10 +65,11 @@ export const placeRouter = api.router({
     }),
   ),
   list: api.list.handler(async ({input, context: {db, google}}) => {
-    const {predicate} = await queryPredicate(input?.query, input?.referenceLocation, {
-      db,
-      google,
-    });
+    const {predicate, referencePoint} = await queryPredicate(
+      input?.query,
+      input?.referenceLocation,
+      {db, google},
+    );
     const rows = await db
       .select({
         ...getTableColumns(places),
@@ -75,7 +78,7 @@ export const placeRouter = api.router({
       })
       .from(places)
       .where(predicate)
-      .orderBy(...placeOrder(input?.sort ?? 'recently-saved'));
+      .orderBy(...placeOrder(input?.sort ?? 'recently-saved', referencePoint));
 
     if (!rows.length) {
       return [];
@@ -210,15 +213,28 @@ const latestRecommendation = sql<Date>`coalesce(
   ${places.createdAt}
 )`;
 
-function placeOrder(sort: PlaceSort) {
+function placeOrder(sort: PlaceSort, referencePoint?: Point) {
   const explicitDirection = sort.endsWith('-asc')
     ? 'asc'
     : sort.endsWith('-desc')
       ? 'desc'
       : undefined;
   const field = sort.replace(/-(asc|desc)$/, '');
-  const direction = explicitDirection ?? (field === 'name' ? 'asc' : 'desc');
+  const direction =
+    explicitDirection ?? (field === 'name' || field === 'distance' ? 'asc' : 'desc');
   const order = direction === 'asc' ? asc : desc;
+
+  if (field === 'distance') {
+    if (!referencePoint) {
+      throw new Error('Distance sorting requires a reference location');
+    }
+
+    return [
+      order(sql`ST_Distance(${places.coordinates}, ${geographyPoint(referencePoint)})`),
+      asc(places.name),
+      asc(places.id),
+    ];
+  }
 
   if (field === 'name') {
     return [order(places.name), order(places.id)];

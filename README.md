@@ -199,7 +199,27 @@ pnpm places import runs
 pnpm places import runs --limit 100
 pnpm places import runs <job-id>
 pnpm places list
+pnpm places list --sort name
+pnpm places list --sort name-desc
+pnpm places list --sort recently-recommended
+pnpm places list --sort recently-saved-asc
+pnpm places list --reference-location 'point(-73.985, 40.726)' --sort distance
+pnpm places list --reference-location 'Union Square, NYC' --query 'location[radius(@ref, 5mi)]'
 ```
+
+`places list` accepts `--query QUERY` and `--sort ORDER` together. The available
+orders are:
+
+- `name` — name from A–Z.
+- `recently-saved` — newest saved date first. This is the default.
+- `recently-recommended` — newest source association first. Places without a
+  source use their saved date.
+- `distance` — nearest to `--reference-location` first.
+
+Append `-asc` or `-desc` to select the direction explicitly. For example,
+`name-desc` orders Z–A and `recently-saved-asc` orders oldest first.
+Distance sorting requires `--reference-location`; use `distance-desc` for
+farthest first.
 
 Instagram post and reel URLs use the Instagram capture worker, which requires the
 Instagram/OpenAI configuration. Each matched place is queued for Google import.

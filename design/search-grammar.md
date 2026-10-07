@@ -257,7 +257,28 @@ arc with steps of at most one degree, refined for a nominal chord error of 0.5m.
 Measure the buffer using PostGIS geography distances in meters. Sectors support
 headings crossing north and coordinates crossing the antimeridian.
 
-### Named locations
+### Request reference point
+
+Each query request may supply one geographic point as `referenceLocation`. The
+CLI exposes it as `--reference-location POINT` on `places list` and
+`places sync`. Its value uses the same geographic point syntax as filter
+arguments:
+
+```sh
+places list --reference-location 'point(-73.985, 40.726)' --sort distance
+places list --reference-location 'Union Square, NYC' \
+  --query 'location[radius(@ref, 5mi)]'
+```
+
+`@ref` resolves to that point anywhere a geographic point is accepted. Using it
+without request context is an error. The `distance`, `distance-asc`, and
+`distance-desc` list orders use straight-line geographic distance from the same
+point; bare `distance` sorts nearest first.
+
+The server cannot infer the user's physical location. Callers representing a
+current position provide explicit coordinates with `point(longitude, latitude)`.
+
+### Named locations — planned
 
 Named locations give saved geographic references short, reusable names:
 
