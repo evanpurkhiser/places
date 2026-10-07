@@ -129,6 +129,36 @@ describe('named geographic points', () => {
     expect(google.get).not.toHaveBeenCalled();
   });
 
+  it('resolves @ref from the query context', async () => {
+    const {google, context} = setup();
+    const resolved = await placeFilterEngine.resolve(
+      placeFilterEngine.prepare('location[radius(@ref, 1mi)]'),
+      {...context, referencePoint: eastVillage.location},
+    );
+    const result = dialect.sqlToQuery(placeFilterEngine.compile(resolved));
+
+    expect(result.params).toEqual([-73.985, 40.726, 1609.344]);
+    expect(google.search).not.toHaveBeenCalled();
+  });
+
+  it('requires a request reference point for @ref', async () => {
+    const {context} = setup();
+
+    await expect(
+      placeFilterEngine.resolve(
+        placeFilterEngine.prepare('location[radius(@ref, 1mi)]'),
+        context,
+      ),
+    ).rejects.toMatchObject({
+      diagnostics: [
+        {
+          code: 'invalid_value',
+          message: 'A reference location is required to use @ref.',
+        },
+      ],
+    });
+  });
+
   it('reports missing places at the literal source', async () => {
     const {google, compile} = setup();
     google.search.mockResolvedValue([]);

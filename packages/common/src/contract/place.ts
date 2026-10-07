@@ -52,6 +52,8 @@ export const placeSort = z.union([
 ]);
 export type PlaceSort = z.infer<typeof placeSort>;
 
+export const referenceLocation = z.string().min(1).max(4096);
+
 export const googleSearchQuery = z.string().trim().min(1).max(4096);
 
 export const importInput = z.string().trim().min(1).max(4096);
@@ -92,6 +94,10 @@ export const queryErrorData = z.object({
 });
 
 const assignmentAction = oc.errors({NOT_FOUND: {message: 'Place or tag not found'}});
+const queryInput = z.object({
+  query: z.string().optional(),
+  referenceLocation: referenceLocation.optional(),
+});
 
 export const placeContract = {
   searchGoogle: oc
@@ -115,16 +121,14 @@ export const placeContract = {
       BAD_REQUEST: {message: 'Invalid place query.', data: queryErrorData},
       SERVICE_UNAVAILABLE: {message: 'Place resolution is unavailable.'},
     })
-    .input(
-      z.object({query: z.string().optional(), sort: placeSort.optional()}).optional(),
-    )
+    .input(queryInput.extend({sort: placeSort.optional()}).optional())
     .output(z.array(place)),
   sync: oc
     .errors({
       BAD_REQUEST: {message: 'Invalid place query.', data: queryErrorData},
       SERVICE_UNAVAILABLE: {message: 'Sync service is unavailable.'},
     })
-    .input(z.object({query: z.string().optional()}).optional())
+    .input(queryInput.optional())
     .output(
       z.object({
         matched: z.number().int(),

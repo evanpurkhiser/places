@@ -15,6 +15,7 @@ export type {Point} from '@places/common/filter-engine/values/geographic-point';
 
 export interface Context {
   readonly now: number;
+  readonly referencePoint?: Point;
   tagExists(name: string): Promise<boolean>;
   resolvePoint(name: string): Promise<Point>;
 }

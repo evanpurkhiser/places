@@ -29,6 +29,9 @@ const definition = defineFilterEngine({
 const engine = implementFilterEngine(definition, {
   valueResolvers: {
     geographicPoint: {
+      resolveReference: name => {
+        throw new InvalidValueError(`Unknown point reference: @${name}`);
+      },
       resolve: value => {
         if (typeof value === 'string') {
           throw new InvalidValueError('Named points are unavailable in this test');

@@ -67,7 +67,7 @@ describe.skipIf(!testUrl)('place filtering through API and CLI', () => {
         googlePlaceId: 'bakery',
         name: 'Bakery',
         formattedAddress: 'New York',
-        coordinates: 'SRID=4326;POINT(-74 40)',
+        coordinates: 'SRID=4326;POINT(-73.9 40)',
       },
     ]);
     const [source] = await db
@@ -166,6 +166,39 @@ describe.skipIf(!testUrl)('place filtering through API and CLI', () => {
     });
     expect(result.map(place => place.id)).toEqual([cafeId]);
     expect(google.search).toHaveBeenCalledWith('Origin, NYC');
+  });
+
+  it('uses a parsed geographic point as @ref', async () => {
+    google.search.mockClear();
+    const referenceLocation = 'point(-74, 40)';
+    const nearby = await client.places.list({
+      query: 'location[radius(@ref, 1mi)]',
+      referenceLocation,
+    });
+
+    expect(nearby.map(place => place.id)).toEqual([cafeId]);
+    expect(google.search).not.toHaveBeenCalled();
+  });
+
+  it('resolves a reference-location name through the geographic point resolver', async () => {
+    google.search.mockClear();
+    google.search.mockResolvedValueOnce([
+      {
+        id: 'origin',
+        displayName: {text: 'Origin'},
+        formattedAddress: 'New York',
+        googleMapsUri: 'https://maps.google.com/?q=origin',
+        location: {longitude: -74, latitude: 40},
+      },
+    ]);
+
+    const result = await client.places.list({
+      query: 'location[radius(@ref, 1mi)]',
+      referenceLocation: 'Origin, NYC',
+    });
+
+    expect(result.map(place => place.id)).toEqual([cafeId]);
+    expect(google.search).toHaveBeenCalledExactlyOnceWith('Origin, NYC');
   });
 
   it('returns query diagnostics for unmatched origins and service errors for outages', async () => {

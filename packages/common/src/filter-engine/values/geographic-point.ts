@@ -10,7 +10,7 @@ export const geographicPoint = defineValue<Point, string>()({
   description:
     'A place name, address, Google Maps place link, gmaps:<place_id>, or explicit point(longitude, latitude). Include a city or region in place names to guide the search.',
   literals: true,
-  references: false,
+  references: true,
   decode: literal => {
     const name = literal.value.trim();
 

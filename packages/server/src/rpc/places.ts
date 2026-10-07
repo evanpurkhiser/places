@@ -8,7 +8,7 @@ import {z} from 'zod';
 import type {Context} from '../context.ts';
 import type {Database} from '../db/index.ts';
 import {places, placeSources, placeTags, sources, tags} from '../db/schema.ts';
-import {compilePlaceQuery} from '../filter-engine/index.ts';
+import {preparePlaceQuery} from '../filter-engine/index.ts';
 import {enqueueImport, getImportStatus, listImportStatuses} from '../importers/index.ts';
 import {syncQueue, syncPayload} from '../jobs/gmaps-sync.ts';
 
@@ -63,7 +63,10 @@ export const placeRouter = api.router({
     }),
   ),
   list: api.list.handler(async ({input, context: {db, google}}) => {
-    const predicate = await queryPredicate(input?.query, {db, google});
+    const {predicate} = await queryPredicate(input?.query, input?.referenceLocation, {
+      db,
+      google,
+    });
     const rows = await db
       .select({
         ...getTableColumns(places),
@@ -120,7 +123,10 @@ export const placeRouter = api.router({
     }));
   }),
   sync: api.sync.handler(async ({input, context: {db, google, jobs, config}}) => {
-    const predicate = await queryPredicate(input?.query, {db, google});
+    const {predicate} = await queryPredicate(input?.query, input?.referenceLocation, {
+      db,
+      google,
+    });
 
     if (!config.google.apiKey) {
       throw new ORPCError('SERVICE_UNAVAILABLE', {
@@ -262,9 +268,10 @@ async function resolvePlaceTag(
 
 function queryPredicate(
   query: string | undefined,
+  referenceLocation: string | undefined,
   context: Pick<Context, 'db' | 'google'>,
 ) {
-  return compilePlaceQuery(query ?? '', context).catch(error => {
+  return preparePlaceQuery(query ?? '', {...context, referenceLocation}).catch(error => {
     if (error instanceof SearchError) {
       throw new ORPCError('BAD_REQUEST', {
         message: error.message,

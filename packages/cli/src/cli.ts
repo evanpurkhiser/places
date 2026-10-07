@@ -14,6 +14,7 @@ import {
   importInput,
   place,
   placeSort,
+  referenceLocation,
 } from '@places/common/contract/place';
 import {tag, tagIcon, tagReference} from '@places/common/contract/tag';
 import {z} from 'zod';
@@ -101,6 +102,16 @@ const namespaceMetadata = {
     }),
   ),
 };
+
+const referenceLocationOption = optional(
+  option(
+    '--reference-location',
+    zod(referenceLocation, {metavar: 'POINT', placeholder: ''}),
+    {
+      description: message`Define @ref using a place name or geographic point such as Union Square, NYC or point(-73.985, 40.726).`,
+    },
+  ),
+);
 
 export const parser = merge(
   object({
@@ -232,6 +243,7 @@ export const parser = merge(
             description: message`Filter places using tags, notes, and boolean expressions.`,
           }),
         ),
+        referenceLocation: referenceLocationOption,
       }),
       {
         description: message`List saved places, optionally filtering and sorting the results.`,
@@ -246,6 +258,7 @@ export const parser = merge(
             description: message`Sync only places matching this filter query.`,
           }),
         ),
+        referenceLocation: referenceLocationOption,
       }),
       {
         description: message`Queue a Google refresh for every matching saved place; defaults to all places.`,
@@ -376,9 +389,13 @@ export function execute(args: InferValue<typeof parser>, client: Client) {
       return client.places.list({
         query: args.query,
         sort: placeSort.parse(args.sort ?? 'recently-saved'),
+        referenceLocation: args.referenceLocation,
       });
     case 'sync':
-      return client.places.sync({query: args.query});
+      return client.places.sync({
+        query: args.query,
+        referenceLocation: args.referenceLocation,
+      });
     case 'sync-status':
       return client.places.syncStatus({jobId: args.jobId});
     case 'import-runs':

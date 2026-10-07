@@ -5,6 +5,7 @@ import {
 } from '@places/common/filter-engine';
 import type {name as nameDefinition} from '@places/common/filter-engine/filters/text';
 import {placeFilterEngineDefinition} from '@places/common/filter-engine/places';
+import {geographicPoint} from '@places/common/filter-engine/values/geographic-point';
 import {sql, type SQL, type SQLWrapper} from 'drizzle-orm';
 
 import type {Database} from '../db/index.ts';
@@ -64,9 +65,38 @@ export const placeFilterEngine = implementFilterEngine(
 
 export async function compilePlaceQuery(
   query: string,
-  {db, google}: {db: Database; google?: GooglePlaces},
+  options: {db: Database; google?: GooglePlaces; referenceLocation?: string},
 ): Promise<SQL> {
+  const prepared = await preparePlaceQuery(query, options);
+
+  return prepared.predicate;
+}
+
+export async function preparePlaceQuery(
+  query: string,
+  {
+    db,
+    google,
+    referenceLocation,
+  }: {
+    db: Database;
+    google?: GooglePlaces;
+    referenceLocation?: string;
+  },
+) {
   const prepared = placeFilterEngine.prepare(query);
-  const context = createContext(db, google);
-  return await placeFilterEngine.execute(prepared, context);
+  const baseContext = createContext(db, google);
+  const referencePoint = referenceLocation
+    ? await placeFilterEngine.resolveValue(
+        referenceLocation,
+        geographicPoint,
+        baseContext,
+      )
+    : undefined;
+  const context: Context = {...baseContext, referencePoint};
+
+  return {
+    predicate: await placeFilterEngine.execute(prepared, context),
+    referencePoint,
+  };
 }

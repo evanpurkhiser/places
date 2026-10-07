@@ -529,6 +529,7 @@ describe('place query arguments', () => {
       expect(places.list).toHaveBeenCalledWith({
         query,
         sort: 'recently-saved',
+        referenceLocation: undefined,
       });
     },
   );
@@ -557,8 +558,32 @@ describe('place query arguments', () => {
     const places = {list: vi.fn()};
     execute(result.value, {places} as unknown as Client);
 
-    expect(places.list).toHaveBeenCalledWith({query: undefined, sort});
+    expect(places.list).toHaveBeenCalledWith({
+      query: undefined,
+      sort,
+      referenceLocation: undefined,
+    });
   });
+
+  it.each(['Union Square, NYC', 'point(-73.985, 40.726)'])(
+    'forwards the reference location value: %s',
+    referenceLocation => {
+      const result = parse(parser, ['list', '--reference-location', referenceLocation]);
+
+      if (!result.success) {
+        throw new Error('Expected valid arguments');
+      }
+
+      const places = {list: vi.fn()};
+      execute(result.value, {places} as unknown as Client);
+
+      expect(places.list).toHaveBeenCalledWith({
+        query: undefined,
+        sort: 'recently-saved',
+        referenceLocation,
+      });
+    },
+  );
 
   it('rejects unknown sorts', () => {
     expect(parse(parser, ['list', '--sort', 'nearest'])).toMatchObject({success: false});
@@ -613,7 +638,16 @@ describe('place sync commands', () => {
       .mockResolvedValue({matched: 0, queued: 0, alreadyQueued: 0, jobIds: []});
     const client = {places: {sync}} as unknown as Client;
 
-    for (const args of [['sync'], ['sync', '--query', 'tag[favorite]']]) {
+    for (const args of [
+      ['sync'],
+      [
+        'sync',
+        '--query',
+        'location[radius(@ref, 1mi)]',
+        '--reference-location',
+        'point(-73.985, 40.726)',
+      ],
+    ]) {
       const result = parse(parser, args);
       expect(result.success).toBe(true);
 
@@ -622,7 +656,15 @@ describe('place sync commands', () => {
       }
     }
 
-    expect(sync.mock.calls).toEqual([[{query: undefined}], [{query: 'tag[favorite]'}]]);
+    expect(sync.mock.calls).toEqual([
+      [{query: undefined, referenceLocation: undefined}],
+      [
+        {
+          query: 'location[radius(@ref, 1mi)]',
+          referenceLocation: 'point(-73.985, 40.726)',
+        },
+      ],
+    ]);
   });
 
   it('parses sync status and rejects invalid job IDs', () => {
