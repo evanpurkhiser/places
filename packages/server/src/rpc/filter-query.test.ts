@@ -210,9 +210,9 @@ describe.skipIf(!testUrl)('place filtering through API and CLI', () => {
   });
 
   it('requires a reference location for distance sorting', async () => {
-    await expect(client.places.list({sort: 'distance'})).rejects.toThrow(
-      'Distance sorting requires a reference location.',
-    );
+    await expect(client.places.list({sort: 'distance'})).rejects.toMatchObject({
+      status: 400,
+    });
   });
 
   it('returns query diagnostics for unmatched origins and service errors for outages', async () => {
