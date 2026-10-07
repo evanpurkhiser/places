@@ -3,7 +3,7 @@ import {describe, expect, it} from 'vitest';
 
 import {readFile} from 'node:fs/promises';
 
-import {parseQuery, SearchError} from './parser.ts';
+import {parseQuery, parseValue, SearchError} from './parser.ts';
 import type {Diagnostic, Filter, FunctionValue, Query} from './types.ts';
 
 function filter(input: string): Filter {
@@ -53,8 +53,33 @@ describe('search grammar', () => {
     const generated = await readFile(new URL('generated.js', directory), 'utf8');
 
     expect(generated).toBe(
-      peggy.generate(source, {output: 'source', format: 'es', cache: true}),
+      peggy.generate(source, {
+        output: 'source',
+        format: 'es',
+        cache: true,
+        allowedStartRules: ['query', 'standalone_value'],
+      }),
     );
+  });
+
+  it('parses standalone values with the query grammar', () => {
+    expect(parseValue('  point(-73.985, 40.726)\n')).toMatchObject({
+      type: 'function',
+      name: 'point',
+      arguments: [
+        {value: {type: 'string', value: '-73.985'}},
+        {value: {type: 'string', value: '40.726'}},
+      ],
+    });
+    expect(parseValue('Union Square, NYC')).toMatchObject({
+      type: 'string',
+      value: 'Union Square, NYC',
+    });
+    expect(parseValue('Cafe (NYC)')).toMatchObject({
+      type: 'string',
+      value: 'Cafe (NYC)',
+    });
+    expect(() => parseValue('point(-73.985,)')).toThrow(SearchError);
   });
 
   it('parses an empty query as match-all', () => {

@@ -1,4 +1,4 @@
-import {parseQuery, SearchError} from '../search/parser.ts';
+import {parseQuery, parseValue, SearchError} from '../search/parser.ts';
 import type {
   Argument,
   Diagnostic,
@@ -18,6 +18,7 @@ import {
   type PresenceRegistry,
   type RuntimeArguments,
   type ValueDefinition,
+  type ValueResult,
 } from './definitions.ts';
 import {describeSignature, type EngineDescription} from './documentation.ts';
 
@@ -516,6 +517,25 @@ export class FilterEngine<Definition extends FilterEngineDefinition, Predicate, 
     };
     this.#prepared.set(result, query ? this.#prepareExpression(query) : {kind: 'all'});
     return result;
+  }
+
+  async resolveValue<V extends Definition['values'][keyof Definition['values']]>(
+    input: string,
+    definition: V,
+    context: Context,
+  ): Promise<ValueResult<V>> {
+    this.#checkValue(definition);
+    const value = parseValue(input);
+    const argument: Argument = {
+      type: 'argument',
+      name: null,
+      operator: null,
+      value,
+      text: value.text,
+      location: value.location,
+    };
+
+    return (await this.#prepareValue(argument, definition)(context)) as ValueResult<V>;
   }
 
   async resolve(query: PreparedQuery, context: Context): Promise<ResolvedQuery> {

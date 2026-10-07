@@ -20,6 +20,7 @@ export type {
   ResolvedArguments,
   Signature,
   ValueDefinition,
+  ValueResult,
   ValueResolverFor,
   ValueResolvers,
 } from './definitions.ts';

@@ -215,6 +215,13 @@ describe('filter engine', () => {
     expect(resolve).toHaveBeenCalledTimes(3);
   });
 
+  it('resolves a standalone value with registered functions and types', async () => {
+    await expect(makeEngine().resolveValue('twice(2)', number, null)).resolves.toBe(4);
+    await expect(makeEngine().resolveValue('missing(2)', number, null)).rejects.toThrow(
+      'Unknown function: missing',
+    );
+  });
+
   it('validates the whole query before starting asynchronous resolution', () => {
     const resolve = vi.fn((value: string) => Promise.resolve(value));
     const external = defineValue<string, string>()({

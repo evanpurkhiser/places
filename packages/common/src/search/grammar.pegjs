@@ -4,6 +4,13 @@
 }
 
 query = _ expression:or_expression? _ { return expression ?? null; }
+standalone_value
+  = _ result:(function / reference / quoted_string / standalone_string) _ { return result; }
+standalone_string
+  = !function_start chars:$([^\r\n]+) {
+      return nodes.string([...chars.trim()], false, span());
+    }
+function_start = identifier '('
 
 or_expression
   = first:and_expression rest:(_ or_operator _ next:and_expression { return next; })* {

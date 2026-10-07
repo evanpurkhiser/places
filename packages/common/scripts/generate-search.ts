@@ -4,7 +4,12 @@ import {readFile, writeFile} from 'node:fs/promises';
 
 const directory = new URL('../src/search/', import.meta.url);
 const grammar = await readFile(new URL('grammar.pegjs', directory), 'utf8');
-const output = peggy.generate(grammar, {output: 'source', format: 'es', cache: true});
+const output = peggy.generate(grammar, {
+  output: 'source',
+  format: 'es',
+  cache: true,
+  allowedStartRules: ['query', 'standalone_value'],
+});
 const target = new URL('generated.js', directory);
 
 if (process.argv.includes('--check')) {

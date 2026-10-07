@@ -1,2 +1,2 @@
-export {parseQuery, SearchError} from './parser.ts';
+export {parseQuery, parseValue, SearchError} from './parser.ts';
 export type * from './types.ts';
