@@ -10,6 +10,7 @@ import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url';
 import Map, {
   GeolocateControl,
   Layer,
+  Marker,
   Popup,
   Source,
   type MapRef,
@@ -24,6 +25,7 @@ import type {Place} from './rpc.ts';
 maplibregl.setWorkerUrl(workerUrl);
 
 const home = {longitude: -74.002, latitude: 40.726, zoom: 13.2};
+const locationOptions = {enableHighAccuracy: true};
 
 interface Props {
   places: Place[];
@@ -45,7 +47,7 @@ export function MapView({
   onUserLocationChange,
 }: Props) {
   const map = useRef<MapRef>(null);
-  const geolocate = useRef<maplibregl.GeolocateControl>(null);
+  const focusUserOnFirstLocation = useRef(false);
   const container = useRef<HTMLDivElement>(null);
   const [loaded, setLoaded] = useState(false);
 
@@ -87,6 +89,61 @@ export function MapView({
   const [dark, setDark] = useState(false);
   const [error, setError] = useState('');
   const [locationError, setLocationError] = useState('');
+  const [userLocation, setUserLocation] = useState<Point | null>(null);
+  const receiveLocation = useCallback(
+    ({coords}: Pick<GeolocationPosition, 'coords'>) => {
+      const location = {
+        longitude: coords.longitude,
+        latitude: coords.latitude,
+      };
+
+      setLocationError('');
+      setUserLocation(location);
+      onUserLocationChange(location);
+    },
+    [onUserLocationChange],
+  );
+  const receiveLocationError = useCallback(
+    ({code}: Pick<GeolocationPositionError, 'code'>) => {
+      setLocationError(
+        code === 1
+          ? 'Location access is blocked. Allow location access in your browser settings, then try again.'
+          : 'Your location could not be found. Try the location button again.',
+      );
+    },
+    [],
+  );
+
+  useEffect(() => {
+    if (!loaded) {
+      return;
+    }
+
+    const watchId = window.navigator.geolocation.watchPosition(
+      position => {
+        receiveLocation(position);
+
+        const shouldFocus = focusUserOnFirstLocation.current;
+        focusUserOnFirstLocation.current = false;
+
+        if (!shouldFocus || !map.current) {
+          return;
+        }
+
+        const {longitude, latitude, accuracy} = position.coords;
+        const bounds = maplibregl.LngLatBounds.fromLngLat(
+          new maplibregl.LngLat(longitude, latitude),
+          accuracy,
+        );
+        map.current.fitBounds(bounds, {maxZoom: 15, duration: 700});
+      },
+      receiveLocationError,
+      locationOptions,
+    );
+
+    return () => window.navigator.geolocation.clearWatch(watchId);
+  }, [loaded, receiveLocation, receiveLocationError]);
+
   const reportBounds = useCallback(() => {
     const bounds = map.current?.getBounds();
 
@@ -143,6 +200,7 @@ export function MapView({
 
   useEffect(() => {
     if (fitResults && loaded) {
+      focusUserOnFirstLocation.current = false;
       fit();
     }
   }, [fitResults, fit, loaded]);
@@ -184,9 +242,9 @@ export function MapView({
               missing.target.addImage(missing.id, image, {pixelRatio: 2});
             }
           });
+          focusUserOnFirstLocation.current = !fitResults;
           setLoaded(true);
           reportBounds();
-          geolocate.current?.trigger();
         }}
         onMoveEnd={reportBounds}
         onResize={reportBounds}
@@ -196,27 +254,25 @@ export function MapView({
         onIdle={() => setError('')}
       >
         <GeolocateControl
-          ref={geolocate}
           position="top-right"
-          positionOptions={{enableHighAccuracy: true}}
-          trackUserLocation
-          showUserLocation
-          showAccuracyCircle
-          onGeolocate={event => {
-            setLocationError('');
-            onUserLocationChange({
-              longitude: event.coords.longitude,
-              latitude: event.coords.latitude,
-            });
-          }}
-          onError={event => {
-            setLocationError(
-              event.code === 1
-                ? 'Location access is blocked. Allow location access in your browser settings, then try again.'
-                : 'Your location could not be found. Try the location button again.',
-            );
-          }}
+          positionOptions={locationOptions}
+          showUserLocation={false}
+          onGeolocate={receiveLocation}
+          onError={receiveLocationError}
         />
+        {userLocation && (
+          <Marker
+            longitude={userLocation.longitude}
+            latitude={userLocation.latitude}
+            anchor="center"
+          >
+            <div
+              className="maplibregl-user-location-dot"
+              role="img"
+              aria-label="Your location"
+            />
+          </Marker>
+        )}
         <Source id="places" type="geojson" data={data}>
           <Layer
             id="place-labels"
