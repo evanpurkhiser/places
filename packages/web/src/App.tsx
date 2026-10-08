@@ -6,6 +6,7 @@ import type {PlaceSort} from '@places/common/contract/place';
 import type {Point} from '@places/common/filter-engine/values/geographic-point';
 import {keepPreviousData, skipToken, useQuery} from '@tanstack/react-query';
 import {Compass, PanelLeft, Search, X} from 'lucide-react';
+import {parseAsBoolean, useQueryState} from 'nuqs';
 
 import {MapView} from './Map.tsx';
 import {PlaceDetails} from './PlaceDetails.tsx';
@@ -45,6 +46,10 @@ function PlacesApp({
     request: number;
   } | null>(null);
   const {search, setSearch, appliedSearch, applySearch} = useSearch();
+  const [zoomToResults, setZoomToResults] = useQueryState(
+    'zoom',
+    parseAsBoolean.withDefault(false).withOptions({history: 'push'}),
+  );
   const parsedSearch = useMemo(() => parseSearch(search), [search]);
   const [debouncedSearch, setDebouncedSearch] = useState(appliedSearch);
   const [collapsed, setCollapsed] = useState(false);
@@ -52,13 +57,14 @@ function PlacesApp({
   const {sort, referenceLocation} = ordering;
   const result = useQuery(
     rpc.places.list.queryOptions({
-      input: bounds
-        ? {
-            query: placesQuery(bounds, debouncedSearch, ''),
-            sort,
-            referenceLocation,
-          }
-        : skipToken,
+      input:
+        bounds || zoomToResults
+          ? {
+              query: placesQuery(zoomToResults ? null : bounds, debouncedSearch, ''),
+              sort,
+              referenceLocation,
+            }
+          : skipToken,
       enabled: !parsedSearch.error && search === debouncedSearch,
       placeholderData: keepPreviousData,
       retry: (count, error) =>
@@ -230,6 +236,16 @@ function PlacesApp({
                   <p>{parsedSearch.error.message}</p>
                 </div>
               )}
+              <div className="search-options">
+                <label>
+                  <input
+                    type="checkbox"
+                    checked={zoomToResults}
+                    onChange={event => void setZoomToResults(event.target.checked)}
+                  />
+                  Zoom to results
+                </label>
+              </div>
               <div className="results-heading" role="status">
                 <span>
                   {parsedSearch.error ? (
@@ -238,7 +254,8 @@ function PlacesApp({
                     'Updating places…'
                   ) : bounds ? (
                     <>
-                      <strong>{places.length}</strong> places in this area
+                      <strong>{places.length}</strong>{' '}
+                      {zoomToResults ? 'matching places' : 'places in this area'}
                     </>
                   ) : (
                     'Waiting for map…'
@@ -293,9 +310,9 @@ function PlacesApp({
                       <Search size={26} />
                       <h2>No places here yet</h2>
                       <p>
-                        Move the map or zoom out
-                        {search ? ', or clear your filters' : ''} to explore your saved
-                        places.
+                        {zoomToResults
+                          ? 'Clear your filters to explore your saved places.'
+                          : `Move the map or zoom out${search ? ', or clear your filters' : ''} to explore your saved places.`}
                       </p>
                       {search && <Button onClick={resetFilters}>Clear filters</Button>}
                     </div>
@@ -303,7 +320,9 @@ function PlacesApp({
               </PlaceList>
               <div className="panel-footer">
                 <span className="green-dot" />
-                Search updates with the map.
+                {zoomToResults
+                  ? 'Map fits the search results.'
+                  : 'Search updates with the map.'}
               </div>
             </>
           )}
@@ -311,6 +330,7 @@ function PlacesApp({
         <section className="map-pane" aria-label="Map of saved places">
           <MapView
             places={places}
+            fitResults={zoomToResults}
             selected={selected}
             target={mapTarget}
             onSelect={select}

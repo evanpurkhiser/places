@@ -178,6 +178,22 @@ kbd {
   flex: 0 0 auto;
   margin-top: 1px;
 }
+.search-options {
+  display: flex;
+  padding: 0 10px 7px;
+  color: var(--muted);
+  font-size: 11px;
+}
+.search-options label {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  cursor: pointer;
+}
+.search-options input {
+  margin: 0;
+  accent-color: var(--accent);
+}
 .results-heading {
   display: flex;
   align-items: center;

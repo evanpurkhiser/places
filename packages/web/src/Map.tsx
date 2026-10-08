@@ -27,6 +27,7 @@ const home = {longitude: -74.002, latitude: 40.726, zoom: 13.2};
 
 interface Props {
   places: Place[];
+  fitResults: boolean;
   selected: Place | null;
   target: {place: Place; request: number} | null;
   onSelect: (place: Place) => void;
@@ -36,6 +37,7 @@ interface Props {
 
 export function MapView({
   places,
+  fitResults,
   selected,
   target,
   onSelect,
@@ -45,6 +47,7 @@ export function MapView({
   const map = useRef<MapRef>(null);
   const geolocate = useRef<maplibregl.GeolocateControl>(null);
   const container = useRef<HTMLDivElement>(null);
+  const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
     if (!container.current) {
@@ -122,7 +125,7 @@ export function MapView({
     });
   }, [target]);
 
-  function fit() {
+  const fit = useCallback(() => {
     if (!map.current || !places.length) {
       return;
     }
@@ -136,7 +139,13 @@ export function MapView({
     }
 
     map.current.fitBounds(bounds, {padding: 40, maxZoom: 15, duration: 700});
-  }
+  }, [places]);
+
+  useEffect(() => {
+    if (fitResults && loaded) {
+      fit();
+    }
+  }, [fitResults, fit, loaded]);
 
   return (
     <div ref={container} className="map-container">
@@ -175,6 +184,7 @@ export function MapView({
               missing.target.addImage(missing.id, image, {pixelRatio: 2});
             }
           });
+          setLoaded(true);
           reportBounds();
           geolocate.current?.trigger();
         }}

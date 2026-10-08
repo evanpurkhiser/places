@@ -129,6 +129,10 @@ describe('viewport queries', () => {
     );
   });
 
+  it('omits map bounds when searching all places', () => {
+    expect(placesQuery(null, 'name[coffee]', '')).toBe('(name[coffee])');
+  });
+
   it('serializes near-zero viewport coordinates without exponent notation', () => {
     const query = placesQuery(
       {west: 1e-7, east: 2e-7, north: 3e-7, south: -3e-7},
