@@ -21,8 +21,7 @@
 ## Spatial storage
 
 Use PostGIS `geography(Point, 4326)` for place coordinates with a GiST spatial
-index. See [Place metadata](place-metadata.md) for the initial fields and planned
-coordinate representation.
+index. See [Place metadata](place-metadata.md) for the stored fields and API coordinate projection.
 
 ## Dependency baseline
 
@@ -36,7 +35,7 @@ records resolved dependency versions.
 - `packages/server`: API implementation, business logic, database access, and place-provider integration.
 - `packages/web`: map interface and API client.
 - `packages/common`: shared API contracts, Zod schemas, and inferred types.
-- `design`: product and technical documents, plus the map interaction prototype.
+- `design`: product and technical documents and implementation status.
 
 ## Filter engine
 
@@ -44,7 +43,7 @@ The search grammar produces a source-located syntax tree. A shared filter engine
 prepares and resolves registered filters and functions, then composes predicates
 through host-provided boolean operations. Server registrations own Drizzle SQL
 and schema imports. See [Filter engine](filter-engine.md) for the architecture and
-initial retrieval scope.
+implemented retrieval capabilities.
 
 ## Schema and API direction
 
@@ -79,19 +78,22 @@ Use Vitest for unit and integration tests across the server, CLI, web, and share
 packages. Vitest can run with its own configuration for packages that use other
 build tools.
 
-Vite is the proposed development server and production build tool for `packages/web`.
+Vite is the development server and static build tool for the React web package.
+The map uses MapLibre through `react-map-gl/maplibre`, and TanStack Query caches
+API results. The API container and static web build have separate hosting needs.
 The initial server and CLI run TypeScript source directly on Node 24 using its
 type stripping support. Shared contracts export TypeScript source within the
 workspace. Run `tsc --noEmit` separately for type checking. Distribution build
-tooling remains open.
+tooling for standalone CLI binaries remains open.
 
 ## Configuration
 
 Server settings live in a YAML file validated by a Zod schema at startup. The
 schema defines defaults and rejects unknown keys. Commit an example configuration
 and keep the actual configuration outside version control. Server and migration
-commands accept `--config` to select the file; the CLI accepts `--server` for the
-API URL.
+commands accept `--config` to select the file. The CLI reads its own YAML config
+from the XDG config directory; `--config` selects another file and `--server`
+overrides its API URL.
 
 Config fields carry Zod descriptions. Pass the validated config and database to
 `createApp` and expose them through typed Hono and oRPC contexts.
@@ -107,8 +109,10 @@ Drizzle queries directly.
 Use Drizzle Kit for database migrations. Keep migration files alongside the
 server's Drizzle table definitions in `packages/server`.
 
-Apply reviewed migrations explicitly with `pnpm --filter @places/server
-db:migrate`, using the server's YAML configuration.
+Apply reviewed migrations with `pnpm --filter @places/server db:migrate`, using
+the server's YAML configuration. The container's default server entrypoint runs
+migrations before starting HTTP; update the server before its worker. See the
+[root README](../README.md#container) for container operation.
 
 ## Access
 
@@ -120,8 +124,8 @@ requirements will be decided as part of that work.
 
 ## HTTP server
 
-Use Hono in `packages/server` to host oRPC through its Fetch API adapter. Hono handles
-HTTP middleware, CORS, request logging, and health checks. oRPC owns place and tag
+Use Hono in `packages/server` to host oRPC through its Fetch API adapter. Hono supplies
+request context, the `/health` endpoint, and routing to the RPC handler. oRPC owns place and tag
 operations, contract validation with Zod, typed errors, and API client integration.
 
 Hono provides a small HTTP layer around the shared API contract and a familiar
@@ -132,13 +136,17 @@ create, list, get, update, and delete; the CLI exposes them under `places tags`.
 Place imports use `places.import`, `places.getImportRun`, and
 `places.listImportRuns`, and saved places
 are listed through `places.list`. The import request resolves a Maps input to a
-Google Place ID before enqueueing `{googlePlaceId}`. The worker retrieves required
+Google Place ID before enqueueing it with validated tag assignments and notes. The worker retrieves required
 metadata and inserts the complete canonical place. pg-boss provides temporary
-import status.
+import status. `places.sync` and `places.syncStatus` handle explicit metadata
+refreshes. `places.tag`/`places.untag` manage associations, `places.searchGoogle`
+returns provider candidates, and `query.describe` exposes registered query
+capabilities. Contracts live in `packages/common/src/contract`.
 
 ## Background jobs
 
-Use pg-boss for Instagram extraction, imports, and eligible metadata refreshes.
+pg-boss runs the `gmaps-import` and `gmaps-sync` queues. Instagram extraction and
+scheduled refreshes are future job types.
 Run workers as a separate process from the HTTP server, initially sharing business
 logic and database code within `packages/server`.
 
@@ -146,13 +154,13 @@ Create a pg-boss instance at process startup and stop it during graceful shutdow
 Expose a typed jobs interface through oRPC context. Hono context can also carry
 that interface when HTTP middleware or routes need it.
 
-Define job payloads with Zod and use a small helper to associate each queue name
-with its schema. Validate payloads when enqueueing and when workers receive them.
-Keep job definitions shared between producers and consumers.
+Job modules define queue names and Zod payload schemas. Producers validate inputs
+and workers parse queued payloads. A shared worker helper runs each claimed batch
+concurrently and records individual job results. YAML settings control batch size
+and polling-worker concurrency per queue.
 
-Use pg-boss's `fromDrizzle(tx, sql)` adapter to enqueue jobs inside the same
-transaction as related application writes. Saving a source and scheduling its
-extraction should commit or roll back together. pg-boss manages its own queue
+Future source capture should enqueue extraction in the same transaction as the
+source write, using pg-boss's `fromDrizzle(tx, sql)` adapter. pg-boss manages its own queue
 tables and migrations; Drizzle Kit manages the application schema.
 
 Make handlers safe to retry. Reprocessing a source should reuse canonical places
@@ -167,16 +175,17 @@ through that interface.
 
 ## Open decisions
 
-- Deployment and migration execution workflow.
-- Confirm Vite for the web and choose distribution build tooling.
-- Concrete place contracts and CLI commands.
-- Worker concurrency tuning and additional background job types.
+- Production static-web hosting and standalone CLI distribution.
+- Boundary and routing integration, saved references, and query explanations.
+- Source capture contracts and extraction jobs.
+- Provider retention/refresh policy and scheduled metadata refreshes.
 
 ## Google Places client
 
-Use Google's `@googlemaps/places` SDK for Places API (New) Place
-Details, with API-key authentication and explicit field masks. The SDK uses its
-HTTP transport with a ten-second timeout; pg-boss controls import retries.
+Basic details and Text Search use Google's `@googlemaps/places` SDK with HTTP
+transport, API-key authentication, and explicit field masks. Import/sync metadata
+uses REST JSON to preserve absent versus empty opening periods. Both paths have
+ten-second timeouts; pg-boss controls background-job retries.
 Maps short links are expanded separately with validated HTTP redirects. Embedded
 feature IDs are converted locally into Place IDs before enqueueing. The conversion
 uses a reverse-engineered protobuf layout; the worker validates IDs through Place

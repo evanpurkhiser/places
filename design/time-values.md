@@ -37,7 +37,8 @@ elapsed time; calendar evaluation belongs to the consuming filter.
 
 ## Open filter syntax
 
-The `open` filter accepts `open(Time, for?: Duration, until?: Time)`:
+The `open` filter takes a positional `time` value and optional named `for`
+(`duration`) or `until` (`time`) arguments:
 
 ```text
 open[@now]

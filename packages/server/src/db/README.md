@@ -39,8 +39,8 @@ results. Failed refreshes preserve the previous snapshot.
 
 Coordinates use `geography(Point, 4326)` and a GiST index. The custom type accepts
 PostGIS text input, such as `SRID=4326;POINT(-73.9876 40.7292)`, and returns the
-provider's hex EWKB representation. Driver integration will add the API projection
-to named latitude and longitude values.
+provider's hex EWKB representation. The list query projects it with `ST_X` and
+`ST_Y` into named longitude and latitude values in the API response.
 
 The initial migration enables PostGIS with
 `CREATE EXTENSION IF NOT EXISTS postgis;` before creating the places table.

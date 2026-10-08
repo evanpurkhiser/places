@@ -8,7 +8,7 @@ A personal saved-places service organized around tags.
 - `packages/server` — API and persistence
 - `packages/web` — map interface
 - `packages/common` — shared schemas and types
-- `design` — product specs and map interaction prototype
+- `design` — product specs, technical design, and implementation status
 
 ## Setup
 
@@ -20,6 +20,12 @@ prek install
 ```
 
 Run `pnpm lint` and `pnpm format:check` to check the workspace.
+
+## Web interface
+
+Run `pnpm web` to open the map at https://5187.prk.network. It queries the API at
+`http://127.0.0.1:5188` through Vite. See [the web package](packages/web/README.md)
+for API configuration and build instructions.
 
 ## Tag API and CLI
 
@@ -408,13 +414,22 @@ source predicates can match different sources attached to the place. `source[]`
 and `has[source]` both require any attached source; `!source[...]` excludes places
 with a matching source. See [Sources](design/sources.md#source-filtering).
 
-`location` supports `radius(point(longitude, latitude), distance)` and
-`rect(topLeft, bottomRight)`. Points also accept place names, addresses, and
+`location` supports `radius(point(longitude, latitude), distance)`,
+`rect(topLeft, bottomRight)`, and `sector(origin, towards:destination)` or
+`sector(origin, bearing:90deg, range:2mi)`. Sectors also accept `spread` and
+`buffer`; defaults and limits are documented in the
+[grammar](design/search-grammar.md#sector). Points also accept place names, addresses, and
 `"gmaps:<place_id>"` strings and Google Maps place links. Names resolve through Google Places Text Search using
 `google.apiKey`; include a city or region to guide the search. The first Google result
 provides the origin point. Independent
 lookups run concurrently, and repeated names share one lookup per query.
 Radius distances support `m`, `km`, `ft`, and `mi`.
+
+`places list` and `places sync` accept `--reference-location POINT`. The value
+uses geographic point syntax from the query language, such as
+`point(-73.985, 40.726)`, or an unquoted place name, and is available to the query
+as `@ref`. The API accepts the same value as `referenceLocation`. Distance sorts
+also use this point and require it to be supplied.
 
 `open` accepts `@now`, clock times such as `6pm` or `22:00`, weekday times such
 as `"MON 6pm"`, and ISO timestamps such as `"2026-09-21T18:00:00-04:00"`.
@@ -423,10 +438,12 @@ endpoint to require continuous opening. Duration units are `m` and `h`.
 Missing hours remain unknown under negation, so `!open[@now]` selects known-closed
 places. See [time values](design/time-values.md) for interval and time-zone rules.
 
-Listing accepts an optional query and returns the existing array of places, newest
-first. Query failures print JSON diagnostics with source locations to stderr and
-exit nonzero. Area boundaries and saved-query filters require future server
-implementations.
+The API listing accepts optional query, sort, and reference-location parameters
+and returns the existing array of places, newest first by default. Query failures print JSON diagnostics with
+source locations to stderr and exit nonzero. Area boundaries,
+route corridors, saved locations such as `@home`, saved queries, and query
+explanations remain planned. See the
+[capability status](design/search-grammar.md#implementation-status).
 
 The shared package exports a PEG-based query parser at `@places/common/search`:
 
@@ -434,7 +451,7 @@ The shared package exports a PEG-based query parser at `@places/common/search`:
 import {parseQuery} from '@places/common/search';
 
 const query = parseQuery(
-  'tag[laptop-friendly, notes:outlet] location[radius(@home, 1mi)]',
+  'tag[laptop-friendly, notes:outlet] location[radius(point(-73.985, 40.726), 1mi)]',
 );
 ```
 

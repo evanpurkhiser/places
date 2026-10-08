@@ -1,5 +1,8 @@
 # Sources
 
+The `sources` and `place_sources` tables and source filtering are implemented.
+Instagram imports attach discovery sources to saved places.
+
 Sources capture where a saved place was discovered, including the original content
 and context. Examples include an Instagram post and a Google Maps import.
 
@@ -76,17 +79,17 @@ post mentions an existing place, retain that post as an additional source for it
 
 Extraction context can describe a particular place within a post: one Reel might
 recommend dumplings at a restaurant, while another highlights its cocktails.
-Preserve both recommendations with their originating sources. A proposed home for
-place-specific extraction data is the place/source association; the source's
-`data` holds post-level content. The exact fields remain to be designed.
+Preserve both recommendations with their originating sources. The association's `description` and `data` fields can hold place-specific extraction
+context; source `data` holds post-level content. Type-specific payload schemas
+remain to be designed.
 
 This is a future integration direction. Extraction, place resolution, and API
 behavior will be designed as part of that work.
 
 ## Open decisions
 
-- Whether sources can exist before a place is attached.
-- Fields for place-specific extraction context on source associations.
+- Capture behavior for sources created before a place is attached; the schema permits it.
+- Typed payloads for place-specific extraction context on source associations.
 - Whether a Google Maps source represents an import batch, a list, or an entry.
 - Source creation, editing, attachment, and deletion through the API and CLI.
 - How attaching a source to an existing place interacts with duplicate-place handling.

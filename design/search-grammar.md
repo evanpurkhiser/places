@@ -2,20 +2,41 @@
 
 ## Purpose and status
 
-Design for querying saved places through the API and CLI. The shared PEG parser
-and typed syntax tree are implemented in `packages/common/src/search`. The filter
-engine validates and executes registered tag, text, and presence predicates
-through the API and CLI. Geographic, hours, and saved-query execution remain
-planned. The first consumer is an agent managing the collection through the CLI.
+The shared PEG parser and typed syntax tree live in `packages/common/src/search`.
+The filter engine executes registered predicates through `places.list` and
+`places.sync` in the API and their CLI commands. `places docs filter` reports the capabilities
+registered by the running server.
 
-Queries select places. Inspection and mutation use the returned place IDs. Sorting,
-pagination, and output selection are separate API inputs and CLI options.
+Queries select places. Inspection and mutation use the returned place IDs.
+Listings return all matches and support name, saved-date, recommendation-date,
+and distance ordering. Pagination and output projection are future API work.
 
 ```sh
 places list --query 'tag[type.cafe] tag[attr.laptop-friendly]'
-places list --query '(tag[type.cafe] OR tag[type.bakery]) location[within("Manhattan, NYC")]'
-places list --query 'tag[status.want-to-try] hours[open(now)]'
+places list --query '(tag[type.cafe] OR tag[type.bakery]) location[radius("Manhattan, NYC", 1mi)]'
+places list --query 'tag[status.want-to-try] open[@now]'
 ```
+
+## Implementation status
+
+| Capability                                                          | Status                                                               |
+| ------------------------------------------------------------------- | -------------------------------------------------------------------- |
+| Boolean expressions, groups, negation, strings, wildcards, equality | Implemented                                                          |
+| `tag`, `source`, `name`, `address`, `notes`, and `has`              | Implemented, including tag-assignment notes                          |
+| `location` with `point`, `radius`, `rect`, and `sector`             | Implemented                                                          |
+| Named point strings and Google Maps inputs                          | Implemented through Google Places; text lookup uses the first result |
+| Request reference point `@ref` and distance sorting                 | Implemented through API and CLI context                              |
+| `open`, time/duration literals, and `@now`                          | Implemented against saved recurring weekly hours                     |
+| Area boundaries with `within`                                       | Planned; requires an administrative boundary catalog and resolver    |
+| Route corridors with `route`                                        | Planned; routing integration required                                |
+| Saved geographic references such as `@home`                         | Planned; reference syntax exists                                     |
+| `saved` queries                                                     | Planned                                                              |
+| Query explanations and ambiguous-location selection                 | Planned                                                              |
+| Travel-time budgets, detours, and open-on-arrival                   | Exploratory                                                          |
+| Saved-date comparisons                                              | Later extension                                                      |
+
+Implemented examples below are executable registrations. Sections labeled
+planned or exploratory specify intended behavior for future registrations.
 
 Use a PEG grammar generated with Peggy and a typed expression tree shared through
 `packages/common`. Sentry's `searchSyntax` grammar provides
@@ -104,16 +125,16 @@ Tag names are arbitrary labels: `tag[favorite]`, `tag["date night"]`, and
 the namespace and local name, as in `type.cafe`. Quote values containing
 spaces or square brackets, such as `tag["gmaps-list.[NYC] Coffee"]`.
 
-| Key        | Meaning                               | Example                              |
-| ---------- | ------------------------------------- | ------------------------------------ |
-| `tag`      | Match an assigned tag name or pattern | `tag[type.cafe]`                     |
-| `source`   | Match an attached discovery source    | `source[instagram, text:coffee]`     |
-| `name`     | Match the saved place name            | `name["La Cabra"]`                   |
-| `address`  | Match the formatted address as text   | `address["Broadway"]`                |
-| `notes`    | Match the general place note          | `notes[espresso]`                    |
-| `has`      | Presence of optional saved context    | `has[notes]`                         |
-| `location` | Evaluate a geographic function        | `location[within("Manhattan, NYC")]` |
-| `hours`    | Evaluate opening hours                | `hours[open(now)]`                   |
+| Key        | Meaning                               | Example                                   |
+| ---------- | ------------------------------------- | ----------------------------------------- |
+| `tag`      | Match an assigned tag name or pattern | `tag[type.cafe]`                          |
+| `source`   | Match an attached discovery source    | `source[instagram, text:coffee]`          |
+| `name`     | Match the saved place name            | `name["La Cabra"]`                        |
+| `address`  | Match the formatted address as text   | `address["Broadway"]`                     |
+| `notes`    | Match the general place note          | `notes[espresso]`                         |
+| `has`      | Presence of optional saved context    | `has[notes]`                              |
+| `location` | Evaluate a geographic condition       | `location[radius("Manhattan, NYC", 1mi)]` |
+| `open`     | Evaluate saved opening hours          | `open[@now, for:2h]`                      |
 
 `has[tag]` means at least one active tag is assigned. `!has[tag]` includes places
 with no tags or only archived tags. Explicit `tag[...]` queries still match
@@ -136,8 +157,8 @@ Use `tag[...]` for tag membership. Namespaces such as `type.`, `status.`, and
 independently of the `location[...]` geographic filter.
 
 Exact tag references must resolve to an existing tag or produce an unknown-tag
-error. Wildcard patterns may match zero tag definitions; the query explanation
-should expose that expansion, especially when the expression is negated.
+error. Wildcard patterns may match zero tag definitions. A future query
+explanation can expose that expansion, especially when the expression is negated.
 
 ### Tag-assignment notes
 
@@ -172,7 +193,10 @@ names must be unique and registered.
 resolution is a server operation after parsing and validation. A location string
 is an argument to the resolver, rather than embedded query syntax.
 
-### Area boundaries
+### Area boundaries — planned
+
+The `within` function requires a boundary catalog, area-name resolution, and
+caller disambiguation.
 
 ```text
 location[within("Manhattan, NYC")]
@@ -196,15 +220,28 @@ location[radius(point(-73.985, 40.726), 800m)]
 ```
 
 Resolve the first argument to a point, then include places at most the supplied
-straight-line geographic distance from it. For a named neighborhood, expose the
-chosen representative point in the query explanation. A named point and an area
+straight-line geographic distance from it. Named strings resolve to the first Google Places Text Search result; callers
+can specify a Maps link, `gmaps:<place_id>`, or coordinates for an explicit point.
+Exposing the selected point in a query explanation is planned. A named point and an area
 boundary are distinct resolver outputs.
 
 `point(longitude, latitude)` uses explicit numeric coordinates. Validate coordinate
 ranges. Distances require a positive number and a unit: `m`, `km`, `ft`, or `mi`.
 Normalize distances internally to meters. Radius is independent of travel time.
 
-### Route corridor
+### Rectangle / map bounds
+
+```text
+location[rect(point(-74.03, 40.76), point(-73.95, 40.70))]
+```
+
+`rect(topLeft, bottomRight)` includes all edges and compares longitude/latitude
+in degrees. The first point supplies west/north and the second east/south.
+North must be at least south. West greater than east crosses the antimeridian;
+`-180` through `180` covers the full longitude span. Zero-width and zero-height
+rectangles are valid. The web map composes this filter with the user's query.
+
+### Route corridor — planned
 
 ```text
 location[route("Union Square, NYC", "Tompkins Square Park, NYC", buffer:800ft, mode:walk)]
@@ -311,8 +348,8 @@ ID so renaming preserves their meaning; geometry updates affect future evaluatio
 Potential future syntax:
 
 ```text
-location[reachable(@home, within:20min, mode:walk)]
-location[detour(@home, @work, extra:10min, mode:walk)]
+location[reachable(@home, within:20m, mode:walk)]
+location[detour(@home, @work, extra:10m, mode:walk)]
 ```
 
 `reachable` would select places whose travel time from an origin is at most the
@@ -332,22 +369,23 @@ and have no committed delivery phase.
 
 ### Resolution and execution context
 
-Choose boundary, geocoding, and routing providers during implementation. Each
+Google Places resolves named points. Independent lookups run concurrently and
+repeated names share a promise within the query context. `@ref` uses the request's
+resolved reference point, and `@now` uses one captured instant for the query.
+Boundary and routing integrations remain to be selected. Each
 integration must specify available geometry, attribution, freshness, and permitted
 reuse. Provider selection is independent of the expression grammar.
 
-A resolution result should expose the matched name, stable reference where
+The planned query-explanation response should expose the matched name, stable reference where
 available, provider, geometry kind, and relevant point or boundary. Support a
 way to reuse a resolved reference so an agent can repeat an unambiguous selection.
 Named locations provide durable reuse; a reference format for ad hoc resolution
 results remains an implementation decision.
 
-The server cannot infer the user's physical location from where the CLI runs.
-A future `here` operand must resolve from explicit request coordinates. Geographic
-bias may help resolve names, but ambiguous candidates require caller selection.
-Provider failures are query errors rather than successful empty results.
+Geographic bias may help resolve names, but ambiguous candidates require caller
+selection. Provider failures are query errors rather than successful empty results.
 
-Combine geography with ordinary boolean expressions:
+Planned boundary functions compose with ordinary boolean expressions:
 
 ```text
 tag[type.cafe] location[within("Manhattan, NYC")] !location[within("East Village, NYC")]
@@ -391,7 +429,7 @@ saved["date night"] AND !tag[status.visited]
 
 `saved[...]` references a named query and evaluates its complete expression as a
 group. It represents a live selection: current data and request context determine
-the results on each evaluation. A saved query containing `now` uses the same
+the results on each evaluation. A saved query containing `@now` uses the same
 instant as the enclosing query.
 
 Names resolve exactly to stable query IDs. Stored expressions bind exact tag,
@@ -456,7 +494,7 @@ that have no registered implementation.
 
 ```ts
 const query = parseQuery(
-  'tag[attr.laptop-friendly, notes:"*outlet*"] location[radius(@home, 1mi)]',
+  'tag[attr.laptop-friendly, notes:"*outlet*"] location[radius(point(-73.985, 40.726), 1mi)]',
 );
 ```
 
@@ -465,8 +503,9 @@ engine's registrations. Registrations define ordered parameters with names,
 argument types, optionality, allowed operators, reference support, and custom
 constraints. Functions declare return types, which determine where they can be
 used. Unknown filters or functions, incompatible types, invalid values, and
-argument errors produce structured diagnostics with source locations before
-asynchronous resolution begins.
+signature errors produce structured diagnostics with source locations before
+asynchronous resolution begins. Resolvers and compilation handlers also validate
+constraints involving resolved values, with source-located diagnostics.
 
 Nodes preserve source text and offsets, line and column positions, explicit
 groups, operators, quoted strings, and references. Scalar values remain decoded
@@ -475,9 +514,9 @@ during engine preparation. Unescaped wildcard positions are retained separately
 from literal stars. Equality operators interpret all stars literally. Filter,
 function, and parameter names are case-sensitive; boolean keywords are case-insensitive.
 
-The executable registrations currently support tag, text, and presence
-filters. Geographic, hours, date, and saved-query examples describe planned
-registrations. They can be parsed as syntax; execution requires an implementation.
+The executable capabilities are listed in [implementation status](#implementation-status).
+Generic parsing also accepts planned function/filter names; engine preparation
+rejects names that have no registered implementation.
 
 Syntax and validation failures throw `SearchError` with a `diagnostics` array.
 Invalid syntax is rejected as a complete query.
@@ -517,28 +556,20 @@ invalid values, ambiguous locations, unavailable boundaries, unsupported
 capabilities, and provider failures. Bound external resolution work according to
 provider capabilities and request budgets.
 
-## Delivery sequence and open decisions
+## Remaining implementation work
 
-1. Boolean expressions, groups, explicit tag matching, strings, wildcards, and
-   inspection-friendly CLI results. Add tag-assignment note constraints, `has[tag]`,
-   text fields, and `has[notes]` with negation.
-2. Geographic radius from explicit points, then named points, area boundaries,
-   and the named-location registry.
-3. A dedicated hours design, followed by enrichment and temporal evaluation.
-4. Route corridors and directional sectors, ordered by actual use.
+The expression language, tag/text/presence filters, radius and sector geometry,
+map rectangles, and recurring-hours evaluation are implemented. Remaining work
+uses the existing registration and typed-value mechanisms:
 
-Document all function families now; expose implemented capabilities explicitly.
-A planned predicate used before its integration exists returns an unsupported
-capability error.
+- Area-name resolution and `within`, including geometry validation and disambiguation.
+- Named-location storage and management for reusable point/area references.
+- Routing integration and `route` corridor selection.
+- Query explanations, resolved geometry, and zero-match wildcard diagnostics.
+- Saved-query storage, stable-reference binding, and cycle detection.
+- Pagination, selectable ordering, and text normalization beyond case-insensitivity.
+- Holiday exceptions, secondary opening schedules, and refresh scheduling.
 
-Before implementation, settle:
-
-- Exact tag errors and zero-match wildcard diagnostics.
-- Provider selection, named-location management, and ad hoc resolution references.
-- Hours freshness and the window for which status can be established.
-- Text normalization beyond case-insensitivity.
-- Pagination and the detailed explanation response contract.
-
-Saved queries are a future implementation. Travel-time and detour filters remain
-exploratory pending a routing feasibility assessment. Other later extensions
-include saved-date comparisons, source predicates, and distance sorting.
+Travel-time and detour filters remain exploratory pending a routing feasibility
+assessment. Other later extensions include saved-date comparisons and source
+dates and counts.

@@ -1,8 +1,12 @@
 # Hours enrichment and filtering
 
-Proposal based on 12 Google Place Details responses fetched on September 18,
-2026, using IDs from the 2,614 saved places in production. Production was read
-through `places.list`; this investigation made no database writes.
+Hours enrichment, import/sync, and the `open` filter are implemented. This document
+records the research behind the representation and its current storage and refresh
+behavior. [Time values](time-values.md) defines the executable query semantics.
+
+The initial research used 12 Google Place Details responses fetched on September
+18, 2026, using IDs from the 2,614 saved places in production. Production was read
+through `places.list`; that investigation made no database writes.
 
 ## Observed schedules
 
@@ -77,7 +81,7 @@ shapes rather than assuming they mean 24/7. All observed endpoint fields were
 valid integers with day 0–6, hour 0–23, and minute 0–59. The largest schedule
 remained Openaire's 17 periods. No overlapping or touching periods, explicit empty
 period arrays, moved-place IDs, or missing time zones appeared in the sample;
-these cases still need synthetic fixtures.
+normalization and sync tests exercise these cases with synthetic fixtures.
 
 An independent scratch comparison expanded each structured weekly schedule and
 its English weekday descriptions into 10,080 minute flags. All 74 schedules
@@ -87,9 +91,8 @@ sample, not a proposed dependency on localized display text.
 
 The installed Google protobuf helper converts both an absent `periods` property
 and an explicit empty array to an owned empty array. A direct `fromObject` probe
-confirmed that these inputs become indistinguishable. Validate the actual SDK
-response path before assigning known-closed semantics to empty decoded arrays;
-use the REST representation if preserving field presence requires it.
+confirmed that these inputs become indistinguishable. Metadata fetching uses
+REST JSON so validation preserves absent versus explicitly empty periods.
 
 Google returned `Asia/Saigon` for Vietnamese places. All 16 returned zones were
 accepted by Node's `Intl.DateTimeFormat`; database integration tests should also
@@ -99,9 +102,9 @@ This sample validates the observed weekly schedule shapes, not completeness or
 real-world accuracy. Seasonal venues can advertise a weekly schedule that does
 not capture off-season closures. Results describe the last synced schedule.
 
-## Storage recommendation
+## Storage
 
-Store the primary schedule directly on `places` using native PostgreSQL
+The primary schedule is stored directly on `places` using native PostgreSQL
 multiranges. Each place contains its weekly schedule and last successful sync
 time. Multiranges keep opening periods together while supporting indexed
 containment.
@@ -128,9 +131,8 @@ applicable schedule. An unfetched place has a null `last_sync`. A
 successful sync with no hours sets `last_sync` while leaving the schedule
 null, distinguishing unavailable hours from unfinished backfill work. Advance
 `last_sync` after a complete successful refresh even when no values changed;
-failed refreshes preserve it. Preserve absent-versus-empty API fields through
-validation; check
-the Google SDK's default handling before relying on its decoded arrays.
+failed refreshes preserve it. REST fetching preserves absent-versus-empty API
+fields through validation.
 
 Store business status with provider-owned place metadata. A closure status needs
 to participate in availability evaluation; a current status is not historical
@@ -143,9 +145,10 @@ JSONB is useful for an optional source snapshot, but nested JSON period queries
 would require extracting and interpreting intervals on each evaluation. A GIN
 index over that JSON does not directly solve continuous temporal coverage.
 
-PostgreSQL supports GiST indexes for multirange containment and overlap. Use a GiST
-index on `hours_weekly_open`, plus a B-tree on `places.time_zone` if query plans
-justify it. Production's deployment specifies PostgreSQL 17.
+The hours migration creates a GiST index on `hours_weekly_open` for range
+containment. Time-zone-dependent queries currently scan candidates; adding a
+time-zone index requires a query plan that can use it. The integration tests use
+PostgreSQL 17 with PostGIS.
 See [PostgreSQL range types](https://www.postgresql.org/docs/17/rangetypes.html).
 
 ## Query behavior
@@ -174,17 +177,16 @@ A nullable SQL predicate preserves unknown through `NOT`, `AND`, and `OR`.
 Missing hours produce unknown. Clock and instant evaluation also require the
 place's time zone; recurring weekly values can use the schedule directly.
 
-For regular instant evaluation, convert the instant to each place's local minute
-of week and test `hours_weekly_open @> minute`. Group candidates by time zone so the
-lookup minute can be computed once per zone and supplied as an indexable search
-value. A per-row time-zone expression is correct but should not be assumed to
-use the range index efficiently.
+Instant evaluation converts the instant to each place's local minute of week and
+tests `hours_weekly_open @> minute`. Weekly values use direct indexable containment.
+Dated intervals project the requested minutes once per stored time zone and reuse
+the resulting multirange for each place. The projection splits at UTC minute
+boundaries, subdividing transition minutes at second boundaries for historical
+IANA offsets. Containment requires every visited local minute to be open.
 
-For intervals, project the request into local weekly ranges, splitting at week
-boundaries and time-zone offset transitions. Require containment of all requested
-segments; preserve continuous coverage across adjacent periods. DST needs
-explicit tests for skipped and repeated local times. A local week is not always
-168 elapsed hours.
+Clock and instant predicates currently scan candidates. A future per-zone join
+with fixed range conditions could make those queries indexable. DST tests cover
+skipped and repeated local times; a local week is not always 168 elapsed hours.
 
 For example, Monday 09:00–12:00 is `[1980,2160)` in minutes from Sunday midnight:
 
@@ -196,41 +198,42 @@ hours_weekly_open @> 2040
 hours_weekly_open @> int4range(2040, 2100, '[)')
 ```
 
-Benchmark with `EXPLAIN (ANALYZE, BUFFERS)` on development data. This
-investigation does not establish query latency.
+## Sync implementation
 
-## Implementation sequence
+`places sync` accepts an optional filter query, selects saved places, and queues
+one pg-boss job per place. It returns `matched`, `queued`, `alreadyQueued`, and
+`jobIds`. `places sync-status` reports each job's state and result: `updated`,
+`unchanged`, `missing`, or `superseded`.
 
-1. Add hours validation, normalization, schema, and a shared provider refresh
-   service. Imports should use the same normalization so new places receive hours.
-2. Add `places sync`, backed by RPC and pg-boss per-place jobs. Support selecting
-   a place or query, a bounded batch, and a dry run that fetches and reports diffs.
-   Return counts for checked, changed, unchanged, unavailable-hours, and failed.
-3. Fetch provider-owned basic fields, business status, time zone, and regular
-   primary hours with an explicit mask. Keep secondary hours for a later feature.
-   Normalize before comparing; update changed values and set `last_sync` after
-   each successful refresh, including unchanged or unavailable-hours results.
-4. Fetch outside transactions, then apply each validated update atomically.
-   Preserve user notes, tags, sources, and internal IDs. Serialize jobs per place
-   to avoid stale responses overwriting newer snapshots. Retry transient failures
-   with bounded concurrency and keep last successful data on fetch failure.
-5. Backfill all saved places through sync. Initial missing hours cause every place
-   to be checked, but some responses will still legitimately have unknown hours.
-   Exclude unavailable-hours rows from repeated initial-backfill selection;
-   include them in subsequent explicit syncs.
-6. Register time and duration value types and the `open` filter. Keep temporal logic in reusable helpers and
-   publish signatures through the existing filter documentation registry.
+Imports and syncs fetch basic metadata, time zone, business status, and regular
+primary hours with an explicit mask. Imports normalize hours before inserting new
+places; reimporting an existing place reuses it and applies supplied annotations.
+Sync fetches outside the write transaction, locks the place before applying the
+validated projection, and skips a response if another refresh already completed.
+A changed Google ID keeps the internal UUID; a collision with another place's
+Google ID rolls back the refresh. Notes, tags, and sources remain intact.
 
-Change detection happens after fetching provider details. It saves database
-writes, not API requests. Hours fields trigger the Place Details Enterprise tier;
-the sample used 12 details requests. See
-[Google's field-mask and SKU reference](https://developers.google.com/maps/documentation/places/web-service/place-details).
+Queue workers have configurable batch size and concurrency. Failed jobs retry
+three times with backoff. Change detection happens after fetching details: it
+reduces database writes, not provider requests. A complete successful refresh
+advances `last_sync`, even when no metadata changed.
 
-Normalization tests should cover the observed split shifts, overnight and
-multi-day periods, week wrap, 24/7 sentinel, and missing/empty hours. Add DST
-transitions, invalid intervals, negation of unknown, idempotent sync, successful
-unchanged refreshes advancing `last_sync`, and failed-refresh preservation. Verify range predicates and query plans against a
-development PostgreSQL database.
+The current commands queue explicit refreshes. Scheduled refreshes, bounded-batch
+selection, a dry-run diff mode, and aggregate completion summaries remain planned.
+Current/date-specific hours and secondary schedules are future enrichment work.
+
+## Verification
+
+Normalization and PostgreSQL tests cover split shifts, overnight and multi-day
+periods, week wrapping, 24/7, missing/empty hours, DST transitions, unknown
+negation, idempotent sync, unchanged refreshes, and failed-refresh preservation.
+API and CLI tests cover query forwarding, results, and diagnostics.
+
+`EXPLAIN (ANALYZE, BUFFERS)` on 26,000 synthetic places across six time zones
+confirmed GiST use for a selective weekly interval. Warm local execution times
+were about 0.6 ms for that weekly interval, 32 ms for `open[@now]`, and 25 ms for a
+two-hour dated interval. These measure database filtering on test data, excluding
+API transport and result serialization; production latency depends on workload.
 
 Google's reference defines local weekday endpoints, dated current periods,
 secondary schedule types, and IANA time zones:

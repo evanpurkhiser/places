@@ -1,107 +1,96 @@
 # Place metadata
 
-Planning proposal: PostgreSQL is selected; field layout and provider retention
-remain to be decided before implementing tables or migrations.
+## Stored model
 
-## Data ownership
+`places` has an internal UUID primary key and a unique Google Place ID. Provider
+metadata and user annotations share that record; tags and sources use separate
+many-to-many associations. Refreshes replace provider-owned values atomically
+while preserving the internal ID and personal annotations.
 
-Keep durable application data in `places`, `tags`, `place_tags`, `sources`, and
-`place_sources`. This includes internal identity, the Google Place ID, user notes,
-manual tags, and independently captured discovery context.
+| Column                     | PostgreSQL type            | Meaning                                                       |
+| -------------------------- | -------------------------- | ------------------------------------------------------------- |
+| `google_place_id`          | `text`, unique             | Provider identity, refreshed when Google returns a changed ID |
+| `name`                     | `text`                     | Display name                                                  |
+| `formatted_address`        | `text`                     | Display address                                               |
+| `google_maps_url`          | `text`, nullable           | Provider Maps link                                            |
+| `coordinates`              | `geography(Point, 4326)`   | Geographic position                                           |
+| `time_zone`                | `text`, nullable           | IANA time zone                                                |
+| `business_status`          | `text`, nullable           | Provider operational/closure status                           |
+| `hours_weekly_open`        | `int4multirange`, nullable | Recurring local opening minutes                               |
+| `last_sync`                | `timestamptz`, nullable    | Last successful full metadata refresh                         |
+| `user_note`                | `text`, nullable           | User-authored place note                                      |
+| `created_at`, `updated_at` | `timestamptz`              | Application timestamps                                        |
 
-Model provider metadata separately, with an explicit provenance and retention
-policy. A proposed one-to-one `place_google_details` projection would let us refresh
-or expire permitted provider fields without changing personal annotations. Its
-existence and persisted fields depend on the permitted storage model below.
+The API exposes camelCase properties. Coordinates are projected into named
+`latitude` and `longitude` values from the PostGIS point. The database stores
+coordinates in longitude/latitude order and indexes them with GiST.
 
-## Initial metadata fields
+## Fetching and freshness
 
-The initial place metadata consists of:
+Imports and sync use `getMetadata` with the field mask:
 
-| Field               | Proposed PostgreSQL type | Purpose                          |
-| ------------------- | ------------------------ | -------------------------------- |
-| `name`              | `text`                   | Display name                     |
-| `formatted_address` | `text`                   | Human-readable address           |
-| `google_maps_url`   | `text`, nullable         | Google Maps link, when available |
-| `coordinates`       | `geography(Point, 4326)` | Geographic position              |
+```text
+id,displayName,formattedAddress,googleMapsUri,location,timeZone,businessStatus,regularOpeningHours
+```
 
-Place identity, user notes, tags, and source associations remain part of the
-application model. Provider retention and physical table layout remain open.
+This path fetches REST JSON to preserve absent versus explicitly empty opening
+periods. Basic point resolution uses the Google Places SDK for details or Text
+Search and requests only identity, name, address, Maps URL, and coordinates.
+Requests have ten-second timeouts. Background jobs own import/sync retries.
 
-Use `displayName.text`, `formattedAddress`, `location`, and `googleMapsUri` from
-Places API for name, address, coordinates, and the Google Maps URL respectively.
-See [Google Maps URL guidance](https://developers.google.com/maps/architecture/maps-url).
+An import inserts a fully populated new place with `last_sync` set. Reimporting an
+existing place reuses its identity and applies supplied tags/notes. Explicit sync
+refreshes provider metadata and advances `last_sync` even when unchanged; unchanged
+refreshes preserve `updated_at`. A successful response with missing optional fields
+clears those fields. Failed refreshes preserve the saved snapshot. A concurrent
+refresh can supersede an in-flight response.
 
-## Coordinate storage
+A changed Google ID retains the internal UUID. A collision with another saved
+place's Google ID fails the refresh atomically. Recorded closures preserve the
+place and annotations. Scheduled refresh and per-field expiration are future work.
 
-Use PostGIS geography with SRID 4326 (WGS 84) and a GiST index on `coordinates`.
-Construct points in longitude, latitude order. Expose named latitude/longitude
-values at the API boundary; derive them from the point rather than maintaining
-separate independently editable copies.
+## Coordinates and geography
 
-This supports radius queries in meters using `ST_DWithin`, and geographic
-distance calculations. Walking time will require routing data in addition to
-coordinates. See [PostGIS radius queries](https://postgis.net/documentation/tips/st-dwithin/).
+Radius and sector queries use geographic distances in meters. Rectangle queries
+compare longitude/latitude bounds in degrees, including antimeridian wrapping.
+Named origins use Google Places; text queries select the first result. Explicit
+coordinates, Maps links, and Google Place IDs offer more specific point inputs.
 
-## Later metadata candidates
+Area resolution with `within`, named-location management, and routing are planned.
+See [grammar status](search-grammar.md#implementation-status).
 
-Primary/all place types, business status, time zone, and structured geographic
-components are candidates for later filtering. Keep provider categories distinct
-from manual tags. Define a country-aware address-component mapping before using
-it for city or neighborhood filters.
+## Opening hours
 
-## Hours and optional enrichment
+Weekly hours use inclusive-start/exclusive-end minute ranges from Sunday 00:00
+through minute 10080. Normalization merges touching/overlapping periods and splits
+week-crossing intervals. SQL NULL means unknown, an empty multirange means closed
+all week, and `{[0,10080)}` means 24/7. A GiST index supports containment.
 
-For time-based filtering, consider regular hours plus date-specific current hours.
-Google's current hours cover the next seven days including exceptional hours;
-regular hours describe a typical week. Use the IANA time zone for date calculations.
-See the [hours reference](https://developers.google.com/maps/documentation/places/web-service/reference/rest/v1/places#OpeningHours).
+`open` checks a local clock time, weekly time, or absolute instant. Intervals
+require continuous opening. Missing data remains unknown under negation; recorded
+temporary/permanent closure makes the predicate false. Calendar-date queries use
+the saved recurring schedule and current closure status. Holiday exceptions and
+secondary schedules are future work. See [hours research](hours.md) and
+[time values](time-values.md).
 
-Compute open status for the requested instant. Treat unavailable hours as unknown.
-When interval queries are implemented, handle overnight periods, 24-hour operation,
-and dated exceptions. Derived intervals inherit the provider data's retention policy.
+## Future enrichment
 
-Potential later fields include website, international phone number, price level,
-and rating together with rating count. For intent filters, consider breakfast,
-brunch, outdoor seating, vegetarian food, and accessibility. Preserve unknown
-values rather than treating omitted booleans as false.
+Candidates include provider place types, structured address components, website,
+phone number, price, ratings, and amenity flags. Provider categories remain
+separate from manual tags. Address-component mapping needs country-aware rules.
+Each extension needs a field mask, nullable-value semantics, fetch budget, and
+retention policy. Reviews and photos need a concrete product use before inclusion.
 
-Defer reviews, photos, and editorial/AI summaries until there is a specific UI need.
+## Provider policy decisions
 
-## Fetch scope and freshness
+The implementation persists the fields above and the web interface uses MapLibre.
+Provider retention, permitted map use, attribution, refresh/expiration behavior,
+and raw-response storage policy require an explicit review against the applicable
+provider agreement. The implemented schema records behavior; it does not establish
+permission to retain or display provider content.
 
-Use explicit field masks for separate basic-details and enrichment requests.
-The API bills according to requested fields: names and business status require
-Place Details Pro; hours, website, ratings, and price require Enterprise; several
-amenity fields require Enterprise + Atmosphere.
-See [field tiers](https://developers.google.com/maps/documentation/places/web-service/data-fields).
-
-Track requested fields, fetch time, language, and any permitted expiration per
-field group. A basic refresh must not imply that hours were refreshed. Keep failure
-information separate from the last successful fetch. A retained response, if
-permitted, contains only requested fields and needs the same expiry handling as
-its queryable projection.
-
-## Storage and map constraints
-
-Google's published policies allow indefinite Place ID storage but restrict caching
-other Places content. The service-specific terms permit latitude/longitude caching
-for up to 30 days; this is not a general allowance for every response field.
-
-The current API terms also prohibit using Places content with a non-Google map.
-The map prototype uses sample data with MapLibre. Resolve the provider, storage,
-and map combination before implementing Google-backed persistence. An expiry
-column alone does not grant permission to retain a field.
-
-Sources:
+References for that review:
 
 - [Places policies](https://developers.google.com/maps/documentation/places/web-service/policies)
-- [Service-specific terms, section 14](https://cloud.google.com/maps-platform/terms/maps-service-terms)
-
-## Decisions to resolve
-
-- Permitted retention for each desired provider field and derived value.
-- On-demand retrieval versus persisted projections or another metadata provider.
-- Initial field mask and enrichment budget.
-- Address-component mapping and nullable-field behavior.
-- Refresh scheduling and handling moved/closed places while preserving associations.
+- [Service-specific terms](https://cloud.google.com/maps-platform/terms/maps-service-terms)
+- [Field masks and request tiers](https://developers.google.com/maps/documentation/places/web-service/place-details)
