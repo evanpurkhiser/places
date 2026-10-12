@@ -2,6 +2,7 @@ import {oc} from '@orpc/contract';
 import {z} from 'zod';
 
 import {importJobId, placeId, sourceId, syncJobId, tagId} from './identifiers.ts';
+import {mcpTools} from './mcp.ts';
 import {placeSourceData, placeSourceDescription, source} from './source.ts';
 import {tag, tagReference} from './tag.ts';
 
@@ -195,6 +196,7 @@ const placeListInput = queryInput
 
 export const placeContract = {
   searchGoogle: oc
+    .meta(mcpTools.places.searchGoogle)
     .errors({SERVICE_UNAVAILABLE: {message: 'Google Places search is unavailable.'}})
     .input(z.object({query: googleSearchQuery}))
     .output(
@@ -209,6 +211,7 @@ export const placeContract = {
       ),
     ),
   tag: assignmentAction
+    .meta(mcpTools.places.tag)
     .input(
       assignmentInput.extend({
         notes: placeTagNote
@@ -220,12 +223,16 @@ export const placeContract = {
       }),
     )
     .output(placeTag),
-  untag: assignmentAction.input(assignmentInput).output(
-    placeTag.pick({placeId: true, tagId: true}).extend({
-      removed: z.boolean().describe('Whether an existing assignment was removed.'),
-    }),
-  ),
+  untag: assignmentAction
+    .meta(mcpTools.places.untag)
+    .input(assignmentInput)
+    .output(
+      placeTag.pick({placeId: true, tagId: true}).extend({
+        removed: z.boolean().describe('Whether an existing assignment was removed.'),
+      }),
+    ),
   list: oc
+    .meta(mcpTools.places.list)
     .errors({
       BAD_REQUEST: {message: 'Invalid place query.', data: queryErrorData},
       SERVICE_UNAVAILABLE: {message: 'Place resolution is unavailable.'},
@@ -250,6 +257,7 @@ export const placeContract = {
       }),
     ),
   syncStatus: oc
+    .meta(mcpTools.places.syncStatus)
     .errors({NOT_FOUND: {message: 'Sync not found or expired.'}})
     .input(z.object({jobId: syncJobId}))
     .output(
@@ -265,6 +273,7 @@ export const placeContract = {
       }),
     ),
   import: oc
+    .meta(mcpTools.places.import)
     .errors({
       BAD_REQUEST: {message: 'Unsupported or invalid import input.'},
       SERVICE_UNAVAILABLE: {message: 'Import service is unavailable.'},
@@ -289,8 +298,12 @@ export const placeContract = {
       }),
     ),
   getImportRun: oc
+    .meta(mcpTools.places.getImportRun)
     .errors({NOT_FOUND: {message: 'Import not found.'}})
     .input(z.object({jobId: importJobId}))
     .output(importStatus),
-  listImportRuns: oc.input(importRunsInput).output(z.array(importStatus)),
+  listImportRuns: oc
+    .meta(mcpTools.places.listImportRuns)
+    .input(importRunsInput)
+    .output(z.array(importStatus)),
 };

@@ -1,0 +1,24 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Evan Purkhiser <git@evanpurkhiser.com>
+Date: Mon, 12 Oct 2026 00:26:43 -0400
+Subject: [PATCH] Fix URI decoding with current oRPC releases
+
+@orpc/shared removed tryDecodeURIComponent in 2.0.0-beta.36, but
+orpc-mcp 0.1.3 still imports it. Use its replacement so the MCP handler can
+load with current oRPC releases.
+
+Upstream issue: https://github.com/mi3lix9/orpc-mcp/issues/6
+---
+ dist/shared/orpc-mcp.DhbUTBkN.mjs | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/dist/shared/orpc-mcp.DhbUTBkN.mjs b/dist/shared/orpc-mcp.DhbUTBkN.mjs
+index ee289f864f3b256193ba34ffbacddd0ea1863cab..5ae7a76480e72a9f4c762b00163f37ce6f0d3c59 100644
+--- a/dist/shared/orpc-mcp.DhbUTBkN.mjs
++++ b/dist/shared/orpc-mcp.DhbUTBkN.mjs
+@@ -3 +3 @@
+-import { tryDecodeURIComponent, toArray } from '@orpc/shared';
++import { safeDecodeURIComponent, toArray } from '@orpc/shared';
+@@ -62 +62 @@ function compileUriTemplate(template) {
+-        extracted[name] = tryDecodeURIComponent(result[index + 1]);
++        extracted[name] = safeDecodeURIComponent(result[index + 1]);

@@ -162,6 +162,9 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
+patchedDependencies:
+  orpc-mcp@0.1.3: 25ebe444b9a979aa1d63483b536815ff4a48fee58b215b6b632def1073f6e41e
+
 importers:
 
   .:
@@ -218,6 +221,9 @@ importers:
       '@orpc/contract':
         specifier: 2.0.0-beta.43
         version: 2.0.0-beta.43
+      orpc-mcp:
+        specifier: 0.1.3
+        version: 0.1.3(patch_hash=25ebe444b9a979aa1d63483b536815ff4a48fee58b215b6b632def1073f6e41e)(@orpc/client@2.0.0-beta.43)(@orpc/contract@2.0.0-beta.43)(@orpc/json-schema@2.0.0-beta.43)(@orpc/server@2.0.0-beta.43)(@orpc/shared@2.0.0-beta.43)
       zod:
         specifier: 4.6.5
         version: 4.6.5
@@ -243,6 +249,9 @@ importers:
       '@orpc/server':
         specifier: 2.0.0-beta.43
         version: 2.0.0-beta.43
+      '@orpc/zod':
+        specifier: 2.0.0-beta.43
+        version: 2.0.0-beta.43(zod@4.6.5)
       '@places/common':
         specifier: workspace:*
         version: link:../common
@@ -258,6 +267,9 @@ importers:
       openai:
         specifier: ^7.18.0
         version: 7.18.0(undici@7.29.1)(ws@8.21.3)(zod@4.6.5)
+      orpc-mcp:
+        specifier: 0.1.3
+        version: 0.1.3(patch_hash=25ebe444b9a979aa1d63483b536815ff4a48fee58b215b6b632def1073f6e41e)(@orpc/client@2.0.0-beta.43)(@orpc/contract@2.0.0-beta.43)(@orpc/json-schema@2.0.0-beta.43)(@orpc/server@2.0.0-beta.43)(@orpc/shared@2.0.0-beta.43)
       pg:
         specifier: ^8.23.0
         version: 8.23.0
@@ -1016,6 +1028,11 @@ packages:
     peerDependencies:
       '@tanstack/query-core': '>=5.89.0'
 
+  '@orpc/zod@2.0.0-beta.43':
+    resolution: {integrity: sha512-Ria1YRhR1tX1DT1dQVrQDhy5SZ/hSJcQknh2XZJ2lGa2cZTtvm8jJL4wsWYaZNtDaXpOLx/DBH7RoGDS0ewaPw==}
+    peerDependencies:
+      zod: '>=4.5.0'
+
   '@oxc-project/types@0.149.0':
     resolution: {integrity: sha512-Efcc+iF0j3Bf67YjEqIqWXbX5XddXoK/Mw4K1/JuXwRCZ8N16VR7iT23nlCc9XrveFVh/E5Rqs2StT0V8v9LdA==}
 
@@ -1559,6 +1576,14 @@ packages:
 
   '@standard-server/shared@0.10.2':
     resolution: {integrity: sha512-ffbmIGnzTMjQfJOM91BkC8VvfhB+Rx70f6/dsVnrqjLXEW8GXGUmi8CGTP3Fz9j1G2N+Rum3r4KiewNUBZG7uQ==}
+
+  '@standardserver/core@0.2.1':
+    resolution: {integrity: sha512-dG+4+MmodTrn3tO9pHnBsioeH/8rK8bkbijKsxRchQY3iGQQblu+Tw6o7DyonsZW/d/7KyB4kisDokIiLTdaVA==}
+    deprecated: Package no longer supported. Contact Support at https://www.npmjs.com/support for more info.
+
+  '@standardserver/shared@0.2.1':
+    resolution: {integrity: sha512-kcWt26yFpEeWwXsRNwsdldNGBG0QnImPu0gTKd0+LnmPfnmogbnodTp5AMgDVD+J1AxJEkSQpV2q2LCjx0yRSQ==}
+    deprecated: Package no longer supported. Contact Support at https://www.npmjs.com/support for more info.
 
   '@tanstack/query-core@5.103.1':
     resolution: {integrity: sha512-rms8HqTGp6zA00dM+cUQ2eBcgzNJefuu5CAMB37i/6MiGT1zulPOytCFu2a0qjLqVR2n1jENPj9woqFQNuCzWA==}
@@ -2363,6 +2388,15 @@ packages:
         optional: true
       zod:
         optional: true
+
+  orpc-mcp@0.1.3:
+    resolution: {integrity: sha512-TJn0UguSc3cnurqFM9l6B5JBAubE4QZg38kgKq0+Kr3+/aB3/UShfPi29gOtzcIZznHgcJKrqjJx8lvpV6UOuw==}
+    peerDependencies:
+      '@orpc/client': ^2.0.0-beta.16
+      '@orpc/contract': ^2.0.0-beta.16
+      '@orpc/json-schema': ^2.0.0-beta.16
+      '@orpc/server': ^2.0.0-beta.16
+      '@orpc/shared': ^2.0.0-beta.16
 
   oxfmt@0.47.0:
     resolution: {integrity: sha512-OFbkbzxKCpooQEnRmpTDnuwTX8KHXzZTQ4Df/hz85fpS67Pl+lxPEFvUtin56HIIS0B1k4X8oIzTXRZPufA2CA==}
@@ -3458,6 +3492,15 @@ snapshots:
       - fastify
       - swagger-ui
 
+  '@orpc/zod@2.0.0-beta.43(zod@4.6.5)':
+    dependencies:
+      '@openapi-spec/types': 0.3.0
+      '@orpc/json-schema': 2.0.0-beta.43
+      zod: 4.6.5
+    transitivePeerDependencies:
+      - crossws
+      - fastify
+
   '@oxc-project/types@0.149.0': {}
 
   '@oxfmt/binding-android-arm-eabi@0.47.0':
@@ -3755,6 +3798,12 @@ snapshots:
       '@standard-server/shared': 0.10.2
 
   '@standard-server/shared@0.10.2': {}
+
+  '@standardserver/core@0.2.1':
+    dependencies:
+      '@standardserver/shared': 0.2.1
+
+  '@standardserver/shared@0.2.1': {}
 
   '@tanstack/query-core@5.103.1': {}
 
@@ -4435,6 +4484,15 @@ snapshots:
       undici: 7.29.1
       ws: 8.21.3
       zod: 4.6.5
+
+  orpc-mcp@0.1.3(patch_hash=25ebe444b9a979aa1d63483b536815ff4a48fee58b215b6b632def1073f6e41e)(@orpc/client@2.0.0-beta.43)(@orpc/contract@2.0.0-beta.43)(@orpc/json-schema@2.0.0-beta.43)(@orpc/server@2.0.0-beta.43)(@orpc/shared@2.0.0-beta.43):
+    dependencies:
+      '@orpc/client': 2.0.0-beta.43
+      '@orpc/contract': 2.0.0-beta.43
+      '@orpc/json-schema': 2.0.0-beta.43
+      '@orpc/server': 2.0.0-beta.43
+      '@orpc/shared': 2.0.0-beta.43
+      '@standardserver/core': 0.2.1
 
   oxfmt@0.47.0:
     dependencies:

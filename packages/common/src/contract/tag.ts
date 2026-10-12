@@ -2,6 +2,8 @@ import {oc} from '@orpc/contract';
 import {z} from 'zod';
 
 import {namespaceId, tagId} from './identifiers.ts';
+import {mcpTools} from './mcp.ts';
+
 export const tagIcon = z.strictObject({
   emoji: z.string().trim().min(1).describe('Emoji displayed for the tag.'),
 });
@@ -50,9 +52,13 @@ const writableTag = oc.errors({
 });
 
 export const tagContract = {
-  list: oc.output(z.array(tag)),
-  get: existingTag.input(tag.pick({id: true})).output(tag),
+  list: oc.meta(mcpTools.tags.list).output(z.array(tag)),
+  get: existingTag
+    .meta(mcpTools.tags.get)
+    .input(tag.pick({id: true}))
+    .output(tag),
   create: writableTag
+    .meta(mcpTools.tags.create)
     .input(
       tag
         .pick({name: true, icon: true, description: true})
@@ -60,6 +66,7 @@ export const tagContract = {
     )
     .output(tag),
   update: writableTag
+    .meta(mcpTools.tags.update)
     .errors({NOT_FOUND: {message: 'Tag not found'}})
     .input(
       tag
@@ -75,5 +82,8 @@ export const tagContract = {
         ),
     )
     .output(tag),
-  delete: existingTag.input(tag.pick({id: true})).output(tag),
+  delete: existingTag
+    .meta(mcpTools.tags.delete)
+    .input(tag.pick({id: true}))
+    .output(tag),
 };

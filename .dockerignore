@@ -6,6 +6,8 @@
 !pnpm-lock.yaml
 !pnpm-workspace.yaml
 !tsconfig.json
+!patches/
+!patches/**
 !packages/
 !packages/server/
 !packages/server/package.json
