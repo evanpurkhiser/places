@@ -1,10 +1,11 @@
 import {oc} from '@orpc/contract';
 import {z} from 'zod';
 
+import {namespaceId} from './identifiers.ts';
 import {tagIcon} from './tag.ts';
 
 export const namespace = z.object({
-  id: z.uuid(),
+  id: namespaceId,
   name: z
     .string()
     .trim()
@@ -12,11 +13,17 @@ export const namespace = z.object({
     .min(1)
     .refine(name => !name.includes('.'), {
       message: 'Namespace names cannot contain dots',
-    }),
-  icon: tagIcon.nullable(),
-  description: z.string().nullable(),
-  createdAt: z.date(),
-  updatedAt: z.date(),
+    })
+    .describe('Unique lowercase namespace name without dots.'),
+  icon: tagIcon
+    .nullable()
+    .describe('Namespace icon, or null when unset. Pass null to clear the icon.'),
+  description: z
+    .string()
+    .nullable()
+    .describe('Namespace description, or null when unset. Pass null to clear it.'),
+  createdAt: z.date().describe('Time the namespace was created.'),
+  updatedAt: z.date().describe('Time the namespace was last updated.'),
 });
 
 const existingNamespace = oc.errors({NOT_FOUND: {message: 'Namespace not found'}});
@@ -55,6 +62,15 @@ export const namespaceContract = {
         message: 'Namespace contains tags',
       },
     })
-    .input(namespace.pick({id: true}).extend({force: z.boolean().default(false)}))
+    .input(
+      namespace.pick({id: true}).extend({
+        force: z
+          .boolean()
+          .default(false)
+          .describe(
+            'Unlink contained tags and remove their namespace prefixes before deletion.',
+          ),
+      }),
+    )
     .output(namespace),
 };
