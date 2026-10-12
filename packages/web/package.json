@@ -12,8 +12,8 @@
   },
   "dependencies": {
     "@base-ui/react": "^1.8.0",
-    "@orpc/client": "1.15.1",
-    "@orpc/tanstack-query": "1.15.1",
+    "@orpc/client": "2.0.0-beta.43",
+    "@orpc/tanstack-query": "2.0.0-beta.43",
     "@places/common": "workspace:*",
     "@tanstack/react-query": "^5.103.1",
     "@tanstack/react-virtual": "^3.14.13",

@@ -31,7 +31,7 @@ export const tag = z.object({
 const existingTag = oc.errors({NOT_FOUND: {message: 'Tag not found'}});
 const writableTag = oc.errors({
   CONFLICT: {message: 'A tag with this name already exists'},
-  NAMESPACE_NOT_FOUND: {status: 404, message: 'Namespace not found'},
+  NAMESPACE_NOT_FOUND: {message: 'Namespace not found'},
 });
 
 export const tagContract = {

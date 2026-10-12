@@ -58,8 +58,9 @@ describe.skipIf(!testUrl)('place import with PostgreSQL and pg-boss', () => {
   const app = createApp({db, jobs, google, config});
   const client: Client = createORPCClient(
     new RPCLink({
-      url: 'http://localhost/rpc',
-      fetch: request => Promise.resolve(app.fetch(request)),
+      origin: 'http://localhost',
+      url: '/rpc',
+      fetch: (url, init) => Promise.resolve(app.fetch(new Request(url, init))),
     }),
   );
 
