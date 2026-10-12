@@ -7,7 +7,7 @@ export type Place = Awaited<ReturnType<Client['places']['list']>>[number];
 
 const client: Client = createORPCClient(
   new RPCLink({
-    url: new URL('/rpc', window.location.origin),
+    url: '/rpc',
   }),
 );
 

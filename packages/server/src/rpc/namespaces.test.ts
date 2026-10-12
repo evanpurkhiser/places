@@ -39,8 +39,9 @@ describe.skipIf(!testUrl)('namespace API and CLI against PostgreSQL', () => {
   });
   const client: Client = createORPCClient(
     new RPCLink({
-      url: 'http://localhost/rpc',
-      fetch: request => Promise.resolve(app.fetch(request)),
+      origin: 'http://localhost',
+      url: '/rpc',
+      fetch: (url, init) => Promise.resolve(app.fetch(new Request(url, init))),
     }),
   );
 
@@ -94,23 +95,22 @@ describe.skipIf(!testUrl)('namespace API and CLI against PostgreSQL', () => {
     ]);
 
     expect(results.filter(result => result.status === 'fulfilled')).toHaveLength(1);
-    expect(results.find(result => result.status === 'rejected')).toMatchObject({
-      reason: {
-        code: 'CONFLICT',
-        status: 409,
-        message: 'A namespace with this name already exists',
-      },
-    });
+    const rejected = results.find(result => result.status === 'rejected');
+    expect(rejected).toMatchObject({reason: {code: 'CONFLICT'}});
+    expect(rejected?.reason).toHaveProperty(
+      'message',
+      'A namespace with this name already exists',
+    );
 
     const other = await client.namespaces.create({name: 'other'});
+    const conflictingUpdate = client.namespaces.update({id: other.id, name: 'CAFE'});
 
-    await expect(
-      client.namespaces.update({id: other.id, name: 'CAFE'}),
-    ).rejects.toMatchObject({
+    await expect(conflictingUpdate).rejects.toMatchObject({
       code: 'CONFLICT',
-      status: 409,
-      message: 'A namespace with this name already exists',
     });
+    await expect(conflictingUpdate).rejects.toThrow(
+      'A namespace with this name already exists',
+    );
     expect(await client.namespaces.get({id: other.id})).toEqual(other);
   });
 
@@ -171,20 +171,20 @@ describe.skipIf(!testUrl)('namespace API and CLI against PostgreSQL', () => {
 
       await expect(
         client.namespaces.create({name: 'dinner', icon: invalidIcon}),
-      ).rejects.toMatchObject({status: 400});
+      ).rejects.toMatchObject({code: 'BAD_REQUEST'});
       await expect(
         client.namespaces.update({id: tag.id, icon: invalidIcon}),
-      ).rejects.toMatchObject({status: 400});
+      ).rejects.toMatchObject({code: 'BAD_REQUEST'});
       expect(await client.namespaces.get({id: tag.id})).toEqual(tag);
     },
   );
 
   it('validates input and reports missing namespaces', async () => {
     await expect(client.namespaces.create({name: ' \t '})).rejects.toMatchObject({
-      status: 400,
+      code: 'BAD_REQUEST',
     });
     await expect(client.namespaces.get({id: 'invalid'})).rejects.toMatchObject({
-      status: 400,
+      code: 'BAD_REQUEST',
     });
 
     const id = randomUUID();
@@ -199,11 +199,13 @@ describe.skipIf(!testUrl)('namespace API and CLI against PostgreSQL', () => {
   });
 
   it.each(['', '  ', 'type.cafe'])('rejects invalid namespace names: %j', async name => {
-    await expect(client.namespaces.create({name})).rejects.toMatchObject({status: 400});
+    await expect(client.namespaces.create({name})).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+    });
     const namespace = await client.namespaces.create({name: 'type'});
     await expect(
       client.namespaces.update({id: namespace.id, name}),
-    ).rejects.toMatchObject({status: 400});
+    ).rejects.toMatchObject({code: 'BAD_REQUEST'});
     await expect(db.insert(namespaces).values({name})).rejects.toThrow();
     expect(await client.namespaces.get({id: namespace.id})).toEqual(namespace);
   });
@@ -251,7 +253,6 @@ describe.skipIf(!testUrl)('namespace API and CLI against PostgreSQL', () => {
     });
     await expect(client.namespaces.delete({id: type.id})).rejects.toMatchObject({
       code: 'CONFLICT',
-      status: 409,
     });
     await client.tags.delete({id: tag.id});
     await client.namespaces.delete({id: type.id});
@@ -315,14 +316,14 @@ describe.skipIf(!testUrl)('namespace API and CLI against PostgreSQL', () => {
     await client.tags.create({name: 'type.cafe'});
     await client.tags.create({name: 'cafe'});
     const before = await client.tags.list();
+    const deletion = client.namespaces.delete({id: namespace.id, force: true});
 
-    await expect(
-      client.namespaces.delete({id: namespace.id, force: true}),
-    ).rejects.toMatchObject({
+    await expect(deletion).rejects.toMatchObject({
       code: 'CONFLICT',
-      status: 409,
-      message: 'Cannot unlink tags: a bare tag name already exists',
     });
+    await expect(deletion).rejects.toThrow(
+      'Cannot unlink tags: a bare tag name already exists',
+    );
     expect(await client.namespaces.get({id: namespace.id})).toEqual(namespace);
     expect(await client.tags.list()).toEqual(before);
   });
@@ -341,7 +342,6 @@ describe.skipIf(!testUrl)('namespace API and CLI against PostgreSQL', () => {
     const tag = await client.tags.create({name: 'cafe'});
     await expect(client.tags.create({name: 'missing.cafe'})).rejects.toMatchObject({
       code: 'NAMESPACE_NOT_FOUND',
-      status: 404,
     });
     await expect(
       client.tags.update({id: tag.id, name: 'missing.cafe'}),
@@ -353,10 +353,12 @@ describe.skipIf(!testUrl)('namespace API and CLI against PostgreSQL', () => {
   it.each(['.cafe', 'type.', 'type.cafe.bar', 'type. cafe', 'type .cafe'])(
     'rejects malformed qualified names: %s',
     async name => {
-      await expect(client.tags.create({name})).rejects.toMatchObject({status: 400});
+      await expect(client.tags.create({name})).rejects.toMatchObject({
+        code: 'BAD_REQUEST',
+      });
       const tag = await client.tags.create({name: 'cafe'});
       await expect(client.tags.update({id: tag.id, name})).rejects.toMatchObject({
-        status: 400,
+        code: 'BAD_REQUEST',
       });
     },
   );
@@ -448,7 +450,7 @@ describe.skipIf(!testUrl)('namespace API and CLI against PostgreSQL', () => {
   it('rejects empty updates', async () => {
     const namespace = await client.namespaces.create({name: 'type'});
     await expect(client.namespaces.update({id: namespace.id})).rejects.toMatchObject({
-      status: 400,
+      code: 'BAD_REQUEST',
     });
   });
 

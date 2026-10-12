@@ -63,8 +63,9 @@ describe.skipIf(!testUrl)('place sync with PostgreSQL and pg-boss', () => {
     const app = createApp({db, jobs, google, config});
     client = createORPCClient(
       new RPCLink({
-        url: 'http://localhost/rpc',
-        fetch: request => Promise.resolve(app.fetch(request)),
+        origin: 'http://localhost',
+        url: '/rpc',
+        fetch: (url, init) => Promise.resolve(app.fetch(new Request(url, init))),
       }),
     );
   }, 30000);
