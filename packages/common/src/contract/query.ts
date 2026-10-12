@@ -1,6 +1,8 @@
 import {oc} from '@orpc/contract';
 import {z} from 'zod';
 
+import {mcpTools} from './mcp.ts';
+
 const parameter = z.object({
   name: z.string().describe('Parameter name used in a query expression.'),
   description: z.string().describe('Purpose and accepted values of the parameter.'),
@@ -54,5 +56,5 @@ export const queryDescription = z.object({
 });
 
 export const queryContract = {
-  describe: oc.output(queryDescription),
+  describe: oc.meta(mcpTools.query.describe).output(queryDescription),
 };

@@ -131,7 +131,9 @@ operations, contract validation with Zod, typed errors, and API client integrati
 Hono provides a small HTTP layer around the shared API contract and a familiar
 middleware model for server-wide concerns.
 
-Serve typed RPC at `/rpc`. Tag operations are
+Serve typed RPC at `/rpc` and Streamable HTTP MCP at `/mcp`. MCP tool metadata
+lives in a centralized catalog alongside the shared contracts, and both
+transports invoke the same oRPC router implementations. Tag operations are
 create, list, get, update, and delete; the CLI exposes them under `places tags`.
 Place imports use `places.import`, `places.getImportRun`, and
 `places.listImportRuns`, and saved places

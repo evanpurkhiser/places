@@ -16,3 +16,5 @@ minimumReleaseAgeExclude:
   - '@vitest/mocker@5.0.1'
   - '@vitest/spy@5.0.1'
   - vitest@5.0.1
+patchedDependencies:
+  orpc-mcp@0.1.3: patches/orpc-mcp@0.1.3.patch
