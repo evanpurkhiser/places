@@ -29,6 +29,7 @@ const details = {
   location: {latitude: 40, longitude: -74},
   timeZone: 'America/New_York',
   businessStatus: 'OPERATIONAL',
+  googleMetadata: {id: 'test', rating: 4.7},
   hoursWeeklyOpen: [
     [1980, 2160],
     [2220, 2460],
@@ -108,6 +109,7 @@ describe.skipIf(!testUrl)('place sync with PostgreSQL and pg-boss', () => {
       hoursWeeklyOpen: details.hoursWeeklyOpen,
       timeZone: details.timeZone,
       businessStatus: 'OPERATIONAL',
+      googleMetadata: details.googleMetadata,
       lastSync: expect.any(Date),
       userNote: 'Keep this note',
     });
@@ -133,6 +135,17 @@ describe.skipIf(!testUrl)('place sync with PostgreSQL and pg-boss', () => {
     const after = await read();
     expect(after.updatedAt).toEqual(before.updatedAt);
     expect(after.lastSync!.getTime()).toBeGreaterThan(old.getTime());
+  });
+
+  it('persists changes found only in the raw Google metadata', async () => {
+    await syncPlace(db, google, placeId);
+    google.getMetadata.mockResolvedValueOnce({
+      ...details,
+      googleMetadata: {...details.googleMetadata, rating: 4.8},
+    });
+
+    expect(await syncPlace(db, google, placeId)).toMatchObject({status: 'updated'});
+    expect(await read()).toMatchObject({googleMetadata: {rating: 4.8}});
   });
 
   it('replaces a Google ID while preserving identity and annotations', async () => {

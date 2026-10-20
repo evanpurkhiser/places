@@ -39,6 +39,7 @@ const details = {
     [2220, 2460],
   ] as Array<[number, number]>,
   businessStatus: 'OPERATIONAL',
+  googleMetadata: {id: 'ChIJtest', rating: 4.7},
 };
 
 describe.skipIf(!testUrl)('place import with PostgreSQL and pg-boss', () => {
@@ -224,6 +225,7 @@ describe.skipIf(!testUrl)('place import with PostgreSQL and pg-boss', () => {
       timeZone: details.timeZone,
       hoursWeeklyOpen: details.hoursWeeklyOpen,
       businessStatus: details.businessStatus,
+      googleMetadata: details.googleMetadata,
       lastSync: expect.any(Date),
     });
   }, 20000);

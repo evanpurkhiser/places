@@ -32,6 +32,7 @@ use snake_case.
 A check constraint bounds intervals to `[0,10080)` and a GiST index supports
 containment. Null means unknown; the empty multirange means known closed.
 `business_status` stores the provider's closure status separately from hours.
+`google_metadata` stores the complete JSON response from the latest metadata fetch.
 `last_sync` advances after each successful Google refresh, including unchanged
 results. Failed refreshes preserve the previous snapshot.
 

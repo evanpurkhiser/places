@@ -23,6 +23,9 @@ export const placeSource = z.object({
 });
 export type PlaceSource = z.infer<typeof placeSource>;
 
+export const googleMetadata = z.record(z.string(), z.json());
+export type GoogleMetadata = z.infer<typeof googleMetadata>;
+
 export const place = z.object({
   id: z.uuid(),
   googlePlaceId: z.string(),
@@ -37,6 +40,7 @@ export const place = z.object({
   // [[0, 10080]] means 24/7; [] means closed all week; null means unknown.
   hoursWeeklyOpen: z.array(z.tuple([z.number().int(), z.number().int()])).nullable(),
   businessStatus: z.string().nullable(),
+  googleMetadata: googleMetadata.nullable(),
   lastSync: z.date().nullable(),
   createdAt: z.date(),
   updatedAt: z.date(),

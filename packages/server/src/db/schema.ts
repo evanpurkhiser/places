@@ -1,3 +1,4 @@
+import type {GoogleMetadata} from '@places/common/contract/place';
 import type {Source} from '@places/common/contract/source';
 import type {TagIcon} from '@places/common/contract/tag';
 import {inArray, sql} from 'drizzle-orm';
@@ -60,6 +61,7 @@ export const places = pgTable(
     timeZone: text('time_zone'),
     hoursWeeklyOpen: weeklyHours('hours_weekly_open'),
     businessStatus: text('business_status'),
+    googleMetadata: jsonb('google_metadata').$type<GoogleMetadata>(),
     lastSync: timestamp('last_sync', {withTimezone: true}),
     createdAt: createdAt(),
     updatedAt: updatedAt(),

@@ -1,6 +1,6 @@
 import {describe, expect, it, vi} from 'vitest';
 
-import {createGooglePlaces} from './index.ts';
+import {createGooglePlaces, metadataFields} from './index.ts';
 
 const details = {
   id: 'test',
@@ -22,6 +22,7 @@ describe('Google place metadata', () => {
     expect(await google.getMetadata('test')).toMatchObject({
       timeZone: 'Asia/Saigon',
       hoursWeeklyOpen: null,
+      googleMetadata: {...details, timeZone: {id: 'Asia/Saigon'}},
     });
     expect(await google.getMetadata('test')).toMatchObject({
       timeZone: null,
@@ -32,7 +33,7 @@ describe('Google place metadata', () => {
       expect.objectContaining({
         redirect: 'error',
         headers: expect.objectContaining({
-          'X-Goog-FieldMask': expect.stringContaining('regularOpeningHours'),
+          'X-Goog-FieldMask': metadataFields.join(','),
         }),
       }),
     );

@@ -48,6 +48,60 @@ const metadataDetails = details.extend({
   regularOpeningHours: openingHours.optional(),
 });
 
+// regularOpeningHours already puts metadata requests in the Place Details
+// Enterprise SKU. Request every field available at that tier and below.
+export const metadataFields = [
+  'attributions',
+  'consumerAlert',
+  'id',
+  'movedPlace',
+  'movedPlaceId',
+  'name',
+  'photos',
+  'addressComponents',
+  'addressDescriptor',
+  'adrFormatAddress',
+  'formattedAddress',
+  'location',
+  'plusCode',
+  'postalAddress',
+  'shortFormattedAddress',
+  'types',
+  'viewport',
+  'accessibilityOptions',
+  'businessStatus',
+  'containingPlaces',
+  'displayName',
+  'entrances',
+  'googleMapsLinks',
+  'googleMapsTypeLabel',
+  'googleMapsUri',
+  'iconBackgroundColor',
+  'iconMaskBaseUri',
+  'navigationPoints',
+  'openingDate',
+  'primaryType',
+  'primaryTypeDisplayName',
+  'pureServiceAreaBusiness',
+  'subDestinations',
+  'timeZone',
+  'utcOffsetMinutes',
+  'currentOpeningHours',
+  'currentSecondaryOpeningHours',
+  'internationalPhoneNumber',
+  'nationalPhoneNumber',
+  'priceLevel',
+  'priceRange',
+  'rating',
+  'regularOpeningHours',
+  'regularSecondaryOpeningHours',
+  'transitStation',
+  'userRatingCount',
+  'websiteUri',
+] as const;
+
+const metadataFieldMask = metadataFields.join(',');
+
 function invalid(message: string): never {
   throw new GoogleInputError(message);
 }
@@ -222,8 +276,7 @@ export function createGooglePlaces(apiKey?: string, fetcher: typeof fetch = fetc
       const response = await fetcher(`https://places.googleapis.com/v1/places/${id}`, {
         headers: {
           'X-Goog-Api-Key': apiKey,
-          'X-Goog-FieldMask':
-            'id,displayName,formattedAddress,googleMapsUri,location,timeZone,businessStatus,regularOpeningHours',
+          'X-Goog-FieldMask': metadataFieldMask,
         },
         redirect: 'error',
         signal: AbortSignal.timeout(10000),
@@ -233,10 +286,12 @@ export function createGooglePlaces(apiKey?: string, fetcher: typeof fetch = fetc
         throw new Error('Place request failed.');
       }
 
-      const result = metadataDetails.parse(await response.json());
+      const googleMetadata = z.record(z.string(), z.json()).parse(await response.json());
+      const result = metadataDetails.parse(googleMetadata);
 
       return {
         ...result,
+        googleMetadata,
         timeZone: result.timeZone?.id ?? null,
         businessStatus: result.businessStatus ?? null,
         hoursWeeklyOpen: normalizeHours(result.regularOpeningHours),

@@ -250,6 +250,7 @@ describe.skipIf(!testUrl)('Instagram ingestion with PostgreSQL and pg-boss', () 
         timeZone: 'America/New_York',
         hoursWeeklyOpen: [],
         businessStatus: 'OPERATIONAL',
+        googleMetadata: {id: payload.googlePlaceId},
       }),
     };
     const result = await importPlace(
@@ -475,6 +476,7 @@ describe.skipIf(!testUrl)('Instagram ingestion with PostgreSQL and pg-boss', () 
         timeZone: 'America/New_York',
         hoursWeeklyOpen: [],
         businessStatus: 'OPERATIONAL',
+        googleMetadata: {id},
       }),
     );
     const submitted = await enqueueImport(url, context());

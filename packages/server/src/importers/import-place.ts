@@ -35,6 +35,7 @@ async function savePlace(
       timeZone: details.timeZone,
       hoursWeeklyOpen: details.hoursWeeklyOpen,
       businessStatus: details.businessStatus,
+      googleMetadata: details.googleMetadata,
       lastSync: new Date(),
       googleMapsUrl: details.googleMapsUri,
       coordinates: `SRID=4326;POINT(${details.location.longitude} ${details.location.latitude})`,

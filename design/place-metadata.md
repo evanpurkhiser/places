@@ -16,6 +16,7 @@ while preserving the internal ID and personal annotations.
 | `coordinates`              | `geography(Point, 4326)`   | Geographic position                                           |
 | `time_zone`                | `text`, nullable           | IANA time zone                                                |
 | `business_status`          | `text`, nullable           | Provider operational/closure status                           |
+| `google_metadata`          | `jsonb`, nullable          | Complete response from the latest provider metadata fetch     |
 | `hours_weekly_open`        | `int4multirange`, nullable | Recurring local opening minutes                               |
 | `last_sync`                | `timestamptz`, nullable    | Last successful full metadata refresh                         |
 | `user_note`                | `text`, nullable           | User-authored place note                                      |
@@ -27,11 +28,12 @@ coordinates in longitude/latitude order and indexes them with GiST.
 
 ## Fetching and freshness
 
-Imports and sync use `getMetadata` with the field mask:
-
-```text
-id,displayName,formattedAddress,googleMapsUri,location,timeZone,businessStatus,regularOpeningHours
-```
+Imports and sync use `getMetadata` with every Place Details field through the
+Enterprise SKU. `regularOpeningHours` already selects that price point, so fields
+from the IDs-only, Essentials, Pro, and Enterprise tiers do not increase the SKU.
+Enterprise + Atmosphere fields remain excluded. The unmodified JSON response is
+stored in `google_metadata`; typed columns retain the fields used by application
+behavior and queries.
 
 This path fetches REST JSON to preserve absent versus explicitly empty opening
 periods. Basic point resolution uses the Google Places SDK for details or Text
@@ -75,11 +77,11 @@ secondary schedules are future work. See [hours research](hours.md) and
 
 ## Future enrichment
 
-Candidates include provider place types, structured address components, website,
-phone number, price, ratings, and amenity flags. Provider categories remain
-separate from manual tags. Address-component mapping needs country-aware rules.
-Each extension needs a field mask, nullable-value semantics, fetch budget, and
-retention policy. Reviews and photos need a concrete product use before inclusion.
+The raw metadata supports future use of provider place types, structured address
+components, website, phone number, price, and ratings. Provider categories remain
+separate from manual tags. Promoting metadata into typed behavior still requires
+nullable-value semantics and a retention policy. Enterprise + Atmosphere fields
+need a concrete product use before increasing the fetch price.
 
 ## Provider policy decisions
 

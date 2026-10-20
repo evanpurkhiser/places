@@ -78,6 +78,13 @@
       "when": 1790035484479,
       "tag": "0010_archive_tags",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1792462092374,
+      "tag": "0011_stormy_deathstrike",
+      "breakpoints": true
     }
   ]
 }

@@ -2,6 +2,8 @@ import {eq, getTableColumns, sql} from 'drizzle-orm';
 import type {PgBoss} from 'pg-boss';
 import {z} from 'zod';
 
+import {isDeepStrictEqual} from 'node:util';
+
 import type {WorkerQueueConfig} from '../config.ts';
 import type {Database} from '../db/index.ts';
 import {places} from '../db/schema.ts';
@@ -52,11 +54,11 @@ export async function syncPlace(db: Database, google: GooglePlaces, placeId: str
       timeZone: details.timeZone,
       hoursWeeklyOpen: details.hoursWeeklyOpen,
       businessStatus: details.businessStatus,
+      googleMetadata: details.googleMetadata,
     };
     const changed =
       Object.entries(values).some(
-        ([key, value]) =>
-          JSON.stringify(current[key as keyof typeof values]) !== JSON.stringify(value),
+        ([key, value]) => !isDeepStrictEqual(current[key as keyof typeof values], value),
       ) ||
       current.latitude !== details.location.latitude ||
       current.longitude !== details.location.longitude;
