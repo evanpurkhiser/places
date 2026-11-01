@@ -3,6 +3,7 @@ import {ArrowLeft, ArrowUpRight, MapPin} from 'lucide-react';
 
 import {googleMapsUrl} from './google-maps.ts';
 import {PlaceIcon} from './PlaceIcon.tsx';
+import {PlaceMenu} from './PlaceMenu.tsx';
 import {PlaceSources} from './PlaceSources.tsx';
 import {PlaceTags} from './PlaceTags.tsx';
 import type {Place} from './rpc.ts';
@@ -23,7 +24,10 @@ export function PlaceDetails({
           <ArrowLeft size={16} />
           Places
         </Button>
-        <span className="eyebrow">SAVED PLACE</span>
+        <span className="detail-actions">
+          <span className="eyebrow">SAVED PLACE</span>
+          <PlaceMenu place={place} onRemoved={onClose} />
+        </span>
       </div>
       <div className="detail-heading">
         <span className="large-category">

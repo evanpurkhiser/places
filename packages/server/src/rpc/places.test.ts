@@ -577,6 +577,31 @@ describe.skipIf(!testUrl)('place import with PostgreSQL and pg-boss', () => {
     expect(await client.places.tag(input)).toMatchObject({note: null});
   });
 
+  it('deletes places and their associations', async () => {
+    const [source] = await db
+      .insert(sources)
+      .values({type: 'instagram', externalId: 'delete-test'})
+      .returning();
+    const tag = await client.tags.create({name: 'delete-test'});
+    const {
+      placeIds: [placeId],
+    } = await importPlace(db, google, 'ChIJtest', [{tagId: tag.id}], undefined, {
+      sourceId: source!.id,
+      description: 'Delete this recommendation',
+    });
+
+    expect(await client.places.delete({id: placeId!})).toEqual({id: placeId});
+    expect(await client.places.list()).toEqual([]);
+    expect(await db.select().from(placeTags)).toEqual([]);
+    expect(await db.select().from(placeSources)).toEqual([]);
+    expect(await db.select().from(sources)).toHaveLength(1);
+    expect(await client.tags.get({id: tag.id})).toMatchObject({id: tag.id});
+
+    await expect(client.places.delete({id: placeId!})).rejects.toMatchObject({
+      code: 'NOT_FOUND',
+    });
+  });
+
   it('rejects missing places and tags for assignment commands', async () => {
     const {
       placeIds: [placeId],

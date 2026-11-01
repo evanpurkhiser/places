@@ -5,6 +5,7 @@ import {useVirtualizer} from '@tanstack/react-virtual';
 import {LocateFixed} from 'lucide-react';
 
 import {PlaceIcon} from './PlaceIcon.tsx';
+import {PlaceMenu} from './PlaceMenu.tsx';
 import {PlaceSources} from './PlaceSources.tsx';
 import {PlaceTags} from './PlaceTags.tsx';
 import type {Place} from './rpc.ts';
@@ -77,6 +78,7 @@ export function PlaceList({
               >
                 <LocateFixed size={14} />
               </Button>
+              <PlaceMenu place={place} />
             </div>
           );
         })}

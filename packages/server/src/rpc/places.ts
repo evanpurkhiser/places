@@ -20,6 +20,18 @@ import {rethrowImportError} from './import-errors.ts';
 const api = implement(contract.places).$context<Context>();
 
 export const placeRouter = api.router({
+  delete: api.delete.handler(async ({input, context: {db}, errors}) => {
+    const [deleted] = await db
+      .delete(places)
+      .where(eq(places.id, input.id))
+      .returning({id: places.id});
+
+    if (!deleted) {
+      throw errors.NOT_FOUND();
+    }
+
+    return deleted;
+  }),
   searchGoogle: api.searchGoogle.handler(async ({input, context: {google}}) => {
     const results = await google.search(input.query, 10).catch(rethrowGoogleError);
 

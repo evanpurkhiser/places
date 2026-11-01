@@ -118,6 +118,10 @@ const placeListInput = queryInput
   );
 
 export const placeContract = {
+  delete: oc
+    .errors({NOT_FOUND: {message: 'Place not found.'}})
+    .input(place.pick({id: true}))
+    .output(place.pick({id: true})),
   searchGoogle: oc
     .errors({SERVICE_UNAVAILABLE: {message: 'Google Places search is unavailable.'}})
     .input(z.object({query: googleSearchQuery}))
