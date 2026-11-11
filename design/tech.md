@@ -20,160 +20,190 @@
 
 ## Spatial storage
 
-Use PostGIS `geography(Point, 4326)` for place coordinates with a GiST spatial
-index. See [Place metadata](place-metadata.md) for the stored fields and API coordinate projection.
+Use PostGIS `geography(Point, 4326)`
+for place coordinates with a GiST spatial index.
+See [Place metadata](place-metadata.md) for the stored fields
+and API coordinate projection.
 
 ## Dependency baseline
 
-Use the stable Drizzle ORM 0.45, Drizzle Kit 0.31, and oRPC 1.15 release
-lines with Zod 4. Keep oRPC packages on matching versions. The pnpm lockfile
-records resolved dependency versions.
+Use the stable Drizzle ORM 0.45, Drizzle Kit 0.31,
+and oRPC 1.15 release lines with Zod 4.
+Keep oRPC packages on matching versions.
+The pnpm lockfile records resolved dependency versions.
 
 ## Workspace
 
 - `packages/cli`: command-line client of the server API.
-- `packages/server`: API implementation, business logic, database access, and place-provider integration.
+- `packages/server`: API implementation, business logic, database access,
+  and place-provider integration.
 - `packages/web`: map interface and API client.
 - `packages/common`: shared API contracts, Zod schemas, and inferred types.
 - `design`: product and technical documents and implementation status.
 
 ## Filter engine
 
-The search grammar produces a source-located syntax tree. A shared filter engine
-prepares and resolves registered filters and functions, then composes predicates
-through host-provided boolean operations. Server registrations own Drizzle SQL
-and schema imports. See [Filter engine](filter-engine.md) for the architecture and
-implemented retrieval capabilities.
+The search grammar produces a source-located syntax tree.
+A shared filter engine prepares and resolves registered filters and functions,
+then composes predicates through host-provided boolean operations.
+Server registrations own Drizzle SQL and schema imports.
+See [Filter engine](filter-engine.md) for the architecture
+and implemented retrieval capabilities.
 
 ## Schema and API direction
 
-Use shared Zod schemas to describe API inputs and outputs. Infer TypeScript types
-from those schemas. The server validates requests at the API boundary; the CLI
-and web can reuse schemas for local input validation.
+Use shared Zod schemas to describe API inputs and outputs.
+Infer TypeScript types from those schemas.
+The server validates requests at the API boundary;
+the CLI and web can reuse schemas for local input validation.
 
-Use oRPC's contract-first approach to describe operations in `common` and implement
-them in `server`. The CLI and web consume typed clients based on that contract.
+Use oRPC's contract-first approach to describe operations in `common`
+and implement them in `server`.
+The CLI and web consume typed clients based on that contract.
 
 Export the assembled contract and client type from `@places/common/contract`.
-Keep domain schemas and contracts in modules such as `@places/common/contract/tag`;
+Keep domain schemas and contracts in modules such
+as `@places/common/contract/tag`;
 consumers reuse individual fields through the schema's `shape`.
 
-Drizzle table definitions and database migrations belong to the server. API schemas
-represent client-facing operations and responses, including related tags and user
-context. Drizzle's Zod helpers can derive validators where a table's shape matches
-what an operation needs.
+Drizzle table definitions and database migrations belong to the server.
+API schemas represent client-facing operations and responses,
+including related tags and user context.
+Drizzle's Zod helpers can derive validators
+where a table's shape matches what an operation needs.
 
 ## CLI argument parsing
 
-Use Optique in `packages/cli` to define arguments, options, and subcommands with
-inferred TypeScript types. Compose parsers to describe each command's accepted
-inputs and generate help text.
+Use Optique in `packages/cli` to define arguments, options,
+and subcommands with inferred TypeScript types.
+Compose parsers to describe each command's accepted inputs
+and generate help text.
 
 Use Optique's Zod integration where argument values can reuse shared validators.
 Command handlers call the server through the typed oRPC client.
 
 ## Testing and build tooling
 
-Use Vitest for unit and integration tests across the server, CLI, web, and shared
-packages. Vitest can run with its own configuration for packages that use other
-build tools.
+Use Vitest for unit and integration tests across the server, CLI, web,
+and shared packages.
+Vitest can run with its own configuration for packages
+that use other build tools.
 
 Vite is the development server and static build tool for the React web package.
-The map uses MapLibre through `react-map-gl/maplibre`, and TanStack Query caches
-API results. The API container and static web build have separate hosting needs.
+The map uses MapLibre through `react-map-gl/maplibre`,
+and TanStack Query caches API results.
+The API container and static web build have separate hosting needs.
 The initial server and CLI run TypeScript source directly on Node 24 using its
-type stripping support. Shared contracts export TypeScript source within the
-workspace. Run `tsc --noEmit` separately for type checking. Distribution build
-tooling for standalone CLI binaries remains open.
+type stripping support.
+Shared contracts export TypeScript source within the workspace.
+Run `tsc --noEmit` separately for type checking.
+Distribution build tooling for standalone CLI binaries remains open.
 
 ## Configuration
 
-Server settings live in a YAML file validated by a Zod schema at startup. The
-schema defines defaults and rejects unknown keys. Commit an example configuration
-and keep the actual configuration outside version control. Server and migration
-commands accept `--config` to select the file. The CLI reads its own YAML config
-from the XDG config directory; `--config` selects another file and `--server`
-overrides its API URL.
+Server settings live in a YAML file validated by a Zod schema at startup.
+The schema defines defaults and rejects unknown keys.
+Commit an example configuration
+and keep the actual configuration outside version control.
+Server and migration commands accept `--config` to select the file.
+The CLI reads its own YAML config from the XDG config directory;
+`--config` selects another file and `--server` overrides its API URL.
 
-Config fields carry Zod descriptions. Pass the validated config and database to
-`createApp` and expose them through typed Hono and oRPC contexts.
+Config fields carry Zod descriptions.
+Pass the validated config and database to `createApp`
+and expose them through typed Hono and oRPC contexts.
 
 ## Database connection
 
-Use node-postgres (`pg`) with Drizzle's node-postgres adapter. Create a connection
-pool at startup and provide the database through oRPC context. Tag handlers issue
-Drizzle queries directly.
+Use node-postgres (`pg`) with Drizzle's node-postgres adapter.
+Create a connection pool at startup
+and provide the database through oRPC context.
+Tag handlers issue Drizzle queries directly.
 
 ## Migrations
 
-Use Drizzle Kit for database migrations. Keep migration files alongside the
-server's Drizzle table definitions in `packages/server`.
+Use Drizzle Kit for database migrations.
+Keep migration files alongside the server's Drizzle table definitions in
+`packages/server`.
 
-Apply reviewed migrations with `pnpm --filter @places/server db:migrate`, using
-the server's YAML configuration. The container's default server entrypoint runs
-migrations before starting HTTP; update the server before its worker. See the
-[root README](../README.md#container) for container operation.
+Apply reviewed migrations with `pnpm --filter @places/server db:migrate`,
+using the server's YAML configuration.
+The container's default server entrypoint runs migrations before starting HTTP;
+update the server before its worker.
+See the [root README](../README.md#container) for container operation.
 
 ## Access
 
-The initial service is accessible through Tailscale, with the tailnet providing
-the access boundary. Application authentication is deferred for this phase.
+The initial service is accessible through Tailscale,
+with the tailnet providing the access boundary.
+Application authentication is deferred for this phase.
 
-A public interface may be added later. Its exposed operations and authentication
-requirements will be decided as part of that work.
+A public interface may be added later.
+Its exposed operations and authentication requirements will be decided
+as part of that work.
 
 ## HTTP server
 
-Use Hono in `packages/server` to host oRPC through its Fetch API adapter. Hono supplies
-request context, the `/health` endpoint, and routing to the RPC handler. oRPC owns place and tag
-operations, contract validation with Zod, typed errors, and API client integration.
+Use Hono in `packages/server` to host oRPC through its Fetch API adapter.
+Hono supplies request context, the `/health` endpoint,
+and routing to the RPC handler. oRPC owns place and tag operations,
+contract validation with Zod, typed errors, and API client integration.
 
-Hono provides a small HTTP layer around the shared API contract and a familiar
-middleware model for server-wide concerns.
+Hono provides a small HTTP layer around the shared API contract
+and a familiar middleware model for server-wide concerns.
 
-Serve typed RPC at `/rpc` and Streamable HTTP MCP at `/mcp`. MCP tool metadata
-lives in a centralized catalog alongside the shared contracts, and both
-transports invoke the same oRPC router implementations. Tag operations are
-create, list, get, update, and delete; the CLI exposes them under `places tags`.
-Place imports use `places.import`, `places.getImportRun`, and
-`places.listImportRuns`, and saved places
-are listed through `places.list`. The import request resolves a Maps input to a
-Google Place ID before enqueueing it with validated tag assignments and notes. The worker retrieves required
-metadata and inserts the complete canonical place. pg-boss provides temporary
-import status. `places.sync` and `places.syncStatus` handle explicit metadata
-refreshes. `places.tag`/`places.untag` manage associations, `places.searchGoogle`
-returns provider candidates, and `query.describe` exposes registered query
-capabilities. Contracts live in `packages/common/src/contract`.
+Serve typed RPC at `/rpc` and Streamable HTTP MCP at `/mcp`.
+MCP tool metadata lives in a centralized catalog alongside the shared contracts,
+and both transports invoke the same oRPC router implementations.
+Tag operations are create, list, get, update, and delete;
+the CLI exposes them under `places tags`.
+Place imports use `places.import`, `places.getImportRun`,
+and `places.listImportRuns`, and saved places are listed through `places.list`.
+The import request resolves a Maps input to a Google Place ID
+before enqueueing it with validated tag assignments and notes.
+The worker retrieves required metadata
+and inserts the complete canonical place. pg-boss provides temporary import
+status.
+`places.sync` and `places.syncStatus` handle explicit metadata refreshes.
+`places.tag`/`places.untag` manage associations,
+`places.searchGoogle` returns provider candidates,
+and `query.describe` exposes registered query capabilities.
+Contracts live in `packages/common/src/contract`.
 
 ## Background jobs
 
-pg-boss runs the `gmaps-import` and `gmaps-sync` queues. Instagram extraction and
-scheduled refreshes are future job types.
-Run workers as a separate process from the HTTP server, initially sharing business
-logic and database code within `packages/server`.
+pg-boss runs the `gmaps-import` and `gmaps-sync` queues.
+Instagram extraction and scheduled refreshes are future job types.
+Run workers as a separate process from the HTTP server,
+initially sharing business logic and database code within `packages/server`.
 
-Create a pg-boss instance at process startup and stop it during graceful shutdown.
-Expose a typed jobs interface through oRPC context. Hono context can also carry
-that interface when HTTP middleware or routes need it.
+Create a pg-boss instance at process startup
+and stop it during graceful shutdown.
+Expose a typed jobs interface through oRPC context.
+Hono context can also carry that interface when HTTP middleware
+or routes need it.
 
-Job modules define queue names and Zod payload schemas. Producers validate inputs
-and workers parse queued payloads. A shared worker helper runs each claimed batch
-concurrently and records individual job results. YAML settings control batch size
-and polling-worker concurrency per queue.
+Job modules define queue names and Zod payload schemas.
+Producers validate inputs and workers parse queued payloads.
+A shared worker helper runs each claimed batch concurrently
+and records individual job results.
+YAML settings control batch size and polling-worker concurrency per queue.
 
-Future source capture should enqueue extraction in the same transaction as the
-source write, using pg-boss's `fromDrizzle(tx, sql)` adapter. pg-boss manages its own queue
-tables and migrations; Drizzle Kit manages the application schema.
+Future source capture should enqueue extraction in the same transaction
+as the source write, using pg-boss's `fromDrizzle(tx, sql)` adapter. pg-boss
+manages its own queue tables and migrations; Drizzle Kit manages the application
+schema.
 
-Make handlers safe to retry. Reprocessing a source should reuse canonical places
-and source associations. Database transaction atomicity covers local writes;
+Make handlers safe to retry.
+Reprocessing a source should reuse canonical places and source associations.
+Database transaction atomicity covers local writes;
 external API calls and other side effects need their own retry handling.
 
 ## Validation interoperability
 
-[Standard Schema](https://standardschema.dev/schema) defines a common interface for
-TypeScript validation libraries. Zod implements it, and oRPC accepts Zod schemas
-through that interface.
+[Standard Schema](https://standardschema.dev/schema) defines a common interface
+for TypeScript validation libraries.
+Zod implements it, and oRPC accepts Zod schemas through that interface.
 
 ## Open decisions
 
@@ -185,13 +215,15 @@ through that interface.
 ## Google Places client
 
 Basic details and Text Search use Google's `@googlemaps/places` SDK with HTTP
-transport, API-key authentication, and explicit field masks. Import/sync metadata
-uses REST JSON to preserve absent versus empty opening periods. Both paths have
-ten-second timeouts; pg-boss controls background-job retries.
-Maps short links are expanded separately with validated HTTP redirects. Embedded
-feature IDs are converted locally into Place IDs before enqueueing. The conversion
-uses a reverse-engineered protobuf layout; the worker validates IDs through Place
-Details. Inputs must contain an explicit place identifier.
+transport, API-key authentication, and explicit field masks.
+Import/sync metadata uses REST JSON to preserve absent versus empty opening
+periods.
+Both paths have ten-second timeouts; pg-boss controls background-job retries.
+Maps short links are expanded separately with validated HTTP redirects.
+Embedded feature IDs are converted locally into Place IDs before enqueueing.
+The conversion uses a reverse-engineered protobuf layout;
+the worker validates IDs through Place Details.
+Inputs must contain an explicit place identifier.
 
 ## References
 
