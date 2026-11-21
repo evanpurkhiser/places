@@ -290,9 +290,9 @@ and prints `jobId`, `type`, `state`, `placeIds`, and `error` as JSON.
 Failed or cancelled jobs exit nonzero.
 Waiting continues through retries;
 Ctrl-C stops waiting while the queued job continues running.
-The Google worker fetches name, formatted address, Maps URL, coordinates,
-time zone, business status, and weekly hours,
-then inserts the place with `lastSync` set.
+The Google worker fetches all Place Details fields through the Enterprise tier,
+stores the JSON response in `googleMetadata`,
+and inserts the place with typed fields and `lastSync` set.
 Existing places are reused.
 Failed attempts leave no partial place;
 pg-boss retries three times with backoff.
@@ -400,21 +400,22 @@ and retries independently of other batch members.
 Restart the worker after changing configuration.
 Additional worker processes each apply these limits independently.
 
-Each job refreshes Google's place ID, name, address, Maps URL, coordinates,
-IANA time zone, business status, and regular weekly hours.
+Each job refreshes `googleMetadata` and its typed projections for place ID,
+name, address, Maps URL, coordinates, time zone, business status,
+and weekly hours.
 Notes, tags, and source associations are preserved.
 `lastSync` records successful refreshes, including unchanged results;
 `updatedAt` advances when saved metadata changes.
 Failed requests leave saved data intact.
 A successful response with unavailable hours clears old hours.
-Hours fields require Google's Place Details Enterprise tier.
+The field mask uses Google's Place Details Enterprise tier.
 A refreshed Google ID replaces the saved provider ID
 while preserving the internal UUID.
 If another saved place owns that ID,
 the refresh fails atomically and preserves both places.
 
-`list` includes nullable `timeZone`, `businessStatus`, `lastSync`,
-and `hoursWeeklyOpen`.
+`list` includes nullable `timeZone`, `businessStatus`, `googleMetadata`,
+`lastSync`, and `hoursWeeklyOpen`.
 Hours are pairs of inclusive-start/exclusive-end minute offsets from Sunday
 midnight, between 0 and 10,080.
 For example, Monday 09:00–12:00 is `[[1980,2160]]`; 24/7 is `[[0,10080]]`.

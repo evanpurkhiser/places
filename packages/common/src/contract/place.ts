@@ -34,6 +34,9 @@ export const placeSource = z.object({
 });
 export type PlaceSource = z.infer<typeof placeSource>;
 
+export const googleMetadata = z.record(z.string(), z.json());
+export type GoogleMetadata = z.infer<typeof googleMetadata>;
+
 export const place = z.object({
   id: placeId,
   googlePlaceId: z.string().describe('Google Places identifier.'),
@@ -67,6 +70,9 @@ export const place = z.object({
     .string()
     .nullable()
     .describe('Google business status, or null when unavailable.'),
+  googleMetadata: googleMetadata
+    .nullable()
+    .describe('Google Place Details response, or null when unavailable.'),
   lastSync: z.date().nullable().describe('Time Google metadata was last refreshed.'),
   createdAt: z.date().describe('Time the place was saved.'),
   updatedAt: z.date().describe('Time the place was last updated.'),
