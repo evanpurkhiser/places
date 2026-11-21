@@ -290,7 +290,7 @@ and prints `jobId`, `type`, `state`, `placeIds`, and `error` as JSON.
 Failed or cancelled jobs exit nonzero.
 Waiting continues through retries;
 Ctrl-C stops waiting while the queued job continues running.
-The Google worker fetches all Place Details fields through the Enterprise tier,
+The Google worker fetches Place Details fields through Enterprise + Atmosphere,
 stores the JSON response in `googleMetadata`,
 and inserts the place with typed fields and `lastSync` set.
 Existing places are reused.
@@ -408,7 +408,7 @@ Notes, tags, and source associations are preserved.
 `updatedAt` advances when saved metadata changes.
 Failed requests leave saved data intact.
 A successful response with unavailable hours clears old hours.
-The field mask uses Google's Place Details Enterprise tier.
+The field mask uses Google's Place Details Enterprise + Atmosphere SKU.
 A refreshed Google ID replaces the saved provider ID
 while preserving the internal UUID.
 If another saved place owns that ID,
