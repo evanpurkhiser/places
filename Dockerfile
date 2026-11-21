@@ -17,6 +17,7 @@ RUN curl -fsSL https://mise.run -o /tmp/install-mise.sh \
 WORKDIR /app
 COPY mise.toml ./
 RUN mise trust mise.toml && mise install node pnpm
+COPY patches/ ./patches/
 
 FROM base AS web-build
 

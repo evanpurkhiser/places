@@ -15,7 +15,7 @@
     "@optique/core": "^1.2.7",
     "@optique/run": "^1.2.7",
     "@optique/zod": "^1.2.7",
-    "@orpc/client": "1.15.1",
+    "@orpc/client": "2.0.0-beta.43",
     "@places/common": "workspace:*",
     "xdg-basedir": "^5.1.0",
     "yaml": "^2.9.1",

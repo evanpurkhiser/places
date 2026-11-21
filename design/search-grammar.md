@@ -2,14 +2,17 @@
 
 ## Purpose and status
 
-The shared PEG parser and typed syntax tree live in `packages/common/src/search`.
-The filter engine executes registered predicates through `places.list` and
-`places.sync` in the API and their CLI commands. `places docs filter` reports the capabilities
-registered by the running server.
+The shared PEG parser and typed syntax tree live in
+`packages/common/src/search`.
+The filter engine executes registered predicates through `places.list`
+and `places.sync` in the API and their CLI commands.
+`places docs filter` reports the capabilities registered by the running server.
 
-Queries select places. Inspection and mutation use the returned place IDs.
+Queries select places.
+Inspection and mutation use the returned place IDs.
 Listings return all matches and support name, saved-date, recommendation-date,
-and distance ordering. Pagination and output projection are future API work.
+and distance ordering.
+Pagination and output projection are future API work.
 
 ```sh
 places list --query 'tag[type.cafe] tag[attr.laptop-friendly]'
@@ -35,23 +38,27 @@ places list --query 'tag[status.want-to-try] open[@now]'
 | Travel-time budgets, detours, and open-on-arrival                   | Exploratory                                                          |
 | Saved-date comparisons                                              | Later extension                                                      |
 
-Implemented examples below are executable registrations. Sections labeled
-planned or exploratory specify intended behavior for future registrations.
+Implemented examples below are executable registrations.
+Sections labeled planned or exploratory specify intended behavior
+for future registrations.
 
-Use a PEG grammar generated with Peggy and a typed expression tree shared through
-`packages/common`. Sentry's `searchSyntax` grammar provides
-precedent for filter syntax, typed nodes, and source locations. Places needs an
-execution grammar with explicit boolean precedence and actionable errors.
+Use a PEG grammar generated with Peggy
+and a typed expression tree shared through `packages/common`.
+Sentry's `searchSyntax` grammar provides precedent for filter syntax,
+typed nodes, and source locations.
+Places needs an execution grammar with explicit boolean precedence
+and actionable errors.
 
 ## Expressions and operators
 
-- Adjacent expressions imply AND. Explicit `AND` is equivalent.
+- Adjacent expressions imply AND.
+  Explicit `AND` is equivalent.
 - `OR` matches either expression.
 - Prefix `!` negates an expression, including a parenthesized group.
 - Parentheses group expressions and may nest.
 - Precedence is negation, then AND, then OR.
-- Boolean keywords are case-insensitive and require token boundaries between
-  expressions.
+- Boolean keywords are case-insensitive
+  and require token boundaries between expressions.
 - An empty query selects all places.
 
 ```text
@@ -61,35 +68,43 @@ tag[type.cafe] AND tag[attr.laptop-friendly]
 !(tag[type.bar] OR tag[type.restaurant])
 ```
 
-Comparison operators appear inside the brackets before the value: `name[="La Cabra"]` or, for a
-future ordered field, `created[>=2026-09-01]`. Recognize `=`, `<`, `<=`, `>`,
-and `>=`; validate supported operators against the field's type. Ordering applies
-to dates and numbers once those fields are defined. Strings support default
-matching and exact equality. Unsupported combinations are errors.
+Comparison operators appear inside the brackets before the value:
+`name[="La Cabra"]` or, for a future ordered field, `created[>=2026-09-01]`.
+Recognize `=`, `<`, `<=`, `>`, and `>=`;
+validate supported operators against the field's type.
+Ordering applies to dates and numbers once those fields are defined.
+Strings support default matching and exact equality.
+Unsupported combinations are errors.
 
-`!field[=value]` excludes an exact match. For tags, `!tag[=type.cafe]`
-selects places without that tag, regardless of other assigned tags.
+`!field[=value]` excludes an exact match.
+For tags, `!tag[=type.cafe]` selects places without that tag,
+regardless of other assigned tags.
 
 Source predicates accept a positional provider type or named arguments:
-`source[instagram, text:coffee]` (equivalent to `source[type:instagram, text:coffee]`)
-requires one attached source matching both conditions. `source[text:coffee]`
-searches discovery context. `has[source]` requires any source; `!has[source]`
-selects places without sources. See [source filtering](sources.md#source-filtering)
-for matching rules and supported fields.
+`source[instagram, text:coffee]`
+(equivalent to `source[type:instagram, text:coffee]`)
+requires one attached source matching both conditions.
+`source[text:coffee]` searches discovery context.
+`has[source]` requires any source;
+`!has[source]` selects places without sources.
+See [source filtering](sources.md#source-filtering) for matching rules
+and supported fields.
 
 ## Strings and wildcards
 
 Double quotes delimit strings containing whitespace or grammar punctuation.
-Unquoted values may contain colons, hyphens, dots, and slashes. Whitespace,
-parentheses, square brackets, commas, comparison symbols, quotes, and `!`
-delimit unquoted values.
-Within strings, `\"` represents a quote, `\\` a backslash, and `\*` a literal
-asterisk. Unknown escape sequences are errors.
+Unquoted values may contain colons, hyphens, dots, and slashes.
+Whitespace, parentheses, square brackets, commas, comparison symbols, quotes,
+and `!` delimit unquoted values.
+Within strings, `\"` represents a quote, `\\` a backslash,
+and `\*` a literal asterisk.
+Unknown escape sequences are errors.
 
-Default string matching supports `*` for zero or more characters. Quoting groups
-a string but preserves wildcard behavior. Use `=` for literal equality, including
-literal asterisks. Wildcards have no regular-expression syntax; SQL wildcard
-characters such as `%` and `_` remain literal characters.
+Default string matching supports `*` for zero or more characters.
+Quoting groups a string but preserves wildcard behavior.
+Use `=` for literal equality, including literal asterisks.
+Wildcards have no regular-expression syntax;
+SQL wildcard characters such as `%` and `_` remain literal characters.
 
 ```text
 tag[favorite]
@@ -102,28 +117,35 @@ name["*coffee*"]
 name[="La Cabra"]
 ```
 
-Tag matches cover the entire normalized tag name. Thus `tag[cafe]` matches the
-exact tag `cafe`, while `tag[*cafe*]` matches names containing `cafe`. Normalize tag
-values using the same trimming and lowercasing rules as tag creation.
+Tag matches cover the entire normalized tag name.
+Thus `tag[cafe]` matches the exact tag `cafe`,
+while `tag[*cafe*]` matches names containing `cafe`.
+Normalize tag values using the same trimming and lowercasing rules
+as tag creation.
 
-Default `name[...]`, `address[...]`, and `notes[...]` matching use
-case-insensitive substring matching; explicit `=` requires whole-field equality,
-also case-insensitive. For example, `name[coffee]` matches a name containing coffee.
+Default `name[...]`, `address[...]`,
+and `notes[...]` matching use case-insensitive substring matching;
+explicit `=` requires whole-field equality, also case-insensitive.
+For example, `name[coffee]` matches a name containing coffee.
 Accent folding and language-specific search behavior remain open decisions.
 
 ## Filter keys and tags
 
-Each predicate uses `field[condition]`. The field selects what to filter; the
-condition is a string, wildcard pattern, boolean, comparison, or function call.
-Use a fixed registry of filter keys. A bracketed predicate contains a primary
-condition and any supported named constraints. Constraints apply to the same
-related record. Boolean operators and groups combine complete predicates outside
-the brackets.
+Each predicate uses `field[condition]`.
+The field selects what to filter; the condition is a string, wildcard pattern,
+boolean, comparison, or function call.
+Use a fixed registry of filter keys.
+A bracketed predicate contains a primary condition
+and any supported named constraints.
+Constraints apply to the same related record.
+Boolean operators and groups combine complete predicates outside the brackets.
 
-Tag names are arbitrary labels: `tag[favorite]`, `tag["date night"]`, and
-`tag[type.cafe]` all match tag names. Qualified names use a dot between
-the namespace and local name, as in `type.cafe`. Quote values containing
-spaces or square brackets, such as `tag["gmaps-list.[NYC] Coffee"]`.
+Tag names are arbitrary labels: `tag[favorite]`, `tag["date night"]`,
+and `tag[type.cafe]` all match tag names.
+Qualified names use a dot between the namespace and local name,
+as in `type.cafe`.
+Quote values containing spaces or square brackets,
+such as `tag["gmaps-list.[NYC] Coffee"]`.
 
 | Key        | Meaning                               | Example                                   |
 | ---------- | ------------------------------------- | ----------------------------------------- |
@@ -136,12 +158,14 @@ spaces or square brackets, such as `tag["gmaps-list.[NYC] Coffee"]`.
 | `location` | Evaluate a geographic condition       | `location[radius("Manhattan, NYC", 1mi)]` |
 | `open`     | Evaluate saved opening hours          | `open[@now, for:2h]`                      |
 
-`has[tag]` means at least one active tag is assigned. `!has[tag]` includes places
-with no tags or only archived tags. Explicit `tag[...]` queries still match
-archived assignments. Visit status stays in user-managed tags.
+`has[tag]` means at least one active tag is assigned.
+`!has[tag]` includes places with no tags or only archived tags.
+Explicit `tag[...]` queries still match archived assignments.
+Visit status stays in user-managed tags.
 
-`has[notes]` means a nonempty general place note exists. `!has[notes]` selects
-places with an absent or empty general note, regardless of tag-assignment notes.
+`has[notes]` means a nonempty general place note exists.
+`!has[notes]` selects places with an absent or empty general note,
+regardless of tag-assignment notes.
 Additional presence checks must be registered explicitly.
 
 Use `name[...]`, `address[...]`, and `notes[...]` to search place fields.
@@ -152,13 +176,16 @@ name[espresso] !has[notes]
 !has[tag]
 ```
 
-Use `tag[...]` for tag membership. Namespaces such as `type.`, `status.`, and
-`trip.` remain part of the tag name. For example, `tag[location.nyc]` matches a tag
-independently of the `location[...]` geographic filter.
+Use `tag[...]` for tag membership.
+Namespaces such as `type.`, `status.`, and `trip.` remain part of the tag name.
+For example, `tag[location.nyc]` matches a tag independently of the
+`location[...]` geographic filter.
 
-Exact tag references must resolve to an existing tag or produce an unknown-tag
-error. Wildcard patterns may match zero tag definitions. A future query
-explanation can expose that expansion, especially when the expression is negated.
+Exact tag references must resolve to an existing tag
+or produce an unknown-tag error.
+Wildcard patterns may match zero tag definitions.
+A future query explanation can expose that expansion,
+especially when the expression is negated.
 
 ### Tag-assignment notes
 
@@ -168,49 +195,57 @@ tag[attr.*, notes:"upstairs"]
 !tag[attr.laptop-friendly, notes:"*outlet*"]
 ```
 
-The primary condition matches the tag name. The optional `notes:` constraint
-matches the note on that same assignment using the text matching and wildcard
-rules for `notes[...]`. A matching name on one assignment and a matching note on
-another cannot satisfy the predicate. The tag definition's description and the
-place's general note are separate fields.
+The primary condition matches the tag name.
+The optional `notes:` constraint matches the note on
+that same assignment using the text matching and wildcard rules
+for `notes[...]`.
+A matching name on one assignment
+and a matching note on another cannot satisfy the predicate.
+The tag definition's description
+and the place's general note are separate fields.
 
-Comma-separated constraints are conjunctive. A missing or empty assignment note
-does not satisfy a positive note match. Negating the whole predicate means no
-assignment matches both the name and note; places without that tag also qualify.
+Comma-separated constraints are conjunctive.
+A missing or empty assignment note does not satisfy a positive note match.
+Negating the whole predicate means no assignment matches both the name and note;
+places without that tag also qualify.
 To require the tag while excluding a particular note, combine predicates:
 
 ```text
 tag[attr.laptop-friendly] AND !tag[attr.laptop-friendly, notes:"*outlet*"]
 ```
 
-Tag names and note constraints support default matching or `=` for literal
-equality. Express exclusion with `!` around the whole predicate. Constraint
-names must be unique and registered.
+Tag names and note constraints support default matching or `=`
+for literal equality.
+Express exclusion with `!` around the whole predicate.
+Constraint names must be unique and registered.
 
 ## Geographic functions
 
-`location[...]` accepts functions that describe a geographic selection. Location
-resolution is a server operation after parsing and validation. A location string
-is an argument to the resolver, rather than embedded query syntax.
+`location[...]` accepts functions that describe a geographic selection.
+Location resolution is a server operation after parsing and validation.
+A location string is an argument to the resolver,
+rather than embedded query syntax.
 
 ### Area boundaries — planned
 
-The `within` function requires a boundary catalog, area-name resolution, and
-caller disambiguation.
+The `within` function requires a boundary catalog, area-name resolution,
+and caller disambiguation.
 
 ```text
 location[within("Manhattan, NYC")]
 location[within("East Village, NYC")]
 ```
 
-Resolve the name to a geographic area represented by a GeoJSON Polygon or
-MultiPolygon. Include places inside or on the boundary, respecting holes and all
-polygon components. A bounding box is useful for candidate retrieval, but the
-area's actual geometry determines membership.
+Resolve the name to a geographic area represented by a GeoJSON Polygon
+or MultiPolygon.
+Include places inside or on the boundary,
+respecting holes and all polygon components.
+A bounding box is useful for candidate retrieval,
+but the area's actual geometry determines membership.
 
 The resolver must distinguish an area boundary from a point or display viewport.
-If a boundary is unavailable, return an explicit resolution error. Ambiguous names
-return candidates for the caller to disambiguate.
+If a boundary is unavailable, return an explicit resolution error.
+Ambiguous names return candidates for the caller to disambiguate.
 
 ### Radius around a point
 
@@ -219,15 +254,20 @@ location[radius("East Village, NYC", 5mi)]
 location[radius(point(-73.985, 40.726), 800m)]
 ```
 
-Resolve the first argument to a point, then include places at most the supplied
-straight-line geographic distance from it. Named strings resolve to the first Google Places Text Search result; callers
-can specify a Maps link, `gmaps:<place_id>`, or coordinates for an explicit point.
-Exposing the selected point in a query explanation is planned. A named point and an area
-boundary are distinct resolver outputs.
+Resolve the first argument to a point,
+then include places at most the supplied straight-line geographic distance from
+it.
+Named strings resolve to the first Google Places Text Search result;
+callers can specify a Maps link, `gmaps:<place_id>`,
+or coordinates for an explicit point.
+Exposing the selected point in a query explanation is planned.
+A named point and an area boundary are distinct resolver outputs.
 
-`point(longitude, latitude)` uses explicit numeric coordinates. Validate coordinate
-ranges. Distances require a positive number and a unit: `m`, `km`, `ft`, or `mi`.
-Normalize distances internally to meters. Radius is independent of travel time.
+`point(longitude, latitude)` uses explicit numeric coordinates.
+Validate coordinate ranges.
+Distances require a positive number and a unit: `m`, `km`, `ft`, or `mi`.
+Normalize distances internally to meters.
+Radius is independent of travel time.
 
 ### Rectangle / map bounds
 
@@ -235,11 +275,14 @@ Normalize distances internally to meters. Radius is independent of travel time.
 location[rect(point(-74.03, 40.76), point(-73.95, 40.70))]
 ```
 
-`rect(topLeft, bottomRight)` includes all edges and compares longitude/latitude
-in degrees. The first point supplies west/north and the second east/south.
-North must be at least south. West greater than east crosses the antimeridian;
-`-180` through `180` covers the full longitude span. Zero-width and zero-height
-rectangles are valid. The web map composes this filter with the user's query.
+`rect(topLeft, bottomRight)` includes all edges
+and compares longitude/latitude in degrees.
+The first point supplies west/north and the second east/south.
+North must be at least south.
+West greater than east crosses the antimeridian;
+`-180` through `180` covers the full longitude span.
+Zero-width and zero-height rectangles are valid.
+The web map composes this filter with the user's query.
 
 ### Route corridor — planned
 
@@ -248,18 +291,22 @@ location[route("Union Square, NYC", "Tompkins Square Park, NYC", buffer:800ft, m
 ```
 
 Resolve endpoints to points and request a route for the specified travel mode.
-The route supplies a GeoJSON LineString or MultiLineString. Match places within
-`buffer` distance of any part of that route, including its endpoints. `800ft` is
-the maximum distance on either side, giving a corridor approximately 1,600 feet
-wide along straight sections.
+The route supplies a GeoJSON LineString or MultiLineString.
+Match places within `buffer` distance of any part of that route,
+including its endpoints.
+`800ft` is the maximum distance on either side,
+giving a corridor approximately 1,600 feet wide along straight sections.
 
-This measures geographic proximity to the route. Reachability and additional
-walking distance for a detour require separate routing calculations.
+This measures geographic proximity to the route.
+Reachability and additional walking distance
+for a detour require separate routing calculations.
 
-Require `buffer` and `mode` explicitly in the initial syntax. Begin with `walk`;
-additional modes depend on the routing integration. Route alternatives, waypoints,
-and reuse of an existing route are extension points. Expose the selected route
-and provider identity so the caller can inspect what was used.
+Require `buffer` and `mode` explicitly in the initial syntax.
+Begin with `walk`; additional modes depend on the routing integration.
+Route alternatives, waypoints,
+and reuse of an existing route are extension points.
+Expose the selected route and provider identity
+so the caller can inspect what was used.
 
 ### Sector
 
@@ -269,37 +316,47 @@ location[sector("Union Square, NYC", bearing:90deg, spread:60deg, buffer:200m, r
 ```
 
 Resolve an origin and select a sector facing either `towards` or `bearing`.
-Require exactly one heading argument. `towards` supplies a point from which to
-calculate the heading and default range. An explicit `range` overrides that
-distance. Require `range` with `bearing`. Resolve origin and heading place names
-concurrently. Coincident origin and heading points are invalid.
+Require exactly one heading argument.
+`towards` supplies a point from which to calculate the heading
+and default range.
+An explicit `range` overrides that distance.
+Require `range` with `bearing`.
+Resolve origin and heading place names concurrently.
+Coincident origin and heading points are invalid.
 
 Bearings run clockwise from true north: 0 degrees is north, 90 east, 180 south,
-and 270 west. `spread` is the full opening angle; 60 degrees means 30 degrees on
-either side of the bearing. Defaults are `spread:30deg` and `buffer:200m`.
+and 270 west.
+`spread` is the full opening angle;
+60 degrees means 30 degrees on either side of the bearing.
+Defaults are `spread:30deg` and `buffer:200m`.
 
-Expand the entire sector by `buffer`, including its sides, forward edge, and
-origin. This includes places up to the buffer distance behind the starting point.
-`range` is forward reach before buffering, so the maximum distance from the
-origin is `range + buffer`.
+Expand the entire sector by `buffer`, including its sides, forward edge,
+and origin.
+This includes places up to the buffer distance behind the starting point.
+`range` is forward reach before buffering,
+so the maximum distance from the origin is `range + buffer`.
 
-Include the origin and sector edges. Accept bearings in `[0, 360)` and spreads in
-`(0, 360]`. A 360-degree spread selects a circle of `range + buffer`. Explicit
-ranges must be less than 10000km to keep the geography interior within a
-hemisphere. When deriving range, require the heading point to be within 90 degrees
-of the origin.
+Include the origin and sector edges.
+Accept bearings in `[0, 360)` and spreads in `(0, 360]`.
+A 360-degree spread selects a circle of `range + buffer`.
+Explicit ranges must be less than 10000km to keep the geography interior within
+a hemisphere.
+When deriving range, require the heading point to be within 90 degrees of the
+origin.
 
-Build sector boundaries using WGS84 geodesic projections. Approximate the outer
-arc with steps of at most one degree, refined for a nominal chord error of 0.5m.
-Measure the buffer using PostGIS geography distances in meters. Sectors support
-headings crossing north and coordinates crossing the antimeridian.
+Build sector boundaries using WGS84 geodesic projections.
+Approximate the outer arc with steps of at most one degree,
+refined for a nominal chord error of 0.5m.
+Measure the buffer using PostGIS geography distances in meters.
+Sectors support headings crossing north
+and coordinates crossing the antimeridian.
 
 ### Request reference point
 
-Each query request may supply one geographic point as `referenceLocation`. The
-CLI exposes it as `--reference-location POINT` on `places list` and
-`places sync`. Its value uses the same geographic point syntax as filter
-arguments:
+Each query request may supply one geographic point as `referenceLocation`.
+The CLI exposes it as `--reference-location POINT` on `places list`
+and `places sync`.
+Its value uses the same geographic point syntax as filter arguments:
 
 ```sh
 places list --reference-location 'point(-73.985, 40.726)' --sort distance
@@ -307,13 +364,15 @@ places list --reference-location 'Union Square, NYC' \
   --query 'location[radius(@ref, 5mi)]'
 ```
 
-`@ref` resolves to that point anywhere a geographic point is accepted. Using it
-without request context is an error. The `distance`, `distance-asc`, and
-`distance-desc` list orders use straight-line geographic distance from the same
-point; bare `distance` sorts nearest first.
+`@ref` resolves to that point anywhere a geographic point is accepted.
+Using it without request context is an error.
+The `distance`, `distance-asc`,
+and `distance-desc` list orders use straight-line geographic distance from the
+same point; bare `distance` sorts nearest first.
 
-The server cannot infer the user's physical location. Callers representing a
-current position provide explicit coordinates with `point(longitude, latitude)`.
+The server cannot infer the user's physical location.
+Callers representing a current position provide explicit coordinates with
+`point(longitude, latitude)`.
 
 ### Named locations — planned
 
@@ -326,22 +385,28 @@ location[route(@home, @work, buffer:800ft, mode:walk)]
 location[sector(@home, bearing:90deg, spread:60deg, range:2mi)]
 ```
 
-Resolve `@name` from an application-managed location registry. Each entry has a
-stable ID, a unique name, and an explicit point or area geometry, with provenance
-when derived from a provider. A point supports radius origins and route endpoints;
-an area supports `within`. A location may have both an area and an explicitly
-chosen representative point. Report an error when the required geometry is absent.
+Resolve `@name` from an application-managed location registry.
+Each entry has a stable ID, a unique name,
+and an explicit point or area geometry,
+with provenance when derived from a provider.
+A point supports radius origins and route endpoints; an area supports `within`.
+A location may have both an area and an explicitly chosen representative point.
+Report an error when the required geometry is absent.
 
-Unknown names produce a reference error. Resolve each reference once per request
-and expose its ID, current name, and geometry in the explanation. Named locations
-refer to stored geography; caller-supplied current position remains separate.
-Use unquoted identifiers such as `@home` or `@east-village`, with `@"name with spaces"`
-for other names. Quote an ordinary string beginning with `@` to search for that
-literal location name.
+Unknown names produce a reference error.
+Resolve each reference once per request and expose its ID, current name,
+and geometry in the explanation.
+Named locations refer to stored geography;
+caller-supplied current position remains separate.
+Use unquoted identifiers such as `@home` or `@east-village`,
+with `@"name with spaces"` for other names.
+Quote an ordinary string beginning with `@` to search for
+that literal location name.
 
 Registry CRUD commands and geometry refresh behavior require implementation
-design. Queries stored by the application should bind named locations by stable
-ID so renaming preserves their meaning; geometry updates affect future evaluations.
+design.
+Queries stored by the application should bind named locations by stable ID
+so renaming preserves their meaning; geometry updates affect future evaluations.
 
 ### Travel time and detours: exploratory
 
@@ -353,37 +418,47 @@ location[detour(@home, @work, extra:10m, mode:walk)]
 ```
 
 `reachable` would select places whose travel time from an origin is at most the
-budget. Candidate implementation approaches include a provider-supplied reachable
-area or travel-time calculations to candidate places. Their accuracy and cost
-need evaluation before committing to an implementation.
+budget.
+Candidate implementation approaches include a provider-supplied reachable area
+or travel-time calculations to candidate places.
+Their accuracy and cost need evaluation before committing to an implementation.
 
-`detour` would compare travel time from origin to destination via a candidate place
-against the direct journey, using consistent routing settings. The `extra` budget
-covers additional travel; time spent visiting the place would be a separate input.
+`detour` would compare travel time from origin to destination via a candidate
+place against the direct journey, using consistent routing settings.
+The `extra` budget covers additional travel;
+time spent visiting the place would be a separate input.
 
-Both depend on routing capabilities beyond geometric filtering. Evaluate provider
-support, request volume, latency, batching, departure-time behavior, and treatment
-of unreachable places. A radius or route corridor remains a geographic predicate;
-it cannot establish either travel-time budget. These functions are exploratory
-and have no committed delivery phase.
+Both depend on routing capabilities beyond geometric filtering.
+Evaluate provider support, request volume, latency, batching,
+departure-time behavior, and treatment of unreachable places.
+A radius or route corridor remains a geographic predicate;
+it cannot establish either travel-time budget.
+These functions are exploratory and have no committed delivery phase.
 
 ### Resolution and execution context
 
-Google Places resolves named points. Independent lookups run concurrently and
-repeated names share a promise within the query context. `@ref` uses the request's
-resolved reference point, and `@now` uses one captured instant for the query.
-Boundary and routing integrations remain to be selected. Each
-integration must specify available geometry, attribution, freshness, and permitted
-reuse. Provider selection is independent of the expression grammar.
+Google Places resolves named points.
+Independent lookups run concurrently
+and repeated names share a promise within the query context.
+`@ref` uses the request's resolved reference point,
+and `@now` uses one captured instant for the query.
+Boundary and routing integrations remain to be selected.
+Each integration must specify available geometry, attribution, freshness,
+and permitted reuse.
+Provider selection is independent of the expression grammar.
 
-The planned query-explanation response should expose the matched name, stable reference where
-available, provider, geometry kind, and relevant point or boundary. Support a
-way to reuse a resolved reference so an agent can repeat an unambiguous selection.
-Named locations provide durable reuse; a reference format for ad hoc resolution
-results remains an implementation decision.
+The planned query-explanation response should expose the matched name,
+stable reference where available, provider, geometry kind,
+and relevant point or boundary.
+Support a way to reuse a resolved reference
+so an agent can repeat an unambiguous selection.
+Named locations provide durable reuse;
+a reference format for ad hoc resolution results remains an implementation
+decision.
 
-Geographic bias may help resolve names, but ambiguous candidates require caller
-selection. Provider failures are query errors rather than successful empty results.
+Geographic bias may help resolve names,
+but ambiguous candidates require caller selection.
+Provider failures are query errors rather than successful empty results.
 
 Planned boundary functions compose with ordinary boolean expressions:
 
@@ -404,21 +479,25 @@ open["2026-09-21T18:00:00-04:00", for:2h]
 !open[@now]
 ```
 
-Time literals accept local clock times, recurring weekdays, and ISO timestamps
-with an explicit UTC offset or `Z`. `@now` resolves once per query. Bare clock
-times use today's date in each place's time zone. Duration literals use `m` or
-`h`. See [time values](time-values.md) for supported spellings, endpoint rules,
+Time literals accept local clock times, recurring weekdays,
+and ISO timestamps with an explicit UTC offset or `Z`.
+`@now` resolves once per query.
+Bare clock times use today's date in each place's time zone.
+Duration literals use `m` or `h`.
+See [time values](time-values.md) for supported spellings, endpoint rules,
 daylight-saving behavior, and interval limits.
 
 `for` and `until` require continuous opening throughout the half-open interval.
-Missing hours produce unknown, preserved by negation. `!open[@now]` therefore
-selects known-closed places. Boolean composition uses SQL three-valued logic:
-`false AND unknown` is false and `true OR unknown` is true. Return places whose
-complete expression is true.
+Missing hours produce unknown, preserved by negation.
+`!open[@now]` therefore selects known-closed places.
+Boolean composition uses SQL three-valued logic:
+`false AND unknown` is false and `true OR unknown` is true.
+Return places whose complete expression is true.
 
-The filter evaluates the saved recurring primary schedule and recorded business
-closure status. Results reflect the last sync; holiday exceptions and dated
-schedules require additional data.
+The filter evaluates the saved recurring primary schedule
+and recorded business closure status.
+Results reflect the last sync;
+holiday exceptions and dated schedules require additional data.
 
 ## Saved queries: future implementation
 
@@ -427,24 +506,30 @@ saved[work-friendly] AND location[within("Manhattan, NYC")]
 saved["date night"] AND !tag[status.visited]
 ```
 
-`saved[...]` references a named query and evaluates its complete expression as a
-group. It represents a live selection: current data and request context determine
-the results on each evaluation. A saved query containing `@now` uses the same
-instant as the enclosing query.
+`saved[...]` references a named query and evaluates its complete expression
+as a group.
+It represents a live selection:
+current data and request context determine the results on each evaluation.
+A saved query containing `@now` uses the same instant as the enclosing query.
 
-Names resolve exactly to stable query IDs. Stored expressions bind exact tag,
-named-location, and saved-query references by ID so renaming preserves meaning;
-wildcard tag patterns remain dynamic. Unknown or deleted references are explicit
-errors. Detect direct and indirect reference cycles and bound expansion depth.
+Names resolve exactly to stable query IDs.
+Stored expressions bind exact tag, named-location,
+and saved-query references by ID so renaming preserves meaning;
+wildcard tag patterns remain dynamic.
+Unknown or deleted references are explicit errors.
+Detect direct and indirect reference cycles and bound expansion depth.
 
-An explanation should show the expanded expression and referenced query identities.
-Storage, naming rules, CRUD commands, and versioning are future implementation
-work. Initial saved queries take no parameters.
+An explanation should show the expanded expression
+and referenced query identities.
+Storage, naming rules, CRUD commands,
+and versioning are future implementation work.
+Initial saved queries take no parameters.
 
 ## Grammar outline
 
-This is a structural sketch; the executable PEG grammar defines lexical
-boundaries and escaping, with coverage in parser tests.
+This is a structural sketch;
+the executable PEG grammar defines lexical boundaries and escaping,
+with coverage in parser tests.
 
 ```text
 query       := whitespace expression? whitespace EOF
@@ -463,34 +548,41 @@ argument    := identifier ":" comparison? value | positionalArgument
 positionalArgument := comparison? value
 ```
 
-`implicitAnd` requires whitespace and the start of another expression. Filter and
-function arguments share the same syntax and permit whitespace around separators.
-An identifier immediately followed by `[` starts a filter and must name a
-registered field. Arguments without a key fill parameters in declaration order.
-Named arguments use `key:value` and follow any positional arguments; each parameter
-can be supplied once. A call may contain only named arguments.
-Empty argument lists are valid syntax; required parameters are checked during
-validation. An empty string is written `""` and counts as an argument.
+`implicitAnd` requires whitespace and the start of another expression.
+Filter and function arguments share the same syntax
+and permit whitespace around separators.
+An identifier immediately followed by `[` starts a filter
+and must name a registered field.
+Arguments without a key fill parameters in declaration order.
+Named arguments use `key:value` and follow any positional arguments;
+each parameter can be supplied once.
+A call may contain only named arguments.
+Empty argument lists are valid syntax;
+required parameters are checked during validation.
+An empty string is written `""` and counts as an argument.
 
-Quote values containing literal brackets or values such as `"type:coffee"` that
-would otherwise parse as named arguments. Colons within values, such as the time
-in `open[2026-09-21T18:30:00Z]`, remain valid.
-Each field declares its allowed arguments. References such as `@home` are valid
-only in configured reference positions; a tag name beginning with `@` must be
-quoted.
+Quote values containing literal brackets or values such as `"type:coffee"`
+that would otherwise parse as named arguments.
+Colons within values, such as the time in `open[2026-09-21T18:30:00Z]`,
+remain valid.
+Each field declares its allowed arguments.
+References such as `@home` are valid only in configured reference positions;
+a tag name beginning with `@` must be quoted.
 
-Parse strings, function calls, and source spans into an AST. A typed validation
-pass assigns booleans, distances, angles, timestamps, and field-specific meaning.
-Validate function names, argument names, arity, duplicate arguments, and operators
-before invoking external services. Function calls are limited to registered
-functions and valid field contexts.
+Parse strings, function calls, and source spans into an AST.
+A typed validation pass assigns booleans, distances, angles, timestamps,
+and field-specific meaning.
+Validate function names, argument names, arity, duplicate arguments,
+and operators before invoking external services.
+Function calls are limited to registered functions and valid field contexts.
 
 ### Shared parser API
 
 Import `parseQuery` and `SearchError` from `@places/common/search`.
-`parseQuery(input)` parses the complete query into an AST. An empty query produces
-`null`. The parser recognizes generic filter and function calls, including names
-that have no registered implementation.
+`parseQuery(input)` parses the complete query into an AST.
+An empty query produces `null`.
+The parser recognizes generic filter and function calls,
+including names that have no registered implementation.
 
 ```ts
 const query = parseQuery(
@@ -498,40 +590,47 @@ const query = parseQuery(
 );
 ```
 
-The filter engine's `prepare(input)` parses syntax and validates it against the
-engine's registrations. Registrations define ordered parameters with names,
-argument types, optionality, allowed operators, reference support, and custom
-constraints. Functions declare return types, which determine where they can be
-used. Unknown filters or functions, incompatible types, invalid values, and
-signature errors produce structured diagnostics with source locations before
-asynchronous resolution begins. Resolvers and compilation handlers also validate
-constraints involving resolved values, with source-located diagnostics.
+The filter engine's `prepare(input)` parses syntax
+and validates it against the engine's registrations.
+Registrations define ordered parameters with names, argument types, optionality,
+allowed operators, reference support, and custom constraints.
+Functions declare return types, which determine where they can be used.
+Unknown filters or functions, incompatible types, invalid values,
+and signature errors produce structured diagnostics with source locations
+before asynchronous resolution begins.
+Resolvers and compilation handlers also validate constraints involving resolved
+values, with source-located diagnostics.
 
-Nodes preserve source text and offsets, line and column positions, explicit
-groups, operators, quoted strings, and references. Scalar values remain decoded
-strings. Registered value types decode literals into their semantic values
-during engine preparation. Unescaped wildcard positions are retained separately
-from literal stars. Equality operators interpret all stars literally. Filter,
-function, and parameter names are case-sensitive; boolean keywords are case-insensitive.
+Nodes preserve source text and offsets, line and column positions,
+explicit groups, operators, quoted strings, and references.
+Scalar values remain decoded strings.
+Registered value types decode literals into their semantic values during engine
+preparation.
+Unescaped wildcard positions are retained separately from literal stars.
+Equality operators interpret all stars literally.
+Filter, function, and parameter names are case-sensitive;
+boolean keywords are case-insensitive.
 
-The executable capabilities are listed in [implementation status](#implementation-status).
-Generic parsing also accepts planned function/filter names; engine preparation
-rejects names that have no registered implementation.
+The executable capabilities are listed in
+[implementation status](#implementation-status).
+Generic parsing also accepts planned function/filter names;
+engine preparation rejects names that have no registered implementation.
 
 Syntax and validation failures throw `SearchError` with a `diagnostics` array.
 Invalid syntax is rejected as a complete query.
 
-The generated ES module is included for direct Node and browser imports. Peggy
-is a development dependency; generation runs through
-`pnpm --filter @places/common generate:search`. Run
-`pnpm --filter @places/common check:search` to check reproducibility. Parser tests
-also verify that the generated module matches the grammar.
+The generated ES module is included for direct Node and browser imports.
+Peggy is a development dependency;
+generation runs through `pnpm --filter @places/common generate:search`.
+Run `pnpm --filter @places/common check:search` to check reproducibility.
+Parser tests also verify that the generated module matches the grammar.
 
 ## Execution and agent tooling
 
-The [filter engine](filter-engine.md) defines registration, typed function
-composition, resolution, and SQL compilation layers. Application implementations
-live in server modules, separate from the PEG grammar and shared engine.
+The [filter engine](filter-engine.md) defines registration,
+typed function composition, resolution, and SQL compilation layers.
+Application implementations live in server modules,
+separate from the PEG grammar and shared engine.
 
 1. Parse the complete query into a typed expression tree with source spans.
 2. Validate fields, functions, operators, and values.
@@ -540,36 +639,43 @@ live in server modules, separate from the PEG grammar and shared engine.
 4. Compile the resolved expression into parameterized database predicates.
 5. Return matching places with IDs and enough tag context for inspection.
 
-Keep parsing pure and reusable. Server code owns database access, external
-resolution, and query compilation. Tag predicates should compose without
-introducing duplicate place results. Apply negation to membership of the whole
-place, rather than to individual joined tag rows.
+Keep parsing pure and reusable.
+Server code owns database access, external resolution, and query compilation.
+Tag predicates should compose without introducing duplicate place results.
+Apply negation to membership of the whole place,
+rather than to individual joined tag rows.
 
-Propose `places query explain '<expression>'` to return canonical syntax, the
-expression tree, tag expansions, resolved locations, temporal context, and missing
-data warnings. It may perform external resolution; it does not mutate places.
+Propose `places query explain '<expression>'` to return canonical syntax,
+the expression tree, tag expansions, resolved locations, temporal context,
+and missing data warnings.
+It may perform external resolution; it does not mutate places.
 An agent can inspect the selection before applying updates by place ID.
 
 Errors should include a stable code, source span, offending field or argument,
-and a correction where possible. Distinguish syntax errors, unknown keys/tags,
-invalid values, ambiguous locations, unavailable boundaries, unsupported
-capabilities, and provider failures. Bound external resolution work according to
-provider capabilities and request budgets.
+and a correction where possible.
+Distinguish syntax errors, unknown keys/tags, invalid values,
+ambiguous locations, unavailable boundaries, unsupported capabilities,
+and provider failures.
+Bound external resolution work according to provider capabilities
+and request budgets.
 
 ## Remaining implementation work
 
 The expression language, tag/text/presence filters, radius and sector geometry,
-map rectangles, and recurring-hours evaluation are implemented. Remaining work
-uses the existing registration and typed-value mechanisms:
+map rectangles, and recurring-hours evaluation are implemented.
+Remaining work uses the existing registration and typed-value mechanisms:
 
-- Area-name resolution and `within`, including geometry validation and disambiguation.
+- Area-name resolution and `within`,
+  including geometry validation and disambiguation.
 - Named-location storage and management for reusable point/area references.
 - Routing integration and `route` corridor selection.
 - Query explanations, resolved geometry, and zero-match wildcard diagnostics.
 - Saved-query storage, stable-reference binding, and cycle detection.
-- Pagination, selectable ordering, and text normalization beyond case-insensitivity.
+- Pagination, selectable ordering,
+  and text normalization beyond case-insensitivity.
 - Holiday exceptions, secondary opening schedules, and refresh scheduling.
 
 Travel-time and detour filters remain exploratory pending a routing feasibility
-assessment. Other later extensions include saved-date comparisons and source
-dates and counts.
+assessment.
+Other later extensions include saved-date comparisons and source dates
+and counts.

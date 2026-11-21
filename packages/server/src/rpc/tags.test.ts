@@ -40,8 +40,9 @@ describe.skipIf(!testUrl)('tag API and CLI against PostgreSQL', () => {
   });
   const client: Client = createORPCClient(
     new RPCLink({
-      url: 'http://localhost/rpc',
-      fetch: request => Promise.resolve(app.fetch(request)),
+      origin: 'http://localhost',
+      url: '/rpc',
+      fetch: (url, init) => Promise.resolve(app.fetch(new Request(url, init))),
     }),
   );
 
@@ -166,21 +167,22 @@ describe.skipIf(!testUrl)('tag API and CLI against PostgreSQL', () => {
     ]);
 
     expect(results.filter(result => result.status === 'fulfilled')).toHaveLength(1);
-    expect(results.find(result => result.status === 'rejected')).toMatchObject({
-      reason: {
-        code: 'CONFLICT',
-        status: 409,
-        message: 'A tag with this name already exists',
-      },
-    });
+    const rejected = results.find(result => result.status === 'rejected');
+    expect(rejected).toMatchObject({reason: {code: 'CONFLICT'}});
+    expect(rejected?.reason).toHaveProperty(
+      'message',
+      'A tag with this name already exists',
+    );
 
     const other = await client.tags.create({name: 'other'});
+    const conflictingUpdate = client.tags.update({id: other.id, name: 'CAFE'});
 
-    await expect(client.tags.update({id: other.id, name: 'CAFE'})).rejects.toMatchObject({
+    await expect(conflictingUpdate).rejects.toMatchObject({
       code: 'CONFLICT',
-      status: 409,
-      message: 'A tag with this name already exists',
     });
+    await expect(conflictingUpdate).rejects.toThrow(
+      'A tag with this name already exists',
+    );
     expect(await client.tags.get({id: other.id})).toEqual(other);
   });
 
@@ -239,17 +241,21 @@ describe.skipIf(!testUrl)('tag API and CLI against PostgreSQL', () => {
 
       await expect(
         client.tags.create({name: 'dinner', icon: invalidIcon}),
-      ).rejects.toMatchObject({status: 400});
+      ).rejects.toMatchObject({code: 'BAD_REQUEST'});
       await expect(
         client.tags.update({id: tag.id, icon: invalidIcon}),
-      ).rejects.toMatchObject({status: 400});
+      ).rejects.toMatchObject({code: 'BAD_REQUEST'});
       expect(await client.tags.get({id: tag.id})).toEqual(tag);
     },
   );
 
   it('validates input and reports missing tags', async () => {
-    await expect(client.tags.create({name: ' \t '})).rejects.toMatchObject({status: 400});
-    await expect(client.tags.get({id: 'invalid'})).rejects.toMatchObject({status: 400});
+    await expect(client.tags.create({name: ' \t '})).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+    });
+    await expect(client.tags.get({id: 'invalid'})).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+    });
 
     const id = randomUUID();
 

@@ -1,4 +1,4 @@
-import type {ContractRouterClient} from '@orpc/contract';
+import type {RouterContractClient} from '@orpc/contract';
 
 import {namespaceContract} from './namespace.ts';
 import {placeContract} from './place.ts';
@@ -12,4 +12,4 @@ export const contract = {
   query: queryContract,
 };
 
-export type Client = ContractRouterClient<typeof contract>;
+export type Client = RouterContractClient<typeof contract>;

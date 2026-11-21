@@ -24,7 +24,8 @@
     "check:search": "node scripts/generate-search.ts --check"
   },
   "dependencies": {
-    "@orpc/contract": "1.15.1",
+    "@orpc/contract": "2.0.0-beta.43",
+    "orpc-mcp": "0.1.3",
     "zod": "4.6.5"
   },
   "devDependencies": {

@@ -1,25 +1,40 @@
 import {z} from 'zod';
 
+import {sourceId} from './identifiers.ts';
+
 /**
  * Instagram post metadata used to display a source card.
  */
 export const instagramSourceData = z.strictObject({
-  caption: z.string(),
-  username: z.string().min(1).nullable(),
-  postedAt: z.iso.datetime().nullable(),
-  thumbnailUrl: z.url().nullable(),
+  caption: z.string().describe('Instagram post caption.'),
+  username: z.string().min(1).nullable().describe('Instagram account username.'),
+  postedAt: z.iso
+    .datetime()
+    .nullable()
+    .describe('ISO 8601 post publication time, or null when unavailable.'),
+  thumbnailUrl: z
+    .url()
+    .nullable()
+    .describe('Post thumbnail URL, or null when unavailable.'),
 });
 export type InstagramSourceData = z.infer<typeof instagramSourceData>;
 
-export const sourceType = z.literal('instagram');
+export const sourceType = z.literal('instagram').describe('Source provider type.');
 
 const sourceFields = z.object({
-  id: z.uuid(),
-  externalId: z.string().min(1).nullable(),
-  url: z.url().nullable(),
-  description: z.string().nullable(),
-  createdAt: z.date(),
-  updatedAt: z.date(),
+  id: sourceId,
+  externalId: z
+    .string()
+    .min(1)
+    .nullable()
+    .describe('Provider-specific source identifier, or null when unavailable.'),
+  url: z.url().nullable().describe('Canonical source URL, or null when unavailable.'),
+  description: z
+    .string()
+    .nullable()
+    .describe('Source-level recommendation text, or null when unset.'),
+  createdAt: z.date().describe('Time the source was created.'),
+  updatedAt: z.date().describe('Time the source was last updated.'),
 });
 
 /**
@@ -29,17 +44,28 @@ const sourceFields = z.object({
 export const source = z.discriminatedUnion('type', [
   sourceFields.extend({
     type: sourceType,
-    data: instagramSourceData.nullable(),
+    data: instagramSourceData
+      .nullable()
+      .describe('Instagram metadata, or null when unavailable.'),
   }),
 ]);
 export type Source = z.infer<typeof source>;
+
+export const placeSourceDescription = z
+  .string()
+  .nullable()
+  .describe('Recommendation text specific to this place, or null when unset.');
+export const placeSourceData = z
+  .record(z.string(), z.json())
+  .nullable()
+  .describe('Provider-specific association metadata, or null when unavailable.');
 
 /**
  * Recommendation details attached to an existing source and a saved place.
  */
 export const placeSourceInput = z.object({
-  sourceId: z.uuid(),
-  description: z.string().nullable().optional(),
-  data: z.record(z.string(), z.json()).nullable().optional(),
+  sourceId: sourceId.describe('Source UUID to associate with a place.'),
+  description: placeSourceDescription.optional(),
+  data: placeSourceData.optional(),
 });
 export type PlaceSourceInput = z.infer<typeof placeSourceInput>;

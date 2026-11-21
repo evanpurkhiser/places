@@ -12,9 +12,12 @@ it('serves serializable documentation for the registered query capabilities', as
   const handler = new RPCHandler({query: queryRouter});
   const client: Client = createORPCClient(
     new RPCLink({
-      url: 'http://localhost/rpc',
-      fetch: async request => {
-        const {response} = await handler.handle(request, {prefix: '/rpc'});
+      origin: 'http://localhost',
+      url: '/rpc',
+      fetch: async (url, init) => {
+        const {response} = await handler.handle(new Request(url, init), {
+          prefix: '/rpc',
+        });
         return response ?? new Response(null, {status: 404});
       },
     }),

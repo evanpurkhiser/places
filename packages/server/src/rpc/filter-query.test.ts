@@ -39,8 +39,9 @@ describe.skipIf(!testUrl)('place filtering through API and CLI', () => {
   });
   const client: Client = createORPCClient(
     new RPCLink({
-      url: 'http://localhost/rpc',
-      fetch: request => Promise.resolve(app.fetch(request)),
+      origin: 'http://localhost',
+      url: '/rpc',
+      fetch: (url, init) => Promise.resolve(app.fetch(new Request(url, init))),
     }),
   );
   const cafeId = randomUUID();
@@ -211,7 +212,7 @@ describe.skipIf(!testUrl)('place filtering through API and CLI', () => {
 
   it('requires a reference location for distance sorting', async () => {
     await expect(client.places.list({sort: 'distance'})).rejects.toMatchObject({
-      status: 400,
+      code: 'BAD_REQUEST',
     });
   });
 

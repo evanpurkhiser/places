@@ -1,6 +1,8 @@
 import {serveStatic} from '@hono/node-server/serve-static';
 import {RPCHandler} from '@orpc/server/fetch';
+import {ZodToJsonSchemaConverter} from '@orpc/zod';
 import {Hono} from 'hono';
+import {MCPHandler} from 'orpc-mcp/fetch';
 
 import {fileURLToPath} from 'node:url';
 
@@ -17,6 +19,11 @@ interface AppOptions {
 export function createApp(context: Context, options: AppOptions = {}) {
   const app = new Hono<{Variables: Context}>();
   const rpc = new RPCHandler(router);
+  const mcp = new MCPHandler(router, {
+    serverInfo: {name: 'places', version: '0.0.0'},
+    instructions: 'Search and manage saved places, tags, and tag namespaces.',
+    converters: [new ZodToJsonSchemaConverter()],
+  });
   const webRoot = options.webRoot ?? defaultWebRoot;
 
   app.use('*', async (c, next) => {
@@ -29,6 +36,11 @@ export function createApp(context: Context, options: AppOptions = {}) {
 
   app.get('/health', c => c.json({status: 'ok'}));
   app.route('/api', api);
+  app.post('/mcp', async c => {
+    const {response} = await mcp.handle(c.req.raw, {context: c.var});
+
+    return response ?? c.notFound();
+  });
   app.use('/rpc/*', async (c, next) => {
     const {matched, response} = await rpc.handle(c.req.raw, {
       prefix: '/rpc',
