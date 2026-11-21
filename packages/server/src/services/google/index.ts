@@ -48,8 +48,7 @@ const metadataDetails = details.extend({
   regularOpeningHours: openingHours.optional(),
 });
 
-// regularOpeningHours already puts metadata requests in the Place Details
-// Enterprise SKU. Request every field available at that tier and below.
+// This mask bills metadata requests at the Place Details Enterprise + Atmosphere SKU.
 export const metadataFields = [
   'attributions',
   'consumerAlert',
@@ -98,6 +97,39 @@ export const metadataFields = [
   'transitStation',
   'userRatingCount',
   'websiteUri',
+  'allowsDogs',
+  'curbsidePickup',
+  'delivery',
+  'dineIn',
+  'editorialSummary',
+  'evChargeAmenitySummary',
+  'evChargeOptions',
+  'fuelOptions',
+  'generativeSummary',
+  'goodForChildren',
+  'goodForGroups',
+  'goodForWatchingSports',
+  'liveMusic',
+  'menuForChildren',
+  'neighborhoodSummary',
+  'outdoorSeating',
+  'parkingOptions',
+  'paymentOptions',
+  'reservable',
+  'restroom',
+  'reviews',
+  'reviewSummary',
+  'servesBeer',
+  'servesBreakfast',
+  'servesBrunch',
+  'servesCocktails',
+  'servesCoffee',
+  'servesDessert',
+  'servesDinner',
+  'servesLunch',
+  'servesVegetarianFood',
+  'servesWine',
+  'takeout',
 ] as const;
 
 const metadataFieldMask = metadataFields.join(',');

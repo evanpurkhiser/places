@@ -31,12 +31,9 @@ and indexes them with GiST.
 
 ## Fetching and freshness
 
-Imports and sync use `getMetadata` with every Place Details field through the
-Enterprise SKU.
-`regularOpeningHours` already selects that price point,
-so fields from the IDs-only, Essentials, Pro,
-and Enterprise tiers do not increase the SKU.
-Enterprise + Atmosphere fields remain excluded.
+Imports and sync use `getMetadata` with the Place Details Enterprise +
+Atmosphere field mask, including venue amenities, dining options, and review
+summaries.
 The unmodified JSON response is stored in `google_metadata`;
 typed columns retain the fields used by application behavior and queries.
 

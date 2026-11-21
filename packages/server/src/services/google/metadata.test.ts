@@ -39,6 +39,25 @@ describe('Google place metadata', () => {
     );
   });
 
+  it('requests and preserves Atmosphere metadata', async () => {
+    const atmosphere = {
+      outdoorSeating: false,
+      servesVegetarianFood: true,
+      parkingOptions: {paidStreetParking: true},
+    };
+    const fetcher = vi
+      .fn<typeof fetch>()
+      .mockResolvedValue(Response.json({...details, ...atmosphere}));
+
+    const metadata = await createGooglePlaces('secret', fetcher).getMetadata('test');
+
+    expect(metadata.googleMetadata).toEqual({...details, ...atmosphere});
+    const headers = new Headers(fetcher.mock.calls[0]?.[1]?.headers);
+    expect(headers.get('X-Goog-FieldMask')?.split(',')).toEqual(
+      expect.arrayContaining(Object.keys(atmosphere)),
+    );
+  });
+
   it('accepts a refreshed Google ID from a successful details response', async () => {
     const fetcher = vi
       .fn<typeof fetch>()
