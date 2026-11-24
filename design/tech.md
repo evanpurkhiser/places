@@ -130,7 +130,7 @@ Apply reviewed migrations with `pnpm --filter @places/server db:migrate`,
 using the server's YAML configuration.
 The container's default server entrypoint runs migrations before starting HTTP;
 update the server before its worker.
-See the [root README](../README.md#container) for container operation.
+See [Deployment](../docs/deployment.md#container) for container operation.
 
 ## Access
 
