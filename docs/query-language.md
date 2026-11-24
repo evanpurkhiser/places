@@ -5,16 +5,16 @@ Combine predicates with `AND`, `OR`, and `NOT`.
 
 ## Filters
 
-| Filter | What it matches |
-|--------|-----------------|
-| `tag` | Exact tag names and `*` wildcard patterns |
-| `source` | Discovery source by provider type, ID, URL, or text |
-| `name` | Place name |
-| `address` | Place address |
-| `notes` | Place notes |
-| `has` | Presence of `tag`, `source`, `name`, `address`, or `notes` |
-| `location` | Geographic area (radius, rectangle, sector) |
-| `open` | Opening hours |
+| Filter     | What it matches                                            |
+| ---------- | ---------------------------------------------------------- |
+| `tag`      | Exact tag names and `*` wildcard patterns                  |
+| `source`   | Discovery source by provider type, ID, URL, or text        |
+| `name`     | Place name                                                 |
+| `address`  | Place address                                              |
+| `notes`    | Place notes                                                |
+| `has`      | Presence of `tag`, `source`, `name`, `address`, or `notes` |
+| `location` | Geographic area (radius, rectangle, sector)                |
+| `open`     | Opening hours                                              |
 
 ## Examples
 
