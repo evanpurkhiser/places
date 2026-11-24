@@ -2,8 +2,8 @@
 
 ## Background jobs
 
-pg-boss runs three queues: `instagram-import`, `gmaps-import`, and
-`gmaps-sync`. Workers run as a separate process:
+pg-boss runs three queues: `instagram-import`, `gmaps-import`, and `gmaps-sync`.
+Workers run as a separate process:
 
 ```bash
 pnpm server    # HTTP API
@@ -25,8 +25,9 @@ workers:
     concurrency: 1
 ```
 
-`concurrency` is the number of polling workers per queue per process; each
-claims up to `batchSize` jobs. Restart the worker after changing these.
+`concurrency` is the number of polling workers per queue per process;
+each claims up to `batchSize` jobs.
+Restart the worker after changing these.
 
 ## Sync
 
@@ -36,16 +37,16 @@ pnpm places sync --query 'tag[type.cafe]'
 pnpm places sync-status JOB_ID
 ```
 
-Sync queues a Google metadata refresh for each matching place. The response
-reports `matched`, `queued`, `alreadyQueued`, and `jobIds`; status ends as
-`updated`, `unchanged`, `missing`, or `superseded`.
+Sync queues a Google metadata refresh for each matching place.
+The response reports `matched`, `queued`, `alreadyQueued`, and `jobIds`;
+status ends as `updated`, `unchanged`, `missing`, or `superseded`.
 
 ## Instagram ingestion
 
-Pasting an Instagram URL queues a job keyed by the post's shortcode. It skips
-existing sources, scrapes the media, captures the places it mentions, and
-atomically saves the source plus a batch of Google import jobs. The worker
-needs `ffmpeg` and `ffprobe` on `PATH`.
+Pasting an Instagram URL queues a job keyed by the post's shortcode.
+It skips existing sources, scrapes the media, captures the places it mentions,
+and atomically saves the source plus a batch of Google import jobs.
+The worker needs `ffmpeg` and `ffprobe` on `PATH`.
 
 ```yaml
 instagram:
@@ -71,5 +72,6 @@ openai:
 - `/rpc` — typed oRPC API.
 - `/mcp` — Streamable HTTP MCP for agents.
 - `/health` — health check.
-- `/api/imports` — `POST` a `{"url": ...}` to import, `GET /api/imports/ID`
-  to poll for `state`, `placeIds`, `placeNames`, `error`, and `sourceId`.
+- `/api/imports` — `POST` a `{"url": ...}` to import,
+  `GET /api/imports/ID` to poll for `state`, `placeIds`, `placeNames`, `error`,
+  and `sourceId`.

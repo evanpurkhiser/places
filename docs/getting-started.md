@@ -4,8 +4,8 @@
 
 - Node 24 and pnpm (see `mise.toml` for the pinned versions).
 - PostgreSQL with the PostGIS extension available.
-- A Google Cloud project with the Places API (New) enabled, for imports and
-  place-name resolution.
+- A Google Cloud project with the Places API (New) enabled,
+  for imports and place-name resolution.
 - An OpenAI API key, for Instagram ingestion.
 - `ffmpeg` and `ffprobe` on `PATH`, for the Instagram worker.
 
@@ -32,8 +32,9 @@ Copy the example config and fill in your database URL and Google API key:
 cp packages/server/config.example.yaml packages/server/config.yaml
 ```
 
-The file is Git-ignored and validated with Zod at startup; unknown keys are
-rejected. The `server`, `worker`, and `db:migrate` commands accept
+The file is Git-ignored and validated with Zod at startup;
+unknown keys are rejected.
+The `server`, `worker`, and `db:migrate` commands accept
 `--config /absolute/path/to/config.yaml`.
 
 ### Configuration reference
@@ -87,8 +88,8 @@ pnpm worker     # background jobs (separate process)
 pnpm web        # map at http://127.0.0.1:5187
 ```
 
-The initial migration enables PostGIS, so the migration role needs permission
-to install that extension.
+The initial migration enables PostGIS,
+so the migration role needs permission to install that extension.
 
 ## Next steps
 

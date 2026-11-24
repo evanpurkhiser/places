@@ -1,7 +1,7 @@
 # Query language
 
-The CLI and API share a small, typed language for filtering places. Combine
-predicates with `AND`, `OR`, and `NOT`.
+The CLI and API share a small, typed language for filtering places.
+Combine predicates with `AND`, `OR`, and `NOT`.
 
 ## Filters
 
@@ -31,8 +31,9 @@ source[instagram]
 
 ## Tag filters
 
-`tag` matches exact names and `*` wildcards. `notes:` inside a tag predicate
-matches that assignment's note, not the place's general note.
+`tag` matches exact names and `*` wildcards.
+`notes:` inside a tag predicate matches that assignment's note,
+not the place's general note.
 
 ```text
 tag[laptop-friendly, notes:outlet]
@@ -52,11 +53,12 @@ source[text:coffee] source[text:cocktails]
 
 - **Type** matches a complete value, ignoring case.
 - **IDs and URLs** match exactly, including URL case and trailing slashes.
-- **`text`** searches source descriptions and Instagram captions using
-  substring matching, `*` wildcards, or `=` for exact literal matches.
+- **`text`** searches source descriptions
+  and Instagram captions using substring matching, `*` wildcards,
+  or `=` for exact literal matches.
 - Separate source predicates can match different attached sources.
-- `source[]` and `has[source]` require any attached source; `!source[...]`
-  excludes places with a matching source.
+- `source[]` and `has[source]` require any attached source;
+  `!source[...]` excludes places with a matching source.
 
 ## Location filters
 
@@ -73,9 +75,9 @@ location[sector(origin, bearing:90deg, range:2mi)]
 - **`sector(origin, ...)`** — a wedge; supports `towards`, `bearing`, `range`,
   `spread`, and `buffer`.
 
-Points also accept place names, addresses, or `gmaps:PLACE_ID`. Names resolve
-through Google Places Text Search using `google.apiKey`. `@ref` refers to the
-`--reference-location` value.
+Points also accept place names, addresses, or `gmaps:PLACE_ID`.
+Names resolve through Google Places Text Search using `google.apiKey`.
+`@ref` refers to the `--reference-location` value.
 
 ## Open-hours filters
 
@@ -88,20 +90,21 @@ open["2026-09-21T18:00:00-04:00"]
 
 - **Time values:** `@now`, clock times (`6pm`, `22:00`), weekday times
   (`"MON 6pm"`), ISO timestamps.
-- **`for:` / `until:`** require continuous opening. Duration units are `m` and
-  `h`.
+- **`for:` / `until:`** require continuous opening.
+  Duration units are `m` and `h`.
 - Clock times mean "today in each place's time zone".
 - `!open[@now]` selects known-closed places; missing hours stay unknown.
 
-Hours are pairs of `[inclusive-start, exclusive-end]` minute offsets from
-Sunday midnight, between 0 and 10080. Monday 09:00–12:00 is `[[1980, 2160]]`;
-24/7 is `[[0, 10080]]`; `null` is unknown and `[]` is closed all week.
+Hours are pairs of `[inclusive-start, exclusive-end]` minute offsets from Sunday
+midnight, between 0 and 10080.
+Monday 09:00–12:00 is `[[1980, 2160]]`; 24/7 is `[[0, 10080]]`;
+`null` is unknown and `[]` is closed all week.
 
 ## Reference
 
 `pnpm places docs filter` prints the server's registered filters, functions,
-types, and examples. The parser lives in `@places/common/search`; after
-editing `grammar.pegjs`, run:
+types, and examples.
+The parser lives in `@places/common/search`; after editing `grammar.pegjs`, run:
 
 ```bash
 pnpm --filter @places/common generate:search

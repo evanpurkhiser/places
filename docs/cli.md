@@ -7,11 +7,12 @@ pnpm add -g ./packages/cli --global-bin-dir="$HOME/.local/bin"
 places --help
 ```
 
-The CLI reads `~/.config/places/config.yaml` (or
-`$XDG_CONFIG_HOME/places/config.yaml`) with a `server:` URL. `--config PATH`
-selects another file and `--server URL` overrides the server. With no config,
-the CLI defaults to `http://127.0.0.1:5188`. Data commands print JSON, docs
-print text, and errors go to stderr with a nonzero exit.
+The CLI reads `~/.config/places/config.yaml`
+(or `$XDG_CONFIG_HOME/places/config.yaml`) with a `server:` URL.
+`--config PATH` selects another file and `--server URL` overrides the server.
+With no config, the CLI defaults to `http://127.0.0.1:5188`.
+Data commands print JSON, docs print text,
+and errors go to stderr with a nonzero exit.
 
 ## Tags
 
@@ -46,8 +47,8 @@ pnpm places ns update ID --icon '' --description ''
 pnpm places ns delete ID            # add --force if it contains tags
 ```
 
-Names are unique, trimmed, lowercase, nonempty; colons are reserved. Renaming
-rewrites all member tags' prefixes in one transaction.
+Names are unique, trimmed, lowercase, nonempty; colons are reserved.
+Renaming rewrites all member tags' prefixes in one transaction.
 
 ## Tagging places
 
@@ -57,9 +58,9 @@ pnpm places tag PLACE_ID attr.nice-bathroom --notes 'Code 1234'
 pnpm places untag PLACE_ID attr.nice-bathroom
 ```
 
-`tag` ensures the assignment exists; omit `--notes` to keep the current note
-or pass `''` to clear it. `untag` removes the assignment but keeps the place
-and the shared tag.
+`tag` ensures the assignment exists;
+omit `--notes` to keep the current note or pass `''` to clear it.
+`untag` removes the assignment but keeps the place and the shared tag.
 
 ## Importing
 
@@ -73,14 +74,14 @@ pnpm places import runs --limit 100
 pnpm places import runs JOB_ID
 ```
 
-Import returns a job ID and provider type (`gmaps` or `instagram`). `--wait`
-polls once per second until completion and prints the result as JSON. Repeat
-`--tag` to apply tags, `--notes TEXT` for a place note, and `--tag-note NAME
-NOTE` for a per-assignment note.
+Import returns a job ID and provider type (`gmaps` or `instagram`).
+`--wait` polls once per second until completion and prints the result as JSON.
+Repeat `--tag` to apply tags, `--notes TEXT` for a place note,
+and `--tag-note NAME NOTE` for a per-assignment note.
 
-Supported inputs: `query_place_id`, `q=place_id:...`, `ftid`, Maps place
-links with a `data=` payload (including Takeout exports), and Instagram
-post/reel URLs.
+Supported inputs: `query_place_id`, `q=place_id:...`, `ftid`,
+Maps place links with a `data=` payload
+(including Takeout exports), and Instagram post/reel URLs.
 
 ## Listing and sorting
 
@@ -92,9 +93,10 @@ pnpm places list --reference-location 'point(-73.985, 40.726)' --sort distance
 pnpm places list --query 'tag[favorite] AND !tag[visited]'
 ```
 
-Sort orders: `name`, `recently-saved` (default), `recently-recommended`, and
-`distance`. Append `-asc` or `-desc` for direction. Distance sorting requires
-`--reference-location`.
+Sort orders: `name`, `recently-saved` (default), `recently-recommended`,
+and `distance`.
+Append `-asc` or `-desc` for direction.
+Distance sorting requires `--reference-location`.
 
 ## Sync
 
@@ -113,5 +115,5 @@ and refreshes their Google metadata.
 pnpm places docs filter    # print available filters, functions, and examples
 ```
 
-See [Concepts](concepts.md) for the tags, namespaces, and sources model, and
-[Query language](query-language.md) for the filter syntax.
+See [Concepts](concepts.md) for the tags, namespaces, and sources model,
+and [Query language](query-language.md) for the filter syntax.
