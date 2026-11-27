@@ -15,6 +15,7 @@ import {
   timestamp,
   uuid,
   unique,
+  uniqueIndex,
 } from 'drizzle-orm/pg-core';
 
 // PostGIS accepts EWKT on writes and returns hex EWKB. Convert to named
@@ -46,6 +47,22 @@ const updatedAt = () =>
     .defaultNow()
     .notNull()
     .$onUpdate(() => new Date());
+
+export const users = pgTable(
+  'users',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    username: text('username').notNull().unique(),
+    tokenHash: text('token_hash').unique(),
+    isDefault: boolean('is_default').default(false).notNull(),
+    createdAt: createdAt(),
+  },
+  table => [
+    uniqueIndex('users_one_default_idx')
+      .on(table.isDefault)
+      .where(sql`${table.isDefault}`),
+  ],
+);
 
 export const places = pgTable(
   'places',
