@@ -132,7 +132,9 @@ function registry<T>(
   return entries;
 }
 
-/** Executes one shared filter-engine definition using host-provided compilers. */
+/**
+ * Executes one shared filter-engine definition using host-provided compilers.
+ */
 export class FilterEngine<Definition extends FilterEngineDefinition, Predicate, Context> {
   readonly #implementation: FilterEngineImplementation<Definition, Predicate, Context>;
   readonly #values: Map<string, RuntimeValue<Context>>;

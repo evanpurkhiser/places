@@ -205,7 +205,9 @@ const importRunStates = [
   'cancelled',
 ] as const;
 
-/** Durable execution records, independent of the queue's retention period. */
+/**
+ * Durable execution records, independent of the queue's retention period.
+ */
 export const importRuns = pgTable(
   'import_runs',
   {

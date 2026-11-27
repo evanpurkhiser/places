@@ -38,7 +38,9 @@ export function withImportEnqueue(
   });
 }
 
-/** Use the source transaction so capture, child jobs, and run records commit together. */
+/**
+ * Use the source transaction so capture, child jobs, and run records commit together.
+ */
 export async function withImportBatchEnqueue(
   tx: Pick<Database, 'insert' | 'execute' | 'select'>,
   type: RunType,

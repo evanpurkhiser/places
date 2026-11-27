@@ -17,7 +17,7 @@
     "web": "pnpm --filter @places/web dev"
   },
   "devDependencies": {
-    "@evanpurkhiser/oxc-config": "^0.16.0",
+    "@evanpurkhiser/oxc-config": "^0.20.0",
     "oxfmt": "^0.47.0",
     "oxlint": "^1.62.0",
     "typescript": "^7.0.2",
