@@ -107,6 +107,7 @@ describe('MCP endpoint', () => {
       'tags_create',
       'tags_update',
       'tags_delete',
+      'places_delete',
       'places_search_google',
       'places_tag',
       'places_untag',
@@ -122,6 +123,9 @@ describe('MCP endpoint', () => {
     ).toMatchObject({readOnlyHint: true});
     expect(
       body.result.tools.find(tool => tool.name === 'tags_delete')?.annotations,
+    ).toMatchObject({destructiveHint: true});
+    expect(
+      body.result.tools.find(tool => tool.name === 'places_delete')?.annotations,
     ).toMatchObject({destructiveHint: true});
 
     for (const tool of body.result.tools) {

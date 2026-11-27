@@ -19,6 +19,7 @@ import {places, placeSources, placeTags, sources, tags} from '../db/schema.ts';
 import {testConfig} from '../fixtures/config.ts';
 import {importPlace} from '../importers/import-place.ts';
 import {importQueue, registerImportWorker} from '../jobs/gmaps-import.ts';
+import {syncPlace} from '../jobs/gmaps-sync.ts';
 import {
   importQueue as instagramQueue,
   queueOptions as instagramOptions,
@@ -578,6 +579,65 @@ describe.skipIf(!testUrl)('place import with PostgreSQL and pg-boss', () => {
     expect(await client.places.tag(input)).toMatchObject({note: null});
   });
 
+  it('soft-deletes a saved place through MCP until it is directly re-imported', async () => {
+    const [source] = await db
+      .insert(sources)
+      .values({type: 'instagram', externalId: 'delete-test'})
+      .returning();
+    const tag = await client.tags.create({name: 'delete-test'});
+    const {
+      placeIds: [placeId],
+    } = await importPlace(db, google, 'ChIJtest', [{tagId: tag.id}], 'Try the pastries', {
+      sourceId: source!.id,
+      description: 'Recommended for the pastries',
+    });
+
+    const response = await app.request('/mcp', {
+      method: 'POST',
+      headers: {'content-type': 'application/json'},
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'tools/call',
+        params: {name: 'places_delete', arguments: {id: placeId}},
+      }),
+    });
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({
+      result: {structuredContent: {id: placeId}},
+    });
+    expect(await client.places.list()).toEqual([]);
+    expect(await client.places.list({query: `id["${placeId}"]`})).toEqual([]);
+    expect(await syncPlace(db, google, placeId!)).toEqual({placeId, status: 'missing'});
+    await expect(
+      client.places.untag({placeId: placeId!, tag: tag.id}),
+    ).rejects.toMatchObject({
+      code: 'NOT_FOUND',
+    });
+
+    await expect(client.places.delete({id: placeId!})).rejects.toMatchObject({
+      code: 'NOT_FOUND',
+    });
+
+    expect(
+      await importPlace(db, google, 'ChIJtest', [], undefined, {
+        sourceId: source!.id,
+        description: 'Another recommendation',
+      }),
+    ).toEqual({placeIds: []});
+    expect(await client.places.list()).toEqual([]);
+
+    expect(await importPlace(db, google, 'ChIJtest')).toEqual({placeIds: [placeId]});
+    expect(await client.places.list()).toMatchObject([
+      {
+        id: placeId,
+        userNote: 'Try the pastries',
+        tags: [{tagId: tag.id}],
+        sources: [{sourceId: source!.id, description: 'Recommended for the pastries'}],
+      },
+    ]);
+  });
+
   it('rejects missing places and tags for assignment commands', async () => {
     const {
       placeIds: [placeId],
@@ -676,7 +736,7 @@ describe.skipIf(!testUrl)('place import with PostgreSQL and pg-boss', () => {
     );
   }, 20000);
 
-  it('imports and lists through the actual CLI', async () => {
+  it('imports, lists, and deletes places through the actual CLI', async () => {
     const server = serve({fetch: app.fetch, hostname: '127.0.0.1', port: 15189});
     const cliPath = fileURLToPath(new URL('../../../cli/src/main.ts', import.meta.url));
     const cli = (...args: string[]) =>
@@ -724,6 +784,10 @@ describe.skipIf(!testUrl)('place import with PostgreSQL and pg-boss', () => {
         removed: true,
       });
       expect(await db.select().from(placeTags)).toEqual([]);
+      const deleteOutput = await cli('delete', saved!.id);
+      expect(JSON.parse(deleteOutput.stdout)).toEqual({id: saved!.id});
+      const remainingOutput = await cli('list');
+      expect(JSON.parse(remainingOutput.stdout)).toEqual([]);
       await expect(cli('import', 'https://evil.test')).rejects.toMatchObject({code: 1});
     } finally {
       await new Promise<void>((resolve, reject) =>

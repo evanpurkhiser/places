@@ -510,6 +510,12 @@ describe('place tagging arguments', () => {
   });
 });
 
+describe('place deletion arguments', () => {
+  it.each([['delete'], ['delete', 'bad-id']])('requires a place UUID: %j', (...args) => {
+    expect(parse(parser, args)).toMatchObject({success: false});
+  });
+});
+
 describe('place query arguments', () => {
   it.each([undefined, '', '  tag[type.cafe] OR notes["Good Coffee"]\n'])(
     'forwards the query without normalization: %j',
