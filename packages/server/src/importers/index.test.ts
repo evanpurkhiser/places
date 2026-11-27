@@ -68,16 +68,19 @@ describe('listing import runs', () => {
     expect(statuses).toMatchObject([
       {
         jobId: skippedRunId,
+        importType: 'instagram',
         state: 'completed',
         placeIds: [savedPlaceId, importedPlaceId],
       },
       {
         jobId: instagramRunId,
+        importType: 'instagram',
         state: 'completed',
         placeIds: [savedPlaceId, importedPlaceId],
       },
       {
         jobId: googleRunId,
+        importType: 'gmaps',
         state: 'completed',
         placeIds: [importedPlaceId],
       },
@@ -117,6 +120,7 @@ describe('getting an import run', () => {
       } as unknown as Pick<Context, 'db'>),
     ).resolves.toMatchObject({
       jobId: instagramRunId,
+      importType: 'instagram',
       state: 'completed',
       placeIds: [savedPlaceId, importedPlaceId],
     });

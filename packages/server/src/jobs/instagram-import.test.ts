@@ -313,7 +313,7 @@ describe.skipIf(!testUrl)('Instagram ingestion with PostgreSQL and pg-boss', () 
       [{tag: 'needs-review', note: 'Check this recommendation'}, {tag: importedTagId}],
       'From my saved posts',
     );
-    expect(submitted.type).toBe('instagram');
+    expect(submitted.importType).toBe('instagram');
     const parent = await jobs.getJobById(importQueue, submitted.jobId);
     expect(parent!.data).toMatchObject({
       shortcode,
@@ -374,7 +374,7 @@ describe.skipIf(!testUrl)('Instagram ingestion with PostgreSQL and pg-boss', () 
     });
     const second = await completePlace(children[1]!.id);
     expect(await getImportStatus(submitted.jobId, context())).toMatchObject({
-      type: 'instagram',
+      importType: 'instagram',
       state: 'completed',
       placeIds: expect.arrayContaining([first, second]),
       error: null,

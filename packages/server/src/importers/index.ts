@@ -39,7 +39,7 @@ export async function enqueueImport(
     );
   }
 
-  return {jobId, type: importer.type};
+  return {jobId, importType: importer.type};
 }
 
 export async function getImportStatus(jobId: string, context: Pick<Context, 'db'>) {
@@ -95,7 +95,7 @@ async function importStatus(run: ImportRun, context: Pick<Context, 'db'>) {
 function statusResponse(run: ImportRun, status: ImportStatus) {
   return {
     jobId: run.id,
-    type: run.type,
+    importType: run.type,
     sourceId: run.sourceId,
     ...status,
   };

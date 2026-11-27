@@ -180,10 +180,8 @@ describe('MCP endpoint', () => {
       output: [importRun],
     },
   ])('serializes $name results as MCP content', async ({name, args, output}) => {
-    const {jobId, importType, ...statusFields} = importRun;
-    const submission = {jobId, type: importType};
-    const status = {...submission, ...statusFields, sourceId: null};
-    vi.spyOn(imports, 'enqueueImport').mockResolvedValue(submission);
+    const status = {...importRun, sourceId: null};
+    vi.spyOn(imports, 'enqueueImport').mockResolvedValue(queuedImport);
     vi.spyOn(imports, 'getImportStatus').mockResolvedValue(status);
     vi.spyOn(imports, 'listImportStatuses').mockResolvedValue([status]);
     const app = createApp({} as Context);

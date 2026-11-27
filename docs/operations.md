@@ -72,6 +72,6 @@ openai:
 - `/rpc` — typed oRPC API.
 - `/mcp` — Streamable HTTP MCP for agents.
 - `/health` — health check.
-- `/api/imports` — `POST` a `{"url": ...}` to import,
-  `GET /api/imports/ID` to poll for `state`, `placeIds`, `placeNames`, `error`,
-  and `sourceId`.
+- `/api/imports` — `POST` a `{"url": ...}` to get a `jobId` and `importType`.
+  Poll `GET /api/imports/ID` for `state`, `importType`, `placeIds`,
+  `placeNames`, `error`, and `sourceId`.
