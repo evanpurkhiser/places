@@ -2,6 +2,7 @@ import {serve} from '@hono/node-server';
 import {createORPCClient} from '@orpc/client';
 import {RPCLink} from '@orpc/client/fetch';
 import type {Client} from '@places/common/contract';
+import {eq} from 'drizzle-orm';
 import {migrate} from 'drizzle-orm/node-postgres/migrator';
 import {Pool} from 'pg';
 import {PgBoss} from 'pg-boss';
@@ -13,9 +14,18 @@ import {fileURLToPath} from 'node:url';
 import {promisify} from 'node:util';
 
 import {createApp} from '../app.ts';
+import {hashToken} from '../auth.ts';
 import {configSchema} from '../config.ts';
 import {createDatabase} from '../db/index.ts';
-import {places, placeSources, placeTags, sources, tags} from '../db/schema.ts';
+import {
+  auditEntries,
+  places,
+  placeSources,
+  placeTags,
+  sources,
+  tags,
+  users,
+} from '../db/schema.ts';
 import {defaultUserId} from '../db/users.ts';
 import {testConfig} from '../fixtures/config.ts';
 import {importPlace} from '../importers/import-place.ts';
@@ -79,6 +89,7 @@ describe.skipIf(!testUrl)('place import with PostgreSQL and pg-boss', () => {
   }, 30000);
 
   beforeEach(async () => {
+    await db.delete(auditEntries);
     await db.delete(places);
     await db.delete(tags);
     await db.delete(sources);
@@ -197,6 +208,7 @@ describe.skipIf(!testUrl)('place import with PostgreSQL and pg-boss', () => {
     );
     expect(results[0]).toEqual(results[1]);
     expect(await db.select().from(placeSources)).toHaveLength(1);
+    expect(await db.select().from(auditEntries)).toMatchObject([{type: 'place.created'}]);
   });
 
   it('rolls back a new place when its source does not exist', async () => {
@@ -207,6 +219,7 @@ describe.skipIf(!testUrl)('place import with PostgreSQL and pg-boss', () => {
     ).rejects.toThrow();
     expect(await db.select().from(places)).toEqual([]);
     expect(await db.select().from(placeSources)).toEqual([]);
+    expect(await db.select().from(auditEntries)).toEqual([]);
   });
 
   it('queues only the resolved ID, persists metadata, and exposes named coordinates', async () => {
@@ -219,6 +232,18 @@ describe.skipIf(!testUrl)('place import with PostgreSQL and pg-boss', () => {
     const saved = await client.places.list();
 
     expect(result.placeIds).toEqual([saved[0]?.id]);
+    const [defaultUser] = await db
+      .select({id: users.id})
+      .from(users)
+      .where(eq(users.isDefault, true));
+    expect(await db.select().from(auditEntries)).toMatchObject([
+      {
+        type: 'place.created',
+        subject: {type: 'place', id: result.placeIds[0]},
+        actor: {type: 'user', id: defaultUser!.id},
+        payload: {name: 'Test Cafe', userNote: null, importRunId: submitted.jobId},
+      },
+    ]);
     expect(saved).toHaveLength(1);
     expect(saved[0]).toMatchObject({
       name: 'Test Cafe',
@@ -598,9 +623,14 @@ describe.skipIf(!testUrl)('place import with PostgreSQL and pg-boss', () => {
       description: 'Recommended for the pastries',
     });
 
+    const token = 'test-place-audit-delete';
+    const [deleter] = await db
+      .insert(users)
+      .values({username: 'audit-delete-test', tokenHash: hashToken(token)})
+      .returning({id: users.id});
     const response = await app.request('/mcp', {
       method: 'POST',
-      headers: {'content-type': 'application/json'},
+      headers: {Authorization: `Bearer ${token}`, 'content-type': 'application/json'},
       body: JSON.stringify({
         jsonrpc: '2.0',
         id: 1,
@@ -634,6 +664,13 @@ describe.skipIf(!testUrl)('place import with PostgreSQL and pg-boss', () => {
     expect(await client.places.list()).toEqual([]);
 
     expect(await importPlace(db, google, 'ChIJtest')).toEqual({placeIds: [placeId]});
+    const history = await db.select().from(auditEntries);
+    expect(history).toHaveLength(2);
+    expect(history.find(entry => entry.type === 'place.deleted')).toMatchObject({
+      subject: {type: 'place', id: placeId},
+      actor: {type: 'user', id: deleter!.id},
+      payload: {name: 'Test Cafe'},
+    });
     expect(await client.places.list()).toMatchObject([
       {
         id: placeId,

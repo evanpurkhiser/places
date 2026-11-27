@@ -18,6 +18,8 @@ import {
   uniqueIndex,
 } from 'drizzle-orm/pg-core';
 
+import type {AuditEntry} from '../audit/schema.ts';
+
 // PostGIS accepts EWKT on writes and returns hex EWKB. Convert to named
 // latitude/longitude values in the API projection once the driver is selected.
 const geographyPoint = customType<{data: string; driverData: string}>({
@@ -61,6 +63,32 @@ export const users = pgTable(
     uniqueIndex('users_one_default_idx')
       .on(table.isDefault)
       .where(sql`${table.isDefault}`),
+  ],
+);
+
+export const auditEntries = pgTable(
+  'audit_entries',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    occurredAt: timestamp('occurred_at', {withTimezone: true}).defaultNow().notNull(),
+    type: text('type').$type<AuditEntry['type']>().notNull(),
+    subject: jsonb('subject').$type<AuditEntry['subject']>().notNull(),
+    actor: jsonb('actor').$type<AuditEntry['actor']>().notNull(),
+    payload: jsonb('payload').$type<AuditEntry['payload']>().notNull(),
+  },
+  table => [
+    check(
+      'audit_entries_subject_shape',
+      sql`(jsonb_typeof(${table.subject}) = 'object'
+        AND jsonb_typeof(${table.subject}->'type') = 'string'
+        AND jsonb_typeof(${table.subject}->'id') = 'string') IS TRUE`,
+    ),
+    index('audit_entries_subject_timeline_idx').on(
+      sql`(${table.subject}->>'type')`,
+      sql`(${table.subject}->>'id')`,
+      table.occurredAt.desc(),
+      table.id.desc(),
+    ),
   ],
 );
 

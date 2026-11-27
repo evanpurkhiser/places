@@ -6,6 +6,7 @@ import {SearchError} from '@places/common/search';
 import {and, asc, desc, eq, getTableColumns, inArray, isNull, or, sql} from 'drizzle-orm';
 import {z} from 'zod';
 
+import {saveAuditEntry} from '../audit/index.ts';
 import type {Context, RequestContext} from '../context.ts';
 import type {Database} from '../db/index.ts';
 import {places, placeSources, placeTags, sources, tags} from '../db/schema.ts';
@@ -20,19 +21,28 @@ import {rethrowImportError} from './import-errors.ts';
 const api = implement(contract.places).$context<RequestContext>();
 
 export const placeRouter = api.router({
-  delete: api.delete.handler(async ({input, context: {db}, errors}) => {
-    const [deleted] = await db
-      .update(places)
-      .set({deletedAt: sql`now()`})
-      .where(and(eq(places.id, input.id), isNull(places.deletedAt)))
-      .returning({id: places.id});
+  delete: api.delete.handler(({input, context: {db, userId}, errors}) =>
+    db.transaction(async tx => {
+      const [deleted] = await tx
+        .update(places)
+        .set({deletedAt: sql`now()`})
+        .where(and(eq(places.id, input.id), isNull(places.deletedAt)))
+        .returning({id: places.id, name: places.name});
 
-    if (!deleted) {
-      throw errors.NOT_FOUND();
-    }
+      if (!deleted) {
+        throw errors.NOT_FOUND();
+      }
 
-    return deleted;
-  }),
+      await saveAuditEntry(tx, {
+        type: 'place.deleted',
+        subject: {type: 'place', id: deleted.id},
+        actor: {type: 'user', id: userId},
+        payload: {name: deleted.name},
+      });
+
+      return {id: deleted.id};
+    }),
+  ),
   searchGoogle: api.searchGoogle.handler(async ({input, context: {google}}) => {
     const results = await google.search(input.query, 10).catch(rethrowGoogleError);
 

@@ -93,18 +93,10 @@ export function registerImportWorker(
     jobs,
     importQueue,
     options,
-    withImportRun(db, 'gmaps', (data, {requestedByUserId}) => {
+    withImportRun(db, 'gmaps', (data, run) => {
       const {googlePlaceId, tags, notes, source} = importPayload.parse(data);
 
-      return importPlace(
-        db,
-        google,
-        googlePlaceId,
-        tags,
-        notes,
-        source,
-        requestedByUserId,
-      );
+      return importPlace(db, google, googlePlaceId, tags, notes, source, run);
     }),
   );
 }

@@ -1,11 +1,13 @@
 import type {PlaceSourceInput} from '@places/common/contract/source';
 import {eq, sql} from 'drizzle-orm';
 
+import {saveAuditEntry} from '../audit/index.ts';
 import type {Database} from '../db/index.ts';
 import {places, placeSources, placeTags} from '../db/schema.ts';
 import {defaultUserId} from '../db/users.ts';
 import type {GooglePlaces} from '../services/google/index.ts';
 
+import type {ImportRunIdentity} from './runs.ts';
 import type {ImportOptions} from './types.ts';
 
 type ImportAssignment = ImportOptions['tags'][number];
@@ -30,7 +32,7 @@ async function savePlace(
   const existing = await findPlace(db, googlePlaceId);
 
   if (existing) {
-    return {...existing, created: false};
+    return {...existing, created: false as const};
   }
 
   const details = await google.getMetadata(googlePlaceId);
@@ -51,10 +53,15 @@ async function savePlace(
       coordinates: `SRID=4326;POINT(${details.location.longitude} ${details.location.latitude})`,
     })
     .onConflictDoNothing({target: places.googlePlaceId})
-    .returning({id: places.id, deletedAt: places.deletedAt});
+    .returning({
+      id: places.id,
+      deletedAt: places.deletedAt,
+      name: places.name,
+      userNote: places.userNote,
+    });
 
   if (inserted) {
-    return {...inserted, created: true};
+    return {...inserted, created: true as const};
   }
 
   const canonical = await findPlace(db, details.id);
@@ -63,7 +70,7 @@ async function savePlace(
     throw new Error('Place disappeared during import. Retry the import.');
   }
 
-  return {...canonical, created: false};
+  return {...canonical, created: false as const};
 }
 
 export function importPlace(
@@ -73,14 +80,17 @@ export function importPlace(
   tags: ImportAssignment[] = [],
   notes?: string,
   source?: PlaceSourceInput,
-  addedByUserId?: string,
+  run?: ImportRunIdentity,
 ) {
   return db.transaction(async tx => {
-    const {
-      id: placeId,
-      created,
-      deletedAt,
-    } = await savePlace(tx, google, googlePlaceId, addedByUserId, notes);
+    const place = await savePlace(
+      tx,
+      google,
+      googlePlaceId,
+      run?.requestedByUserId,
+      notes,
+    );
+    const {id: placeId, deletedAt} = place;
 
     // Importing a source can discover several places. Keep deleted places hidden
     // until a direct Google Maps import targets the place for restoration.
@@ -92,7 +102,15 @@ export function importPlace(
       await tx.update(places).set({deletedAt: null}).where(eq(places.id, placeId));
     }
 
-    if (created) {
+    if (place.created) {
+      await saveAuditEntry(tx, {
+        type: 'place.created',
+        subject: {type: 'place', id: placeId},
+        actor: run
+          ? {type: 'user', id: run.requestedByUserId}
+          : {type: 'system', id: 'gmaps-import'},
+        payload: {name: place.name, userNote: place.userNote, importRunId: run?.id},
+      });
       await applyInitialTags(tx, placeId, tags);
     }
 
