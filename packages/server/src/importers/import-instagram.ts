@@ -69,25 +69,27 @@ async function saveExistingSource(
     skipped: true,
   };
 
-  if (run) {
-    await lockImportSource(tx, sourceId);
-    await tx
-      .insert(placeSaves)
-      .select(
-        tx
-          .select({
-            placeId: placeSources.placeId,
-            userId: sql<string>`${run.requestedByUserId}::uuid`.as('user_id'),
-            savedAt: sql<Date>`now()`.as('saved_at'),
-          })
-          .from(placeSources)
-          .innerJoin(places, eq(placeSources.placeId, places.id))
-          .where(and(eq(placeSources.sourceId, sourceId), isNull(places.deletedAt)))
-          .orderBy(placeSources.placeId),
-      )
-      .onConflictDoNothing();
-    await recordImportCapture(tx, run.id, output);
+  if (!run) {
+    return output;
   }
+
+  await lockImportSource(tx, sourceId);
+  await tx
+    .insert(placeSaves)
+    .select(
+      tx
+        .select({
+          placeId: placeSources.placeId,
+          userId: sql<string>`${run.requestedByUserId}::uuid`.as('user_id'),
+          savedAt: sql<Date>`now()`.as('saved_at'),
+        })
+        .from(placeSources)
+        .innerJoin(places, eq(placeSources.placeId, places.id))
+        .where(and(eq(placeSources.sourceId, sourceId), isNull(places.deletedAt)))
+        .orderBy(placeSources.placeId),
+    )
+    .onConflictDoNothing();
+  await recordImportCapture(tx, run.id, output);
 
   return output;
 }

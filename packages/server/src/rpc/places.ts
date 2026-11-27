@@ -138,11 +138,12 @@ export const placeRouter = api.router({
     return rows.map(({latitude, longitude, ...place}) => ({
       ...place,
       coordinates: {latitude, longitude},
-      savedBy: (savesByPlace.get(place.id) ?? []).map(({userId, username, savedAt}) => ({
-        userId,
-        username,
-        savedAt,
-      })),
+      savedBy:
+        savesByPlace.get(place.id)?.map(({userId, username, savedAt}) => ({
+          userId,
+          username,
+          savedAt,
+        })) ?? [],
       tags: tagsByPlace.get(place.id) ?? [],
       sources: (sourcesByPlace.get(place.id) ?? []).map(assignment => ({
         ...assignment,
