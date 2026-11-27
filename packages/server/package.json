@@ -9,6 +9,7 @@
     "db:generate": "drizzle-kit generate",
     "start": "node src/main.ts",
     "db:migrate": "node src/db/migrate.ts",
+    "users": "node src/users.ts",
     "worker": "node src/worker.ts"
   },
   "dependencies": {

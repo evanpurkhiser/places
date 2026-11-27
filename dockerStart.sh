@@ -13,8 +13,9 @@ server)
 	;;
 worker) script=src/worker.ts ;;
 migrate) script=src/db/migrate.ts ;;
+users) script=src/users.ts ;;
 *)
-	echo "Usage: server|worker|migrate [--config PATH]" >&2
+	echo "Usage: server|worker|migrate|users [--config PATH]" >&2
 	exit 1
 	;;
 esac
