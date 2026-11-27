@@ -22,9 +22,6 @@ server: https://places.example.com
 token_file: token
 ```
 
-The CLI sends the token to the selected server,
-including when you use `--server`.
-
 ## Tags
 
 ```bash

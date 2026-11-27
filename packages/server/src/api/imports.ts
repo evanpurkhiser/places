@@ -3,7 +3,7 @@ import {inArray} from 'drizzle-orm';
 import {Hono} from 'hono';
 import {z} from 'zod';
 
-import type {Context} from '../context.ts';
+import type {Context, RequestContext} from '../context.ts';
 import {places} from '../db/schema.ts';
 import {
   ImportNotFoundError,
@@ -33,7 +33,7 @@ async function getPlaceNames(placeIds: string[], context: Pick<Context, 'db'>) {
   });
 }
 
-export const importApi = new Hono<{Variables: Context}>();
+export const importApi = new Hono<{Variables: RequestContext}>();
 
 importApi.onError((error, c) => {
   if (error instanceof InvalidImportInputError || error instanceof GoogleInputError) {

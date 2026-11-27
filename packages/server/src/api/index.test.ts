@@ -2,8 +2,8 @@ import {beforeEach, describe, expect, it, vi} from 'vitest';
 
 import {randomUUID} from 'node:crypto';
 
-import type {Context} from '../context.ts';
-import {users} from '../db/schema.ts';
+import {places, users} from '../db/schema.ts';
+import {createSelectContext} from '../fixtures/context.ts';
 import {ImportNotFoundError} from '../importers/errors.ts';
 
 const importers = vi.hoisted(() => ({
@@ -15,9 +15,7 @@ vi.mock('../importers/index.ts', () => importers);
 
 const {createApp} = await import('../app.ts');
 const defaultUser = {id: randomUUID()};
-const context = {
-  db: {select: () => ({from: () => ({where: () => Promise.resolve([defaultUser])})})},
-} as unknown as Context;
+const context = createSelectContext([[users, [defaultUser]]]);
 
 describe('import HTTP API', () => {
   beforeEach(() => vi.resetAllMocks());
@@ -44,12 +42,7 @@ describe('import HTTP API', () => {
   });
 
   it('rejects an unknown bearer token', async () => {
-    const app = createApp({
-      ...context,
-      db: {
-        select: () => ({from: () => ({where: () => Promise.resolve([])})}),
-      } as unknown as Context['db'],
-    });
+    const app = createApp(createSelectContext([[users, []]]));
     const response = await app.request('/api/imports', {
       method: 'POST',
       headers: {Authorization: 'Bearer unknown-token'},
@@ -63,23 +56,14 @@ describe('import HTTP API', () => {
     const jobId = randomUUID();
     const sourceId = randomUUID();
     const placeIds = [randomUUID(), randomUUID()];
-    const statusContext = {
-      db: {
-        select: () => ({
-          from: (table: unknown) => ({
-            where: () =>
-              Promise.resolve(
-                table === users
-                  ? [defaultUser]
-                  : [
-                      {id: placeIds[1], name: 'Second Place'},
-                      {id: placeIds[0], name: 'First Place'},
-                    ],
-              ),
-          }),
-        }),
-      },
-    } as unknown as Context;
+    const savedPlaces = [
+      {id: placeIds[1], name: 'Second Place'},
+      {id: placeIds[0], name: 'First Place'},
+    ];
+    const statusContext = createSelectContext([
+      [users, [defaultUser]],
+      [places, savedPlaces],
+    ]);
     importers.getImportStatus.mockResolvedValue({
       jobId,
       importType: 'instagram',

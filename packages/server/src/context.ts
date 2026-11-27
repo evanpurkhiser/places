@@ -5,9 +5,12 @@ import type {Database} from './db/index.ts';
 import type {GooglePlaces} from './services/google/index.ts';
 
 export interface Context {
-  userId: string;
   config: Config;
   db: Database;
   jobs: PgBoss;
   google: GooglePlaces;
+}
+
+export interface RequestContext extends Context {
+  userId: string;
 }

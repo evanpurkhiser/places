@@ -1,6 +1,6 @@
 import type {z} from 'zod';
 
-import type {Context} from '../context.ts';
+import type {Context, RequestContext} from '../context.ts';
 import type {importRuns} from '../db/schema.ts';
 import type {importPayload} from '../jobs/gmaps-import.ts';
 
@@ -20,7 +20,7 @@ export interface Importer {
   enqueue(
     input: string,
     options: ImportOptions,
-    context: Context,
+    context: RequestContext,
   ): Promise<string | null>;
   getStatus(
     run: ImportRun,

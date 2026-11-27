@@ -8,7 +8,7 @@ import {fileURLToPath} from 'node:url';
 
 import {api} from './api/index.ts';
 import {identifyUser} from './auth.ts';
-import type {Context} from './context.ts';
+import type {Context, RequestContext} from './context.ts';
 import {router} from './rpc/index.ts';
 
 const defaultWebRoot = fileURLToPath(new URL('../../web/dist/', import.meta.url));
@@ -17,8 +17,8 @@ interface AppOptions {
   webRoot?: string;
 }
 
-export function createApp(context: Omit<Context, 'userId'>, options: AppOptions = {}) {
-  const app = new Hono<{Variables: Context}>();
+export function createApp(context: Context, options: AppOptions = {}) {
+  const app = new Hono<{Variables: RequestContext}>();
   const rpc = new RPCHandler(router);
   const mcp = new MCPHandler(router, {
     serverInfo: {name: 'places', version: '0.0.0'},

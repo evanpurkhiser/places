@@ -8,6 +8,8 @@ import path from 'node:path';
 
 import {createApp} from './app.ts';
 import type {Context} from './context.ts';
+import {users} from './db/schema.ts';
+import {createSelectContext} from './fixtures/context.ts';
 import * as imports from './importers/index.ts';
 
 const temporaryDirectories: string[] = [];
@@ -77,9 +79,7 @@ describe('API credentials', () => {
 
 describe('MCP endpoint', () => {
   const defaultUser = {id: randomUUID()};
-  const context = {
-    db: {select: () => ({from: () => ({where: () => Promise.resolve([defaultUser])})})},
-  } as unknown as Context;
+  const context = createSelectContext([[users, [defaultUser]]]);
   const post = (app: ReturnType<typeof createApp>, body: unknown) =>
     app.request('/mcp', {
       method: 'POST',
@@ -209,7 +209,7 @@ describe('MCP endpoint', () => {
     vi.spyOn(imports, 'enqueueImport').mockResolvedValue(queuedImport);
     vi.spyOn(imports, 'getImportStatus').mockResolvedValue(status);
     vi.spyOn(imports, 'listImportStatuses').mockResolvedValue([status]);
-    const app = createApp({} as Context);
+    const app = createApp(context);
 
     const response = await post(app, {
       jsonrpc: '2.0',
