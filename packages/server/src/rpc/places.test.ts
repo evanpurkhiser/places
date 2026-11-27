@@ -16,6 +16,7 @@ import {createApp} from '../app.ts';
 import {configSchema} from '../config.ts';
 import {createDatabase} from '../db/index.ts';
 import {places, placeSources, placeTags, sources, tags} from '../db/schema.ts';
+import {defaultUserId} from '../db/users.ts';
 import {testConfig} from '../fixtures/config.ts';
 import {importPlace} from '../importers/import-place.ts';
 import {importQueue, registerImportWorker} from '../jobs/gmaps-import.ts';
@@ -297,6 +298,7 @@ describe.skipIf(!testUrl)('place import with PostgreSQL and pg-boss', () => {
     const [untagged] = await db
       .insert(places)
       .values({
+        addedByUserId: defaultUserId(db),
         googlePlaceId: 'untagged',
         name: 'Untagged',
         formattedAddress: '',
@@ -348,6 +350,7 @@ describe.skipIf(!testUrl)('place import with PostgreSQL and pg-boss', () => {
     const [otherPlace] = await db
       .insert(places)
       .values({
+        addedByUserId: defaultUserId(db),
         googlePlaceId: 'other',
         name: 'Other',
         formattedAddress: '',
@@ -406,6 +409,7 @@ describe.skipIf(!testUrl)('place import with PostgreSQL and pg-boss', () => {
       .insert(places)
       .values([
         {
+          addedByUserId: defaultUserId(db),
           googlePlaceId: 'beta',
           name: 'Beta',
           formattedAddress: '',
@@ -413,6 +417,7 @@ describe.skipIf(!testUrl)('place import with PostgreSQL and pg-boss', () => {
           createdAt: new Date('2026-01-03T00:00:00Z'),
         },
         {
+          addedByUserId: defaultUserId(db),
           googlePlaceId: 'alpha',
           name: 'Alpha',
           formattedAddress: '',
@@ -420,6 +425,7 @@ describe.skipIf(!testUrl)('place import with PostgreSQL and pg-boss', () => {
           createdAt: new Date('2026-01-03T00:00:00Z'),
         },
         {
+          addedByUserId: defaultUserId(db),
           googlePlaceId: 'gamma',
           name: 'Gamma',
           formattedAddress: '',

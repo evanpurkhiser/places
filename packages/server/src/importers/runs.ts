@@ -3,7 +3,7 @@ import {fromDrizzle, type JobWithMetadata} from 'pg-boss';
 
 import type {Database} from '../db/index.ts';
 import {importRuns} from '../db/schema.ts';
-import {defaultUserQuery} from '../db/users.ts';
+import {defaultUserId} from '../db/users.ts';
 
 type RunType = typeof importRuns.$inferInsert.type;
 export type ImportRunIdentity = Pick<
@@ -77,7 +77,7 @@ async function recordQueuedImport(
       id,
       type,
       ...run,
-      requestedByUserId: run.requestedByUserId ?? sql`(${defaultUserQuery(db)})`,
+      requestedByUserId: run.requestedByUserId ?? defaultUserId(db),
     })
     .onConflictDoNothing();
 }

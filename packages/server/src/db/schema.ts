@@ -71,6 +71,9 @@ export const places = pgTable(
     googlePlaceId: text('google_place_id').notNull().unique(),
     name: text('name').notNull(),
     formattedAddress: text('formatted_address').notNull(),
+    addedByUserId: uuid('added_by_user_id')
+      .notNull()
+      .references(() => users.id, {onDelete: 'restrict'}),
     googleMapsUrl: text('google_maps_url'),
     coordinates: geographyPoint('coordinates').notNull(),
     userNote: text('user_note'),
@@ -210,6 +213,9 @@ export const importRuns = pgTable(
     type: text('type', {enum: importRunTypes}).notNull(),
     state: text('state', {enum: importRunStates}).notNull().default('created'),
     sourceId: uuid('source_id').references(() => sources.id, {onDelete: 'set null'}),
+    requestedByUserId: uuid('requested_by_user_id')
+      .notNull()
+      .references(() => users.id, {onDelete: 'restrict'}),
     input: jsonb('input').$type<unknown>().notNull(),
     output: jsonb('output').$type<unknown>(),
     error: text('error'),

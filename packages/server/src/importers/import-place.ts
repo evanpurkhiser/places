@@ -3,7 +3,7 @@ import {eq, sql} from 'drizzle-orm';
 
 import type {Database} from '../db/index.ts';
 import {places, placeSources, placeTags} from '../db/schema.ts';
-import {defaultUserQuery} from '../db/users.ts';
+import {defaultUserId} from '../db/users.ts';
 import type {GooglePlaces} from '../services/google/index.ts';
 
 import type {ImportOptions} from './types.ts';
@@ -38,7 +38,7 @@ async function savePlace(
     .insert(places)
     .values({
       googlePlaceId: details.id,
-      addedByUserId: addedByUserId ?? sql`(${defaultUserQuery(db)})`,
+      addedByUserId: addedByUserId ?? defaultUserId(db),
       name: details.displayName.text,
       userNote: notes || null,
       formattedAddress: details.formattedAddress,
