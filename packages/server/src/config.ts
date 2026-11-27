@@ -90,10 +90,14 @@ export type Config = z.infer<typeof configSchema>;
 export async function loadConfig(args = process.argv.slice(2)): Promise<Config> {
   const {values} = parseArgs({
     args,
-    options: {config: {type: 'string', default: 'config.yaml'}},
+    options: {config: {type: 'string'}},
   });
+  return readConfig(values.config);
+}
+
+export async function readConfig(path = 'config.yaml'): Promise<Config> {
   const result = configSchema.safeParse(
-    parse(await readFile(values.config!, 'utf8'), {prettyErrors: false}),
+    parse(await readFile(path, 'utf8'), {prettyErrors: false}),
   );
 
   if (!result.success) {

@@ -1,34 +1,55 @@
+import {merge, object, or} from '@optique/core/constructs';
+import {message} from '@optique/core/message';
+import {optional} from '@optique/core/modifiers';
+import type {InferValue} from '@optique/core/parser';
+import {argument, command, constant, option} from '@optique/core/primitives';
+import {string} from '@optique/core/valueparser';
+import {run} from '@optique/run';
+import {zod} from '@optique/zod';
 import {desc, eq, sql} from 'drizzle-orm';
 import {z} from 'zod';
 
 import {randomBytes} from 'node:crypto';
-import {parseArgs} from 'node:util';
 
 import {hashToken} from './auth.ts';
-import {loadConfig} from './config.ts';
+import {readConfig} from './config.ts';
 import {createDatabase, type Database} from './db/index.ts';
 import {users} from './db/schema.ts';
 
-const usage = `Usage: users [--config PATH] COMMAND
+const username = argument(
+  zod(z.string().regex(/^[a-z0-9][a-z0-9_-]*$/), {metavar: 'USERNAME', placeholder: ''}),
+  {description: message`Use lowercase letters, digits, underscores, and hyphens.`},
+);
+const id = argument(zod(z.uuid(), {metavar: 'USER_ID', placeholder: ''}), {
+  description: message`User UUID shown by users list.`,
+});
 
-  list
-  create USERNAME
-  rename USER_ID USERNAME
-  rotate-token USER_ID
-  revoke-token USER_ID
-
-Usernames use lowercase letters, digits, underscores, and hyphens.
-rotate-token prints the new token once. Other commands print JSON.`;
-
-const username = z.string().regex(/^[a-z0-9][a-z0-9_-]*$/);
-const userId = z.uuid();
-const command = z.union([
-  z.tuple([z.literal('list')]),
-  z.tuple([z.literal('create'), username]),
-  z.tuple([z.literal('rename'), userId, username]),
-  z.tuple([z.literal('rotate-token'), userId]),
-  z.tuple([z.literal('revoke-token'), userId]),
-]);
+const parser = merge(
+  object({
+    config: optional(
+      option('--config', string({metavar: 'PATH'}), {
+        description: message`Path to the Places server YAML config.`,
+      }),
+    ),
+  }),
+  or(
+    command('list', object({action: constant('list')}), {
+      description: message`List users and their credential status.`,
+    }),
+    command('create', object({action: constant('create'), username}), {
+      description: message`Create a user.`,
+    }),
+    command('rename', object({action: constant('rename'), id, username}), {
+      description: message`Change a user's username.`,
+    }),
+    command('rotate-token', object({action: constant('rotate-token'), id}), {
+      description: message`Replace a user's credential and print the new bearer token.`,
+    }),
+    command('revoke-token', object({action: constant('revoke-token'), id}), {
+      description: message`Revoke a user's bearer token.`,
+    }),
+  ),
+);
 
 const userSummary = {
   id: users.id,
@@ -56,11 +77,8 @@ async function updateUser(
   return user;
 }
 
-async function manageUsers(
-  db: Database,
-  [action, target, newUsername]: z.infer<typeof command>,
-) {
-  switch (action) {
+async function manageUsers(db: Database, args: InferValue<typeof parser>) {
+  switch (args.action) {
     case 'list':
       return db
         .select(userSummary)
@@ -69,53 +87,39 @@ async function manageUsers(
     case 'create': {
       const [user] = await db
         .insert(users)
-        .values({username: target})
+        .values({username: args.username})
         .returning(userSummary);
       return user;
     }
     case 'rename':
-      return updateUser(db, target, {username: newUsername});
+      return updateUser(db, args.id, {username: args.username});
     case 'rotate-token': {
       const token = randomBytes(32).toString('base64url');
-      await updateUser(db, target, {tokenHash: hashToken(token)});
+      await updateUser(db, args.id, {tokenHash: hashToken(token)});
       return token;
     }
     case 'revoke-token':
-      return updateUser(db, target, {tokenHash: null});
+      return updateUser(db, args.id, {tokenHash: null});
   }
 }
 
-async function main() {
-  const {values, positionals} = parseArgs({
-    allowPositionals: true,
-    options: {config: {type: 'string'}, help: {type: 'boolean', short: 'h'}},
-  });
+const args = run(parser, {
+  programName: 'places users',
+  help: {option: {names: ['-h', '--help']}},
+  brief: message`Manage users from the Places server host.`,
+  description: message`Token rotation prints the new token once. Other commands print JSON.`,
+});
 
-  if (values.help) {
-    console.log(usage);
-    return;
-  }
-
-  const parsed = command.safeParse(positionals);
-  if (!parsed.success) {
-    throw new Error(usage);
-  }
-
-  const config = await loadConfig(
-    values.config === undefined ? [] : ['--config', values.config],
-  );
+try {
+  const config = await readConfig(args.config ?? process.env.PLACES_CONFIG_PATH);
   const db = createDatabase(config.database.url);
 
   try {
-    const result = await manageUsers(db, parsed.data);
+    const result = await manageUsers(db, args);
     console.log(typeof result === 'string' ? result : JSON.stringify(result, null, 2));
   } finally {
     await db.$client.end();
   }
-}
-
-try {
-  await main();
 } catch (error) {
   console.error(error instanceof Error ? error.message : 'User management failed.');
   process.exitCode = 1;

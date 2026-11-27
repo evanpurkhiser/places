@@ -13,7 +13,7 @@ server)
 	;;
 worker) script=src/worker.ts ;;
 migrate) script=src/db/migrate.ts ;;
-users) script=src/users.ts ;;
+users) PLACES_CONFIG_PATH=/etc/places.yaml exec node src/users.ts "$@" ;;
 *)
 	echo "Usage: server|worker|migrate|users [--config PATH]" >&2
 	exit 1
