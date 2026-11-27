@@ -78,6 +78,8 @@ export function importPlace(
       deletedAt,
     } = await savePlace(tx, google, googlePlaceId, notes);
 
+    // Importing a source can discover several places. Keep deleted places hidden
+    // until a direct Google Maps import targets the place for restoration.
     if (deletedAt && source) {
       return {placeIds: []};
     }
