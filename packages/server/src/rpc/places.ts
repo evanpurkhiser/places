@@ -8,7 +8,15 @@ import {z} from 'zod';
 
 import type {Context, RequestContext} from '../context.ts';
 import type {Database} from '../db/index.ts';
-import {places, placeSources, placeTags, sources, tags} from '../db/schema.ts';
+import {
+  places,
+  placeSaves,
+  placeSources,
+  placeTags,
+  sources,
+  tags,
+  users,
+} from '../db/schema.ts';
 import {geographyPoint} from '../filter-engine/geography.ts';
 import {preparePlaceQuery} from '../filter-engine/index.ts';
 import {enqueueImport, getImportStatus, listImportStatuses} from '../importers/index.ts';
@@ -97,40 +105,44 @@ export const placeRouter = api.router({
       return [];
     }
 
+    const placeIds = rows.map(place => place.id);
     const assignments = await db
       .select({...getTableColumns(placeTags), tag: getTableColumns(tags)})
       .from(placeTags)
       .innerJoin(tags, eq(placeTags.tagId, tags.id))
-      .where(
-        and(
-          eq(tags.archived, false),
-          inArray(
-            placeTags.placeId,
-            rows.map(place => place.id),
-          ),
-        ),
-      )
+      .where(and(eq(tags.archived, false), inArray(placeTags.placeId, placeIds)))
       .orderBy(tags.name, tags.id);
     const tagsByPlace = Map.groupBy(assignments, assignment => assignment.placeId);
     const sourceAssignments = await db
       .select({...getTableColumns(placeSources), source: getTableColumns(sources)})
       .from(placeSources)
       .innerJoin(sources, eq(placeSources.sourceId, sources.id))
-      .where(
-        inArray(
-          placeSources.placeId,
-          rows.map(place => place.id),
-        ),
-      )
+      .where(inArray(placeSources.placeId, placeIds))
       .orderBy(desc(placeSources.createdAt), desc(placeSources.sourceId));
     const sourcesByPlace = Map.groupBy(
       sourceAssignments,
       assignment => assignment.placeId,
     );
 
+    const saves = await db
+      .select({
+        ...getTableColumns(placeSaves),
+        username: users.username,
+      })
+      .from(placeSaves)
+      .innerJoin(users, eq(placeSaves.userId, users.id))
+      .where(inArray(placeSaves.placeId, placeIds))
+      .orderBy(placeSaves.savedAt, placeSaves.userId);
+    const savesByPlace = Map.groupBy(saves, save => save.placeId);
+
     return rows.map(({latitude, longitude, ...place}) => ({
       ...place,
       coordinates: {latitude, longitude},
+      savedBy: (savesByPlace.get(place.id) ?? []).map(({userId, username, savedAt}) => ({
+        userId,
+        username,
+        savedAt,
+      })),
       tags: tagsByPlace.get(place.id) ?? [],
       sources: (sourcesByPlace.get(place.id) ?? []).map(assignment => ({
         ...assignment,

@@ -30,7 +30,7 @@ const importPayload = z.object({
 });
 
 /**
- * Enqueue one ingestion per shortcode while a matching job is queued or active.
+ * Deduplicate queued or active imports of the same shortcode by the same user.
  */
 export function enqueueInstagramImport(
   jobs: PgBoss,
@@ -42,8 +42,10 @@ export function enqueueInstagramImport(
   const shortcode = instagramShortcode(url);
   const input = {shortcode, ...options};
 
+  const singletonKey = `${shortcode}:${requestedByUserId ?? 'default'}`;
+
   return withImportEnqueue(db, 'instagram', {input, requestedByUserId}, queueDb =>
-    jobs.send(importQueue, input, {singletonKey: shortcode, db: queueDb}),
+    jobs.send(importQueue, input, {singletonKey, db: queueDb}),
   );
 }
 

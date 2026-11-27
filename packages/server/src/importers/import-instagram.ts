@@ -1,11 +1,18 @@
 import {instagramSourceData} from '@places/common/contract/source';
-import {and, eq} from 'drizzle-orm';
+import {and, eq, isNull, sql} from 'drizzle-orm';
 import type OpenAI from 'openai';
 import type {PgBoss} from 'pg-boss';
 
 import type {Config} from '../config.ts';
 import type {Database} from '../db/index.ts';
-import {namespaces, sources, tags} from '../db/schema.ts';
+import {
+  namespaces,
+  places,
+  placeSaves,
+  placeSources,
+  sources,
+  tags,
+} from '../db/schema.ts';
 import {enqueuePlaceImports} from '../jobs/gmaps-import.ts';
 import type {GooglePlaces} from '../services/google/index.ts';
 import {
@@ -17,6 +24,7 @@ import {
   type FFmpeg,
 } from '../services/instagram/index.ts';
 
+import {lockImportSource} from './place-saves.ts';
 import {recordImportCapture, type ImportRunIdentity} from './runs.ts';
 import type {ImportOptions} from './types.ts';
 
@@ -49,13 +57,39 @@ async function findSource(db: Pick<Database, 'select'>, externalId: string) {
 /**
  * Report an existing ingestion without repeating capture or dispatch.
  */
-function skipped(sourceId: string) {
-  return {
+async function saveExistingSource(
+  tx: Pick<Database, 'select' | 'insert' | 'update'>,
+  sourceId: string,
+  run: ImportRunIdentity | undefined,
+) {
+  const output = {
     sourceId,
     jobIds: [] as string[],
     unresolved: [] as CaptureResult['unresolved'],
     skipped: true,
   };
+
+  if (run) {
+    await lockImportSource(tx, sourceId);
+    await tx
+      .insert(placeSaves)
+      .select(
+        tx
+          .select({
+            placeId: placeSources.placeId,
+            userId: sql<string>`${run.requestedByUserId}::uuid`.as('user_id'),
+            savedAt: sql<Date>`now()`.as('saved_at'),
+          })
+          .from(placeSources)
+          .innerJoin(places, eq(placeSources.placeId, places.id))
+          .where(and(eq(placeSources.sourceId, sourceId), isNull(places.deletedAt)))
+          .orderBy(placeSources.placeId),
+      )
+      .onConflictDoNothing();
+    await recordImportCapture(tx, run.id, output);
+  }
+
+  return output;
 }
 
 /**
@@ -71,7 +105,7 @@ export async function importInstagramPost(
   const existing = await findSource(dependencies.db, shortcode);
 
   if (existing) {
-    return skipped(existing.id);
+    return dependencies.db.transaction(tx => saveExistingSource(tx, existing.id, run));
   }
 
   const {captured, alwaysApplyTagIds} = await capturePost(
@@ -199,7 +233,7 @@ function dispatchPlaces(
       if (!existing) {
         throw new Error('Instagram source disappeared during import. Retry the import.');
       }
-      return skipped(existing.id);
+      return saveExistingSource(tx, existing.id, run);
     }
 
     const jobIds = await enqueueCapturedPlaces(

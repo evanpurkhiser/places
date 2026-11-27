@@ -74,11 +74,20 @@ export const place = z.object({
     .nullable()
     .describe('Google Place Details response, or null when unavailable.'),
   lastSync: z.date().nullable().describe('Time Google metadata was last refreshed.'),
-  createdAt: z.date().describe('Time the place was saved.'),
+  createdAt: z.date().describe('Time the place was added to the shared catalog.'),
   updatedAt: z.date().describe('Time the place was last updated.'),
   tags: z
     .array(placeTag.extend({tag: tag.describe('Assigned tag.')}))
     .describe('Active tag assignments.'),
+  savedBy: z
+    .array(
+      z.object({
+        userId: z.uuid(),
+        username: z.string(),
+        savedAt: z.date(),
+      }),
+    )
+    .describe('Users who saved the place and when each first saved it.'),
   sources: z.array(placeSource).describe('Sources associated with the place.'),
 });
 

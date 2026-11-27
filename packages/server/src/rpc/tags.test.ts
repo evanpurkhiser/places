@@ -17,7 +17,6 @@ import {createApp} from '../app.ts';
 import {configSchema} from '../config.ts';
 import {createDatabase} from '../db/index.ts';
 import {places, placeTags, tags} from '../db/schema.ts';
-import {defaultUserId} from '../db/users.ts';
 import {testConfig} from '../fixtures/config.ts';
 import {createGooglePlaces} from '../services/google/index.ts';
 
@@ -87,7 +86,6 @@ describe.skipIf(!testUrl)('tag API and CLI against PostgreSQL', () => {
     const [place] = await db
       .insert(places)
       .values({
-        addedByUserId: defaultUserId(db),
         googlePlaceId: 'archived-test',
         name: 'Cafe',
         formattedAddress: 'NYC',
@@ -273,7 +271,6 @@ describe.skipIf(!testUrl)('tag API and CLI against PostgreSQL', () => {
     const [place] = await db
       .insert(places)
       .values({
-        addedByUserId: defaultUserId(db),
         googlePlaceId: 'test-place',
         name: 'Test place',
         formattedAddress: 'Test address',

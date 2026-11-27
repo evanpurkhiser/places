@@ -56,6 +56,12 @@ export function PlaceDetails({
             })}
           </p>
         </section>
+        {place.savedBy.length > 0 && (
+          <section>
+            <div className="section-label">SAVED BY</div>
+            <p>{place.savedBy.map(save => save.username).join(', ')}</p>
+          </section>
+        )}
         <a
           className="external-link"
           href={googleMapsUrl(place)}

@@ -13,10 +13,10 @@ import {fileURLToPath} from 'node:url';
 import {promisify} from 'node:util';
 
 import {createApp} from '../app.ts';
+import {hashToken} from '../auth.ts';
 import {configSchema} from '../config.ts';
 import {createDatabase} from '../db/index.ts';
-import {places, placeSources, placeTags, sources, tags} from '../db/schema.ts';
-import {defaultUserId} from '../db/users.ts';
+import {places, placeSources, placeTags, sources, tags, users} from '../db/schema.ts';
 import {testConfig} from '../fixtures/config.ts';
 import {importPlace} from '../importers/import-place.ts';
 import {importQueue, registerImportWorker} from '../jobs/gmaps-import.ts';
@@ -103,6 +103,42 @@ describe.skipIf(!testUrl)('place import with PostgreSQL and pg-boss', () => {
 
     return client.places.getImportRun({jobId});
   }
+
+  it('lists each saver once and preserves their first save time', async () => {
+    const token = 'second-saver-token';
+    const [second] = await db
+      .insert(users)
+      .values({username: 'second-saver', tokenHash: hashToken(token)})
+      .returning();
+    const secondClient: Client = createORPCClient(
+      new RPCLink({
+        origin: 'http://localhost',
+        url: '/rpc',
+        headers: {Authorization: `Bearer ${token}`},
+        fetch: (url, init) => Promise.resolve(app.fetch(new Request(url, init))),
+      }),
+    );
+
+    const firstImport = await client.places.import({input: 'gmaps:ChIJtest'});
+    const first = await waitForState(firstImport.jobId, 'completed');
+    const [original] = await client.places.list();
+    expect(original?.savedBy).toEqual([
+      {userId: expect.any(String), username: 'admin', savedAt: original?.createdAt},
+    ]);
+
+    const secondImport = await secondClient.places.import({input: 'gmaps:ChIJtest'});
+    const afterSecond = await waitForState(secondImport.jobId, 'completed');
+    expect(afterSecond.placeIds).toEqual(first.placeIds);
+    const [shared] = await client.places.list();
+    expect(shared?.savedBy).toEqual([
+      original?.savedBy[0],
+      {userId: second!.id, username: 'second-saver', savedAt: expect.any(Date)},
+    ]);
+
+    const retry = await secondClient.places.import({input: 'gmaps:ChIJtest'});
+    await waitForState(retry.jobId, 'completed');
+    expect(await client.places.list()).toEqual([shared]);
+  }, 20000);
 
   it('attaches source details through the import worker', async () => {
     const [source] = await db.insert(sources).values({type: 'instagram'}).returning();
@@ -298,7 +334,6 @@ describe.skipIf(!testUrl)('place import with PostgreSQL and pg-boss', () => {
     const [untagged] = await db
       .insert(places)
       .values({
-        addedByUserId: defaultUserId(db),
         googlePlaceId: 'untagged',
         name: 'Untagged',
         formattedAddress: '',
@@ -350,7 +385,6 @@ describe.skipIf(!testUrl)('place import with PostgreSQL and pg-boss', () => {
     const [otherPlace] = await db
       .insert(places)
       .values({
-        addedByUserId: defaultUserId(db),
         googlePlaceId: 'other',
         name: 'Other',
         formattedAddress: '',
@@ -409,7 +443,6 @@ describe.skipIf(!testUrl)('place import with PostgreSQL and pg-boss', () => {
       .insert(places)
       .values([
         {
-          addedByUserId: defaultUserId(db),
           googlePlaceId: 'beta',
           name: 'Beta',
           formattedAddress: '',
@@ -417,7 +450,6 @@ describe.skipIf(!testUrl)('place import with PostgreSQL and pg-boss', () => {
           createdAt: new Date('2026-01-03T00:00:00Z'),
         },
         {
-          addedByUserId: defaultUserId(db),
           googlePlaceId: 'alpha',
           name: 'Alpha',
           formattedAddress: '',
@@ -425,7 +457,6 @@ describe.skipIf(!testUrl)('place import with PostgreSQL and pg-boss', () => {
           createdAt: new Date('2026-01-03T00:00:00Z'),
         },
         {
-          addedByUserId: defaultUserId(db),
           googlePlaceId: 'gamma',
           name: 'Gamma',
           formattedAddress: '',
