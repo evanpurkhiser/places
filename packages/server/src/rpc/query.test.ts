@@ -29,6 +29,7 @@ it('serves serializable documentation for the registered query capabilities', as
     'id',
     'tag',
     'source',
+    'savedBy',
     'name',
     'address',
     'notes',

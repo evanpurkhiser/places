@@ -3,6 +3,7 @@ import {has} from './filters/has.ts';
 import {id} from './filters/id.ts';
 import {location} from './filters/location.ts';
 import {open} from './filters/open.ts';
+import {savedBy} from './filters/saved-by.ts';
 import {source} from './filters/source.ts';
 import {tag} from './filters/tag.ts';
 import {address, name, notes} from './filters/text.ts';
@@ -48,6 +49,6 @@ export const placeFilterEngineDefinition = defineFilterEngine({
     geographicPoint,
     geographicPredicate,
   },
-  filters: {id, tag, source, name, address, notes, has, location, open},
+  filters: {id, tag, source, savedBy, name, address, notes, has, location, open},
   functions: {point, radius, rect, sector},
 });

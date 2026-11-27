@@ -16,6 +16,7 @@ import {hasCompiler} from './compiler/has.ts';
 import {idCompiler} from './compiler/id.ts';
 import {locationCompiler} from './compiler/location.ts';
 import {openCompiler} from './compiler/open.ts';
+import {savedByCompiler} from './compiler/saved-by.ts';
 import {sourceCompiler} from './compiler/source.ts';
 import {tagCompiler} from './compiler/tag.ts';
 import {matchText, present} from './compiler/text.ts';
@@ -43,6 +44,7 @@ const implementation = {
     id: idCompiler,
     tag: tagCompiler,
     source: sourceCompiler,
+    savedBy: savedByCompiler,
     name: textCompiler(places.name),
     address: textCompiler(places.formattedAddress),
     notes: textCompiler(places.userNote),
