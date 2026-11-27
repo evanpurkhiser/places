@@ -98,6 +98,16 @@ and `distance`.
 Append `-asc` or `-desc` for direction.
 Distance sorting requires `--reference-location`.
 
+## Deleting places
+
+```bash
+pnpm places delete PLACE_ID
+```
+
+Use a saved place UUID from `list`.
+Deletion hides the place from the list and preserves its notes, tags, and sources.
+A direct Google Maps import restores the same saved place.
+
 ## Sync
 
 ```bash

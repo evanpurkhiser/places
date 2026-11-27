@@ -736,7 +736,7 @@ describe.skipIf(!testUrl)('place import with PostgreSQL and pg-boss', () => {
     );
   }, 20000);
 
-  it('imports and lists through the actual CLI', async () => {
+  it('imports, lists, and deletes places through the actual CLI', async () => {
     const server = serve({fetch: app.fetch, hostname: '127.0.0.1', port: 15189});
     const cliPath = fileURLToPath(new URL('../../../cli/src/main.ts', import.meta.url));
     const cli = (...args: string[]) =>
@@ -784,6 +784,10 @@ describe.skipIf(!testUrl)('place import with PostgreSQL and pg-boss', () => {
         removed: true,
       });
       expect(await db.select().from(placeTags)).toEqual([]);
+      const deleteOutput = await cli('delete', saved!.id);
+      expect(JSON.parse(deleteOutput.stdout)).toEqual({id: saved!.id});
+      const remainingOutput = await cli('list');
+      expect(JSON.parse(remainingOutput.stdout)).toEqual([]);
       await expect(cli('import', 'https://evil.test')).rejects.toMatchObject({code: 1});
     } finally {
       await new Promise<void>((resolve, reject) =>

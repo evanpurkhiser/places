@@ -29,10 +29,12 @@ const name = argument(zod(tag.shape.name, {metavar: 'NAME', placeholder: ''}), {
   description: message`Tag name or namespace.tag; trimmed and lowercased. The namespace must exist.`,
 });
 
+const placeId = argument(zod(place.shape.id, {metavar: 'PLACE_ID', placeholder: ''}), {
+  description: message`Saved place UUID, shown by list or import runs.`,
+});
+
 const assignmentArguments = {
-  placeId: argument(zod(place.shape.id, {metavar: 'PLACE_ID', placeholder: ''}), {
-    description: message`Saved place UUID, shown by list or import runs.`,
-  }),
+  placeId,
   tag: argument(zod(tagReference, {metavar: 'NAME_OR_ID', placeholder: ''}), {
     description: message`Existing tag name or UUID.`,
   }),
@@ -229,6 +231,9 @@ export const parser = merge(
       }),
       {description: message`Remove a tag and its assignment note from a saved place.`},
     ),
+    command('delete', object({action: constant('place-delete'), placeId}), {
+      description: message`Remove a saved place while preserving its notes, tags, and sources.`,
+    }),
     command(
       'list',
       object({
@@ -385,6 +390,8 @@ export function execute(args: InferValue<typeof parser>, client: Client) {
       return client.places.tag({placeId: args.placeId, tag: args.tag, notes: args.notes});
     case 'place-untag':
       return client.places.untag({placeId: args.placeId, tag: args.tag});
+    case 'place-delete':
+      return client.places.delete({id: args.placeId});
     case 'places-list':
       return client.places.list({
         query: args.query,
