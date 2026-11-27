@@ -9,12 +9,16 @@
     "db:generate": "drizzle-kit generate",
     "start": "node src/main.ts",
     "db:migrate": "node src/db/migrate.ts",
+    "users": "node src/users.ts",
     "worker": "node src/worker.ts"
   },
   "dependencies": {
     "@googlemaps/places": "^3.0.0",
     "@hono/node-server": "^2.1.1",
     "@openai/agents": "^0.18.0",
+    "@optique/core": "^1.2.7",
+    "@optique/run": "^1.2.7",
+    "@optique/zod": "^1.2.7",
     "@orpc/server": "2.0.0-beta.43",
     "@orpc/zod": "2.0.0-beta.43",
     "@places/common": "workspace:*",
