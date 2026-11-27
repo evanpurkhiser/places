@@ -8,6 +8,7 @@ import {fileURLToPath} from 'node:url';
 
 import {createDatabase} from '../../db/index.ts';
 import {places} from '../../db/schema.ts';
+import {defaultUserId} from '../../db/users.ts';
 import {compilePlaceQuery} from '../index.ts';
 
 const testUrl = process.env.TEST_DATABASE_URL;
@@ -77,6 +78,7 @@ describe.skipIf(!testUrl)('opening hours with PostgreSQL', () => {
     ];
     await db.insert(places).values(
       fixtures.map(fixture => ({
+        addedByUserId: defaultUserId(db),
         googlePlaceId: fixture.name,
         formattedAddress: '',
         coordinates: 'SRID=4326;POINT(-74 40)',

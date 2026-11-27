@@ -1,7 +1,7 @@
 import type {ImportTag} from '@places/common/contract/place';
 import {desc, eq} from 'drizzle-orm';
 
-import type {Context} from '../context.ts';
+import type {Context, RequestContext} from '../context.ts';
 import {importRuns} from '../db/schema.ts';
 
 import {
@@ -18,7 +18,7 @@ const importers = [googleImporter, instagramImporter];
 
 export async function enqueueImport(
   input: string,
-  context: Context,
+  context: RequestContext,
   tags: ImportTag[] = [],
   notes?: string,
 ) {

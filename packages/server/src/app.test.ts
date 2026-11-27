@@ -1,12 +1,15 @@
 import {afterEach, describe, expect, it, vi} from 'vitest';
 import {z} from 'zod';
 
+import {randomUUID} from 'node:crypto';
 import {mkdtemp, mkdir, rm, writeFile} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import path from 'node:path';
 
 import {createApp} from './app.ts';
 import type {Context} from './context.ts';
+import {users} from './db/schema.ts';
+import {createSelectContext} from './fixtures/context.ts';
 import * as imports from './importers/index.ts';
 
 const temporaryDirectories: string[] = [];
@@ -58,7 +61,25 @@ describe('web app', () => {
   });
 });
 
+describe('API credentials', () => {
+  it.each(['/api/imports', '/mcp', '/rpc/places/list'])(
+    'rejects invalid credentials at %s instead of using the default user',
+    async path => {
+      const app = createApp({} as Context);
+      const response = await app.request(path, {
+        method: 'POST',
+        headers: {Authorization: 'Basic wrong-scheme'},
+      });
+
+      expect(response.status).toBe(401);
+      expect(response.headers.get('WWW-Authenticate')).toBe('Bearer');
+    },
+  );
+});
+
 describe('MCP endpoint', () => {
+  const defaultUser = {id: randomUUID()};
+  const context = createSelectContext([[users, [defaultUser]]]);
   const post = (app: ReturnType<typeof createApp>, body: unknown) =>
     app.request('/mcp', {
       method: 'POST',
@@ -67,7 +88,7 @@ describe('MCP endpoint', () => {
     });
 
   it('publishes the centralized tool catalog', async () => {
-    const app = createApp({} as Context);
+    const app = createApp(context);
     const response = await post(app, {jsonrpc: '2.0', id: 1, method: 'tools/list'});
     const body = z
       .object({
@@ -138,7 +159,7 @@ describe('MCP endpoint', () => {
   });
 
   it('calls the existing oRPC implementation', async () => {
-    const app = createApp({} as Context);
+    const app = createApp(context);
     const response = await post(app, {
       jsonrpc: '2.0',
       id: 2,
@@ -188,7 +209,7 @@ describe('MCP endpoint', () => {
     vi.spyOn(imports, 'enqueueImport').mockResolvedValue(queuedImport);
     vi.spyOn(imports, 'getImportStatus').mockResolvedValue(status);
     vi.spyOn(imports, 'listImportStatuses').mockResolvedValue([status]);
-    const app = createApp({} as Context);
+    const app = createApp(context);
 
     const response = await post(app, {
       jsonrpc: '2.0',

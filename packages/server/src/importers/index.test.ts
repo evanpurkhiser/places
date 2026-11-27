@@ -15,6 +15,7 @@ const savedPlaceId = '00000000-0000-4000-8000-000000000006';
 function importRun(overrides: Pick<ImportRun, 'id' | 'type'> & Partial<ImportRun>) {
   return {
     state: 'created',
+    requestedByUserId: '00000000-0000-4000-8000-000000000007',
     sourceId: null,
     input: {},
     output: null,

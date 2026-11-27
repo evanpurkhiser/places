@@ -1,9 +1,9 @@
 import {Hono} from 'hono';
 
-import type {Context} from '../context.ts';
+import type {RequestContext} from '../context.ts';
 
 import {importApi} from './imports.ts';
 
-export const api = new Hono<{Variables: Context}>();
+export const api = new Hono<{Variables: RequestContext}>();
 
 api.route('/imports', importApi);

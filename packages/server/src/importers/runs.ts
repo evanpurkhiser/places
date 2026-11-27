@@ -3,13 +3,20 @@ import {fromDrizzle, type JobWithMetadata} from 'pg-boss';
 
 import type {Database} from '../db/index.ts';
 import {importRuns} from '../db/schema.ts';
+import {defaultUserId} from '../db/users.ts';
 
 type RunType = typeof importRuns.$inferInsert.type;
-type RunWriter = Pick<Database, 'insert' | 'update'>;
+export type ImportRunIdentity = Pick<
+  typeof importRuns.$inferSelect,
+  'id' | 'requestedByUserId'
+>;
+
+type RunWriter = Pick<Database, 'insert' | 'select' | 'update'>;
 
 interface QueuedImport {
   input: unknown;
   sourceId?: string;
+  requestedByUserId?: string;
 }
 
 type QueueDatabase = ReturnType<typeof fromDrizzle>;
@@ -24,7 +31,7 @@ export function withImportEnqueue(
     const id = await enqueue(fromDrizzle(tx, sql));
 
     if (id !== null) {
-      await recordQueuedImport(tx, id, type, run.input, run.sourceId);
+      await recordQueuedImport(tx, id, type, run);
     }
 
     return id;
@@ -33,7 +40,7 @@ export function withImportEnqueue(
 
 /** Use the source transaction so capture, child jobs, and run records commit together. */
 export async function withImportBatchEnqueue(
-  tx: Pick<Database, 'insert' | 'execute'>,
+  tx: Pick<Database, 'insert' | 'execute' | 'select'>,
   type: RunType,
   runs: QueuedImport[],
   enqueue: (db: QueueDatabase) => Promise<string[] | null>,
@@ -51,21 +58,28 @@ export async function withImportBatchEnqueue(
   await Promise.all(
     ids.map((id, index) => {
       const run = runs[index]!;
-      return recordQueuedImport(tx, id, type, run.input, run.sourceId);
+      return recordQueuedImport(tx, id, type, run);
     }),
   );
 
   return ids;
 }
 
-export async function recordQueuedImport(
-  db: Pick<Database, 'insert'>,
+async function recordQueuedImport(
+  db: Pick<Database, 'insert' | 'select'>,
   id: string,
   type: RunType,
-  input: unknown,
-  sourceId?: string,
+  run: QueuedImport,
 ) {
-  await db.insert(importRuns).values({id, type, input, sourceId}).onConflictDoNothing();
+  await db
+    .insert(importRuns)
+    .values({
+      id,
+      type,
+      ...run,
+      requestedByUserId: run.requestedByUserId ?? defaultUserId(db),
+    })
+    .onConflictDoNothing();
 }
 
 export async function recordImportStarted(
@@ -74,8 +88,8 @@ export async function recordImportStarted(
   type: RunType,
   input: unknown,
 ) {
-  await recordQueuedImport(db, id, type, input);
-  await db
+  await recordQueuedImport(db, id, type, {input});
+  const [run] = await db
     .update(importRuns)
     .set({
       state: 'active',
@@ -84,7 +98,14 @@ export async function recordImportStarted(
       finishedAt: null,
       error: null,
     })
-    .where(eq(importRuns.id, id));
+    .where(eq(importRuns.id, id))
+    .returning({id: importRuns.id, requestedByUserId: importRuns.requestedByUserId});
+
+  if (!run) {
+    throw new Error('Import run disappeared before it could start.');
+  }
+
+  return run;
 }
 
 export async function recordImportCompleted(
@@ -139,13 +160,13 @@ export async function recordImportCapture(
 export function withImportRun(
   db: RunWriter,
   type: RunType,
-  handler: (data: unknown, runId: string) => Promise<unknown>,
+  handler: (data: unknown, run: ImportRunIdentity) => Promise<unknown>,
 ) {
   return async (data: unknown, job: JobWithMetadata<unknown>) => {
-    await recordImportStarted(db, job.id, type, data);
+    const run = await recordImportStarted(db, job.id, type, data);
 
     try {
-      const output = await handler(data, job.id);
+      const output = await handler(data, run);
       await recordImportCompleted(db, job.id, output);
       return output;
     } catch (error) {

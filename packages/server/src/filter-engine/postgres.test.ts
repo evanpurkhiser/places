@@ -8,6 +8,7 @@ import {fileURLToPath} from 'node:url';
 
 import {createDatabase} from '../db/index.ts';
 import {places, placeSources, sources, placeTags, tags} from '../db/schema.ts';
+import {defaultUserId} from '../db/users.ts';
 
 import {compilePlaceQuery} from './index.ts';
 
@@ -34,6 +35,7 @@ describe.skipIf(!testUrl)('filter engine with PostgreSQL', () => {
       .insert(places)
       .values([
         {
+          addedByUserId: defaultUserId(db),
           googlePlaceId: 'a',
           name: 'Cafe',
           formattedAddress: 'NYC',
@@ -41,6 +43,7 @@ describe.skipIf(!testUrl)('filter engine with PostgreSQL', () => {
           userNote: '100%_good',
         },
         {
+          addedByUserId: defaultUserId(db),
           googlePlaceId: 'b',
           name: 'Bar',
           formattedAddress: 'NYC',
@@ -48,6 +51,7 @@ describe.skipIf(!testUrl)('filter engine with PostgreSQL', () => {
           userNote: '',
         },
         {
+          addedByUserId: defaultUserId(db),
           googlePlaceId: 'c',
           name: 'Empty',
           formattedAddress: 'NYC',
@@ -179,12 +183,14 @@ describe.skipIf(!testUrl)('filter engine with PostgreSQL', () => {
       .insert(places)
       .values([
         {
+          addedByUserId: defaultUserId(db),
           googlePlaceId: 'radius-near',
           name: 'RadiusNear',
           formattedAddress: '',
           coordinates: 'SRID=4326;POINT(-179.999 0)',
         },
         {
+          addedByUserId: defaultUserId(db),
           googlePlaceId: 'radius-far',
           name: 'RadiusFar',
           formattedAddress: '',
@@ -232,6 +238,7 @@ describe.skipIf(!testUrl)('filter engine with PostgreSQL', () => {
       .insert(places)
       .values(
         fixtures.map(([name, distance, bearing]) => ({
+          addedByUserId: defaultUserId(db),
           googlePlaceId: randomUUID(),
           name,
           formattedAddress: '',
@@ -346,6 +353,7 @@ describe.skipIf(!testUrl)('filter engine with PostgreSQL', () => {
       .insert(places)
       .values(
         fixtures.map(([name, lng, lat]) => ({
+          addedByUserId: defaultUserId(db),
           googlePlaceId: randomUUID(),
           name,
           formattedAddress: '',
@@ -431,6 +439,7 @@ describe.skipIf(!testUrl)('filter engine with PostgreSQL', () => {
       .insert(places)
       .values(
         fixtures.map(([name, note]) => ({
+          addedByUserId: defaultUserId(db),
           googlePlaceId: randomUUID(),
           name: name!,
           userNote: note,
@@ -466,6 +475,7 @@ describe.skipIf(!testUrl)('filter engine with PostgreSQL', () => {
     const [place] = await db
       .insert(places)
       .values({
+        addedByUserId: defaultUserId(db),
         googlePlaceId: randomUUID(),
         name: 'NoNote',
         formattedAddress: 'NYC',

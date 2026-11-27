@@ -16,6 +16,7 @@ import {createApp} from '../app.ts';
 import {configSchema} from '../config.ts';
 import {createDatabase} from '../db/index.ts';
 import {namespaces, tags, places, placeTags} from '../db/schema.ts';
+import {defaultUserId} from '../db/users.ts';
 import {testConfig} from '../fixtures/config.ts';
 import {createGooglePlaces} from '../services/google/index.ts';
 
@@ -271,6 +272,7 @@ describe.skipIf(!testUrl)('namespace API and CLI against PostgreSQL', () => {
     const [place] = await db
       .insert(places)
       .values({
+        addedByUserId: defaultUserId(db),
         googlePlaceId: 'force-delete',
         name: 'Cafe',
         formattedAddress: 'NYC',
@@ -370,6 +372,7 @@ describe.skipIf(!testUrl)('namespace API and CLI against PostgreSQL', () => {
     const [place] = await db
       .insert(places)
       .values({
+        addedByUserId: defaultUserId(db),
         googlePlaceId: 'namespace-place',
         name: 'Cafe',
         formattedAddress: 'NYC',

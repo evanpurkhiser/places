@@ -21,7 +21,7 @@ const args = run(parser, {
 
 try {
   const config = await loadConfig(args);
-  const result = await execute(args, createClient(config.server));
+  const result = await execute(args, createClient(config.server, config.token));
 
   console.log(typeof result === 'string' ? result : JSON.stringify(result, null, 2));
 } catch (error) {

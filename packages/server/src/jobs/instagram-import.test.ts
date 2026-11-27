@@ -7,6 +7,8 @@ import {afterAll, beforeAll, beforeEach, describe, expect, it, vi} from 'vitest'
 import {randomUUID} from 'node:crypto';
 import {fileURLToPath} from 'node:url';
 
+import {createApp} from '../app.ts';
+import {hashToken} from '../auth.ts';
 import {configSchema} from '../config.ts';
 import {createDatabase} from '../db/index.ts';
 import {
@@ -16,6 +18,7 @@ import {
   placeTags,
   sources,
   tags,
+  users,
 } from '../db/schema.ts';
 import {ImportUnavailableError, InvalidImportInputError} from '../importers/errors.ts';
 import {
@@ -79,6 +82,7 @@ describe.skipIf(!testUrl)('Instagram ingestion with PostgreSQL and pg-boss', () 
       capture: {model: 'test'},
     },
   });
+  let defaultUserId: string;
   let jobs: Awaited<ReturnType<typeof startJobs>>;
   let dependencies: InstagramImportDependencies;
   let captured: instagram.CaptureResult;
@@ -91,6 +95,8 @@ describe.skipIf(!testUrl)('Instagram ingestion with PostgreSQL and pg-boss', () 
     await migrate(db, {
       migrationsFolder: fileURLToPath(new URL('../../drizzle', import.meta.url)),
     });
+    const [defaultUser] = await db.select().from(users).where(eq(users.isDefault, true));
+    defaultUserId = defaultUser!.id;
     jobs = await startJobs(databaseUrl.href);
     dependencies = {
       db,
@@ -217,7 +223,13 @@ describe.skipIf(!testUrl)('Instagram ingestion with PostgreSQL and pg-boss', () 
     );
   });
 
-  const context = () => ({db, jobs, google: dependencies.google, config});
+  const context = () => ({
+    db,
+    jobs,
+    google: dependencies.google,
+    config,
+    userId: defaultUserId,
+  });
 
   async function dispatchImport() {
     const submitted = await enqueueImport(url, context());
@@ -228,7 +240,7 @@ describe.skipIf(!testUrl)('Instagram ingestion with PostgreSQL and pg-boss', () 
       dependencies,
       shortcode,
       {tags: []},
-      parent!.id,
+      {id: parent!.id, requestedByUserId: defaultUserId},
     );
     await recordImportStarted(db, job!.id, 'instagram', job!.data);
     await recordImportCompleted(db, job!.id, result);
@@ -465,6 +477,39 @@ describe.skipIf(!testUrl)('Instagram ingestion with PostgreSQL and pg-boss', () 
     });
   });
 
+  it('attributes tokenless imports and older jobs to the current default user', async () => {
+    const [otherUser] = await db
+      .insert(users)
+      .values({username: 'new-default'})
+      .returning({id: users.id});
+    const nextDefaultId = otherUser!.id;
+    const designateDefault = (id: string) =>
+      db.transaction(async tx => {
+        await tx.update(users).set({isDefault: false}).where(eq(users.isDefault, true));
+        await tx.update(users).set({isDefault: true}).where(eq(users.id, id));
+      });
+    await designateDefault(nextDefaultId);
+
+    try {
+      const app = createApp(context());
+      const response = await app.request('/api/imports', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({url}),
+      });
+
+      expect(response.status).toBe(202);
+      const {jobId} = await response.json();
+      const [run] = await db.select().from(importRuns).where(eq(importRuns.id, jobId));
+      expect(run?.requestedByUserId).toBe(nextDefaultId);
+
+      const olderJob = await recordImportStarted(db, randomUUID(), 'gmaps', {});
+      expect(olderJob.requestedByUserId).toBe(nextDefaultId);
+    } finally {
+      await designateDefault(defaultUserId);
+    }
+  });
+
   it('retains capture metadata, child results, and unresolved mentions after queue cleanup', async () => {
     vi.spyOn(dependencies.google, 'getMetadata').mockImplementation(id =>
       Promise.resolve({
@@ -479,7 +524,19 @@ describe.skipIf(!testUrl)('Instagram ingestion with PostgreSQL and pg-boss', () 
         googleMetadata: {id},
       }),
     );
-    const submitted = await enqueueImport(url, context());
+    const token = 'test-vivian-token';
+    const [user] = await db
+      .insert(users)
+      .values({username: 'vivian', tokenHash: hashToken(token)})
+      .returning({id: users.id});
+    const app = createApp(context());
+    const response = await app.request('/api/imports', {
+      method: 'POST',
+      headers: {Authorization: `Bearer ${token}`, 'Content-Type': 'application/json'},
+      body: JSON.stringify({url}),
+    });
+    expect(response.status).toBe(202);
+    const submitted = await response.json();
     await registerInstagramImportWorker(jobs, dependencies, config.workers[importQueue]);
     await registerImportWorker(jobs, dependencies, config.workers[googleQueue]);
 
@@ -507,6 +564,20 @@ describe.skipIf(!testUrl)('Instagram ingestion with PostgreSQL and pg-boss', () 
       output: {captured, unresolved: captured.unresolved},
     });
     expect(runs.every(run => run.sourceId === parent.sourceId)).toBe(true);
+    expect(runs.map(run => run.requestedByUserId)).toEqual([
+      user!.id,
+      user!.id,
+      user!.id,
+    ]);
+
+    const saved = await db.select().from(places);
+    expect(saved.map(place => place.addedByUserId)).toEqual([user!.id, user!.id]);
+    await importPlace(db, dependencies.google, saved[0]!.googlePlaceId);
+    const [reimported] = await db
+      .select()
+      .from(places)
+      .where(eq(places.id, saved[0]!.id));
+    expect(reimported?.addedByUserId).toBe(user!.id);
     await jobs.deleteAllJobs(importQueue);
     await jobs.deleteAllJobs(googleQueue);
     expect(await db.select().from(importRuns)).toEqual(runs);
@@ -529,7 +600,7 @@ describe.skipIf(!testUrl)('Instagram ingestion with PostgreSQL and pg-boss', () 
       dependencies,
       shortcode,
       {tags: []},
-      submitted.jobId,
+      {id: submitted.jobId, requestedByUserId: defaultUserId},
     );
     const runs = await db.select().from(importRuns);
     const parent = runs.find(item => item.id === submitted.jobId);

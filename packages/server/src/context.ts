@@ -10,3 +10,7 @@ export interface Context {
   jobs: PgBoss;
   google: GooglePlaces;
 }
+
+export interface RequestContext extends Context {
+  userId: string;
+}

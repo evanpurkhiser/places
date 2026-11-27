@@ -17,7 +17,7 @@ import {
   type FFmpeg,
 } from '../services/instagram/index.ts';
 
-import {recordImportCapture} from './runs.ts';
+import {recordImportCapture, type ImportRunIdentity} from './runs.ts';
 import type {ImportOptions} from './types.ts';
 
 export interface InstagramImportDependencies {
@@ -66,7 +66,7 @@ export async function importInstagramPost(
   dependencies: InstagramImportDependencies,
   shortcode: string,
   options: ImportOptions = {tags: []},
-  runId?: string,
+  run?: ImportRunIdentity,
 ) {
   const existing = await findSource(dependencies.db, shortcode);
 
@@ -85,7 +85,7 @@ export async function importInstagramPost(
     captured,
     alwaysApplyTagIds,
     options,
-    runId,
+    run,
   );
 }
 
@@ -136,16 +136,18 @@ async function capturePost(
 }
 
 function enqueueCapturedPlaces(
-  tx: Pick<Database, 'insert' | 'execute'>,
+  tx: Pick<Database, 'insert' | 'execute' | 'select'>,
   jobs: PgBoss,
   sourceId: string,
   places: CaptureResult['places'],
   alwaysApplyTagIds: string[],
   options: ImportOptions,
+  requestedByUserId: string | undefined,
 ) {
   return enqueuePlaceImports(
     jobs,
     tx,
+    requestedByUserId,
     places.map(place => ({
       googlePlaceId: place.googlePlaceId,
       tags: [
@@ -176,7 +178,7 @@ function dispatchPlaces(
   captured: CaptureResult,
   alwaysApplyTagIds: string[],
   options: ImportOptions,
-  runId?: string,
+  run?: ImportRunIdentity,
 ) {
   return db.transaction(async tx => {
     const {description, caption, username, postedAt, thumbnailUrl} = captured.source;
@@ -207,6 +209,7 @@ function dispatchPlaces(
       captured.places,
       alwaysApplyTagIds,
       options,
+      run?.requestedByUserId,
     );
 
     const output = {
@@ -217,8 +220,8 @@ function dispatchPlaces(
       skipped: false,
     };
 
-    if (runId) {
-      await recordImportCapture(tx, runId, output);
+    if (run) {
+      await recordImportCapture(tx, run.id, output);
     }
 
     return output;

@@ -6,7 +6,7 @@ import {SearchError} from '@places/common/search';
 import {and, asc, desc, eq, getTableColumns, inArray, isNull, or, sql} from 'drizzle-orm';
 import {z} from 'zod';
 
-import type {Context} from '../context.ts';
+import type {Context, RequestContext} from '../context.ts';
 import type {Database} from '../db/index.ts';
 import {places, placeSources, placeTags, sources, tags} from '../db/schema.ts';
 import {geographyPoint} from '../filter-engine/geography.ts';
@@ -17,7 +17,7 @@ import {syncQueue, syncPayload} from '../jobs/gmaps-sync.ts';
 import {rethrowGoogleError} from './google-errors.ts';
 import {rethrowImportError} from './import-errors.ts';
 
-const api = implement(contract.places).$context<Context>();
+const api = implement(contract.places).$context<RequestContext>();
 
 export const placeRouter = api.router({
   delete: api.delete.handler(async ({input, context: {db}, errors}) => {

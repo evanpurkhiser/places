@@ -7,7 +7,8 @@ import {MCPHandler} from 'orpc-mcp/fetch';
 import {fileURLToPath} from 'node:url';
 
 import {api} from './api/index.ts';
-import type {Context} from './context.ts';
+import {identifyUser} from './auth.ts';
+import type {Context, RequestContext} from './context.ts';
 import {router} from './rpc/index.ts';
 
 const defaultWebRoot = fileURLToPath(new URL('../../web/dist/', import.meta.url));
@@ -17,7 +18,7 @@ interface AppOptions {
 }
 
 export function createApp(context: Context, options: AppOptions = {}) {
-  const app = new Hono<{Variables: Context}>();
+  const app = new Hono<{Variables: RequestContext}>();
   const rpc = new RPCHandler(router);
   const mcp = new MCPHandler(router, {
     serverInfo: {name: 'places', version: '0.0.0'},
@@ -35,6 +36,9 @@ export function createApp(context: Context, options: AppOptions = {}) {
   });
 
   app.get('/health', c => c.json({status: 'ok'}));
+  app.use('/api/*', identifyUser);
+  app.use('/mcp', identifyUser);
+  app.use('/rpc/*', identifyUser);
   app.route('/api', api);
   app.post('/mcp', async c => {
     const {response} = await mcp.handle(c.req.raw, {context: c.var});
