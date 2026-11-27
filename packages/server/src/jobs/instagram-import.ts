@@ -37,11 +37,12 @@ export function enqueueInstagramImport(
   db: Database,
   url: string,
   options?: ImportOptions,
+  requestedByUserId?: string,
 ) {
   const shortcode = instagramShortcode(url);
   const input = {shortcode, ...options};
 
-  return withImportEnqueue(db, 'instagram', {input}, queueDb =>
+  return withImportEnqueue(db, 'instagram', {input, requestedByUserId}, queueDb =>
     jobs.send(importQueue, input, {singletonKey: shortcode, db: queueDb}),
   );
 }
@@ -58,9 +59,9 @@ export function registerInstagramImportWorker(
     jobs,
     importQueue,
     options,
-    withImportRun(dependencies.db, 'instagram', (data, runId) => {
+    withImportRun(dependencies.db, 'instagram', (data, run) => {
       const {shortcode, ...options} = importPayload.parse(data);
-      return importInstagramPost(jobs, dependencies, shortcode, options, runId);
+      return importInstagramPost(jobs, dependencies, shortcode, options, run);
     }),
   );
 }

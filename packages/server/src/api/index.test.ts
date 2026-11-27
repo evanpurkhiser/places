@@ -3,6 +3,7 @@ import {beforeEach, describe, expect, it, vi} from 'vitest';
 import {randomUUID} from 'node:crypto';
 
 import type {Context} from '../context.ts';
+import {users} from '../db/schema.ts';
 import {ImportNotFoundError} from '../importers/errors.ts';
 
 const importers = vi.hoisted(() => ({
@@ -13,7 +14,10 @@ const importers = vi.hoisted(() => ({
 vi.mock('../importers/index.ts', () => importers);
 
 const {createApp} = await import('../app.ts');
-const context = {} as Context;
+const defaultUser = {id: randomUUID()};
+const context = {
+  db: {select: () => ({from: () => ({where: () => Promise.resolve([defaultUser])})})},
+} as unknown as Context;
 
 describe('import HTTP API', () => {
   beforeEach(() => vi.resetAllMocks());
@@ -35,8 +39,24 @@ describe('import HTTP API', () => {
     });
     expect(importers.enqueueImport).toHaveBeenCalledExactlyOnceWith(
       'https://www.instagram.com/p/example/',
-      context,
+      expect.objectContaining({userId: defaultUser.id}),
     );
+  });
+
+  it('rejects an unknown bearer token', async () => {
+    const app = createApp({
+      ...context,
+      db: {
+        select: () => ({from: () => ({where: () => Promise.resolve([])})}),
+      } as unknown as Context['db'],
+    });
+    const response = await app.request('/api/imports', {
+      method: 'POST',
+      headers: {Authorization: 'Bearer unknown-token'},
+    });
+
+    expect(response.status).toBe(401);
+    expect(importers.enqueueImport).not.toHaveBeenCalled();
   });
 
   it('returns import status with its source ID and place names', async () => {
@@ -46,11 +66,16 @@ describe('import HTTP API', () => {
     const statusContext = {
       db: {
         select: () => ({
-          from: () => ({
-            where: async () => [
-              {id: placeIds[1], name: 'Second Place'},
-              {id: placeIds[0], name: 'First Place'},
-            ],
+          from: (table: unknown) => ({
+            where: () =>
+              Promise.resolve(
+                table === users
+                  ? [defaultUser]
+                  : [
+                      {id: placeIds[1], name: 'Second Place'},
+                      {id: placeIds[0], name: 'First Place'},
+                    ],
+              ),
           }),
         }),
       },
@@ -79,7 +104,7 @@ describe('import HTTP API', () => {
     });
     expect(importers.getImportStatus).toHaveBeenCalledExactlyOnceWith(
       jobId,
-      statusContext,
+      expect.objectContaining({db: statusContext.db, userId: defaultUser.id}),
     );
   });
 

@@ -3,6 +3,7 @@ import {eq, sql} from 'drizzle-orm';
 
 import type {Database} from '../db/index.ts';
 import {places, placeSources, placeTags} from '../db/schema.ts';
+import {defaultUserQuery} from '../db/users.ts';
 import type {GooglePlaces} from '../services/google/index.ts';
 
 import type {ImportOptions} from './types.ts';
@@ -23,6 +24,7 @@ async function savePlace(
   db: Pick<Database, 'select' | 'insert'>,
   google: GooglePlaces,
   googlePlaceId: string,
+  addedByUserId: string | undefined,
   notes?: string,
 ) {
   const existing = await findPlace(db, googlePlaceId);
@@ -36,6 +38,7 @@ async function savePlace(
     .insert(places)
     .values({
       googlePlaceId: details.id,
+      addedByUserId: addedByUserId ?? sql`(${defaultUserQuery(db)})`,
       name: details.displayName.text,
       userNote: notes || null,
       formattedAddress: details.formattedAddress,
@@ -70,13 +73,14 @@ export function importPlace(
   tags: ImportAssignment[] = [],
   notes?: string,
   source?: PlaceSourceInput,
+  addedByUserId?: string,
 ) {
   return db.transaction(async tx => {
     const {
       id: placeId,
       created,
       deletedAt,
-    } = await savePlace(tx, google, googlePlaceId, notes);
+    } = await savePlace(tx, google, googlePlaceId, addedByUserId, notes);
 
     // Importing a source can discover several places. Keep deleted places hidden
     // until a direct Google Maps import targets the place for restoration.

@@ -30,8 +30,8 @@ export const instagramImporter: Importer = {
       return false;
     }
   },
-  enqueue: (input, options, {jobs, db}) =>
-    enqueueInstagramImport(jobs, db, input, options),
+  enqueue: (input, options, {jobs, db, userId}) =>
+    enqueueInstagramImport(jobs, db, input, options, userId),
   async getStatus(run, context) {
     const statuses = await getInstagramStatuses([run], context);
 

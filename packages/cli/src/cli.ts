@@ -362,8 +362,14 @@ export const parser = merge(
   ),
 );
 
-export function createClient(server: string): Client {
-  return createORPCClient(new RPCLink({origin: server.replace(/\/$/, ''), url: '/rpc'}));
+export function createClient(server: string, token?: string): Client {
+  return createORPCClient(
+    new RPCLink({
+      origin: server.replace(/\/$/, ''),
+      url: '/rpc',
+      headers: token ? {Authorization: `Bearer ${token}`} : undefined,
+    }),
+  );
 }
 
 export function execute(args: InferValue<typeof parser>, client: Client) {

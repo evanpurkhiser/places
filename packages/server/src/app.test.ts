@@ -1,6 +1,7 @@
 import {afterEach, describe, expect, it, vi} from 'vitest';
 import {z} from 'zod';
 
+import {randomUUID} from 'node:crypto';
 import {mkdtemp, mkdir, rm, writeFile} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import path from 'node:path';
@@ -58,7 +59,27 @@ describe('web app', () => {
   });
 });
 
+describe('API credentials', () => {
+  it.each(['/api/imports', '/mcp', '/rpc/places/list'])(
+    'rejects invalid credentials at %s instead of using the default user',
+    async path => {
+      const app = createApp({} as Context);
+      const response = await app.request(path, {
+        method: 'POST',
+        headers: {Authorization: 'Basic wrong-scheme'},
+      });
+
+      expect(response.status).toBe(401);
+      expect(response.headers.get('WWW-Authenticate')).toBe('Bearer');
+    },
+  );
+});
+
 describe('MCP endpoint', () => {
+  const defaultUser = {id: randomUUID()};
+  const context = {
+    db: {select: () => ({from: () => ({where: () => Promise.resolve([defaultUser])})})},
+  } as unknown as Context;
   const post = (app: ReturnType<typeof createApp>, body: unknown) =>
     app.request('/mcp', {
       method: 'POST',
@@ -67,7 +88,7 @@ describe('MCP endpoint', () => {
     });
 
   it('publishes the centralized tool catalog', async () => {
-    const app = createApp({} as Context);
+    const app = createApp(context);
     const response = await post(app, {jsonrpc: '2.0', id: 1, method: 'tools/list'});
     const body = z
       .object({
@@ -138,7 +159,7 @@ describe('MCP endpoint', () => {
   });
 
   it('calls the existing oRPC implementation', async () => {
-    const app = createApp({} as Context);
+    const app = createApp(context);
     const response = await post(app, {
       jsonrpc: '2.0',
       id: 2,

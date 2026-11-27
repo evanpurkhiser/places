@@ -39,6 +39,21 @@ describe('CLI config', () => {
     });
   });
 
+  it('reads a plain-text token file for the selected server', async () => {
+    const config = join(directory, 'custom.yaml');
+    await writeFile(config, 'server: https://places.example.com\ntoken_file: token\n');
+    await writeFile(join(directory, 'token'), 'places-token\n');
+
+    await expect(loadConfig({config})).resolves.toEqual({
+      server: 'https://places.example.com',
+      token: 'places-token',
+    });
+    await expect(loadConfig({config, server: 'http://localhost:6000'})).resolves.toEqual({
+      server: 'http://localhost:6000',
+      token: 'places-token',
+    });
+  });
+
   it('reads an explicit config file', async () => {
     const config = join(directory, 'custom.yaml');
     await writeFile(config, 'server: https://custom.example.com\n');

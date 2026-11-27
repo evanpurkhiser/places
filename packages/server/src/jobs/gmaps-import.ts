@@ -37,6 +37,7 @@ export const importPayload = z.object({
 export async function enqueuePlaceImport(
   jobs: PgBoss,
   db: Database,
+  requestedByUserId: string,
   input: z.input<typeof importPayload>,
 ) {
   const payload = importPayload.parse(input);
@@ -44,7 +45,7 @@ export async function enqueuePlaceImport(
   const id = await withImportEnqueue(
     db,
     'gmaps',
-    {input: payload, sourceId: payload.source?.sourceId},
+    {input: payload, sourceId: payload.source?.sourceId, requestedByUserId},
     queueDb => jobs.send(importQueue, payload, {db: queueDb}),
   );
 
@@ -57,7 +58,8 @@ export async function enqueuePlaceImport(
 
 export function enqueuePlaceImports(
   jobs: PgBoss,
-  tx: Pick<Database, 'insert' | 'execute'>,
+  tx: Pick<Database, 'insert' | 'execute' | 'select'>,
+  requestedByUserId: string | undefined,
   inputs: Array<z.input<typeof importPayload>>,
 ) {
   const imports = inputs.map(input => ({data: importPayload.parse(input)}));
@@ -65,7 +67,11 @@ export function enqueuePlaceImports(
   return withImportBatchEnqueue(
     tx,
     'gmaps',
-    imports.map(({data}) => ({input: data, sourceId: data.source?.sourceId})),
+    imports.map(({data}) => ({
+      input: data,
+      sourceId: data.source?.sourceId,
+      requestedByUserId,
+    })),
     queueDb => jobs.insert(importQueue, imports, {db: queueDb, returnId: true}),
   );
 }
@@ -87,10 +93,18 @@ export function registerImportWorker(
     jobs,
     importQueue,
     options,
-    withImportRun(db, 'gmaps', data => {
+    withImportRun(db, 'gmaps', (data, {requestedByUserId}) => {
       const {googlePlaceId, tags, notes, source} = importPayload.parse(data);
 
-      return importPlace(db, google, googlePlaceId, tags, notes, source);
+      return importPlace(
+        db,
+        google,
+        googlePlaceId,
+        tags,
+        notes,
+        source,
+        requestedByUserId,
+      );
     }),
   );
 }

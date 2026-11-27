@@ -14,6 +14,17 @@ With no config, the CLI defaults to `http://127.0.0.1:5188`.
 Data commands print JSON, docs print text,
 and errors go to stderr with a nonzero exit.
 
+A config can point to a plain-text file containing your Places bearer token.
+Relative paths are resolved from the config directory.
+
+```yaml
+server: https://places.example.com
+token_file: token
+```
+
+The CLI sends the token to the selected server,
+including when you use `--server`.
+
 ## Tags
 
 ```bash
