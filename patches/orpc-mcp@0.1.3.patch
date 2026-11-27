@@ -8,13 +8,9 @@ orpc-mcp 0.1.3 still imports it. Use its replacement so the MCP handler can
 load with current oRPC releases.
 
 Upstream issue: https://github.com/mi3lix9/orpc-mcp/issues/6
-
-Recognize the MCP content block types explicitly so result objects with
-domain-specific types are serialized as JSON.
 ---
  dist/shared/orpc-mcp.DhbUTBkN.mjs | 4 ++--
- dist/shared/orpc-mcp.nuIalshz.mjs | 3 ++-
- 2 files changed, 4 insertions(+), 3 deletions(-)
+ 1 file changed, 2 insertions(+), 2 deletions(-)
 
 diff --git a/dist/shared/orpc-mcp.DhbUTBkN.mjs b/dist/shared/orpc-mcp.DhbUTBkN.mjs
 index ee289f864f3b256193ba34ffbacddd0ea1863cab..5ae7a76480e72a9f4c762b00163f37ce6f0d3c59 100644
@@ -26,10 +22,3 @@ index ee289f864f3b256193ba34ffbacddd0ea1863cab..5ae7a76480e72a9f4c762b00163f37ce
 @@ -62 +62 @@ function compileUriTemplate(template) {
 -        extracted[name] = tryDecodeURIComponent(result[index + 1]);
 +        extracted[name] = safeDecodeURIComponent(result[index + 1]);
-diff --git a/dist/shared/orpc-mcp.nuIalshz.mjs b/dist/shared/orpc-mcp.nuIalshz.mjs
---- a/dist/shared/orpc-mcp.nuIalshz.mjs
-+++ b/dist/shared/orpc-mcp.nuIalshz.mjs
-@@ -44 +44,2 @@ function isContentBlock(value) {
--  return isPlainRecord(value) && typeof value.type === "string";
-+  return isPlainRecord(value) &&
-+    ["text", "image", "audio", "resource", "resource_link"].includes(value.type);

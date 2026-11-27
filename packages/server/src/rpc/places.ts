@@ -12,6 +12,7 @@ import {places, placeSources, placeTags, sources, tags} from '../db/schema.ts';
 import {geographyPoint} from '../filter-engine/geography.ts';
 import {preparePlaceQuery} from '../filter-engine/index.ts';
 import {enqueueImport, getImportStatus, listImportStatuses} from '../importers/index.ts';
+import type {ImportRun} from '../importers/types.ts';
 import {syncQueue, syncPayload} from '../jobs/gmaps-sync.ts';
 
 import {rethrowGoogleError} from './google-errors.ts';
@@ -194,17 +195,23 @@ export const placeRouter = api.router({
     };
   }),
   import: api.import.handler(({input, context}) =>
-    enqueueImport(input.input, context, input.tags, input.notes).catch(
-      rethrowImportError,
-    ),
+    enqueueImport(input.input, context, input.tags, input.notes)
+      .then(renameImportType)
+      .catch(rethrowImportError),
   ),
   getImportRun: api.getImportRun.handler(({input, context}) =>
-    getImportStatus(input.jobId, context).catch(rethrowImportError),
+    getImportStatus(input.jobId, context)
+      .then(renameImportType)
+      .catch(rethrowImportError),
   ),
   listImportRuns: api.listImportRuns.handler(({input, context}) =>
-    listImportStatuses(context, input.limit),
+    listImportStatuses(context, input.limit).then(runs => runs.map(renameImportType)),
   ),
 });
+
+function renameImportType<T extends Pick<ImportRun, 'type'>>({type, ...result}: T) {
+  return {...result, importType: type};
+}
 
 const latestRecommendation = sql<Date>`coalesce(
   (select max(${placeSources.createdAt})

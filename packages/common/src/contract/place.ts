@@ -134,7 +134,7 @@ export const importResult = z.object({
 });
 export const importStatus = z.object({
   jobId: importJobId,
-  type: importType,
+  importType,
   state: jobState,
   placeIds: importResult.shape.placeIds,
   error: jobError,
@@ -300,7 +300,7 @@ export const placeContract = {
     .output(
       z.object({
         jobId: importJobId.describe('Queued import job UUID.'),
-        type: importType,
+        importType,
       }),
     ),
   getImportRun: oc
