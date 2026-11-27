@@ -105,7 +105,8 @@ pnpm places delete PLACE_ID
 ```
 
 Use a saved place UUID from `list`.
-Deletion hides the place from the list and preserves its notes, tags, and sources.
+Deletion hides the place from the list and preserves its notes, tags,
+and sources.
 A direct Google Maps import restores the same saved place.
 
 ## Sync

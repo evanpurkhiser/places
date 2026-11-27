@@ -107,12 +107,8 @@
           "name": "import_runs_source_id_sources_id_fk",
           "tableFrom": "import_runs",
           "tableTo": "sources",
-          "columnsFrom": [
-            "source_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["source_id"],
+          "columnsTo": ["id"],
           "onDelete": "set null",
           "onUpdate": "no action"
         }
@@ -183,9 +179,7 @@
         "namespaces_name_unique": {
           "name": "namespaces_name_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "name"
-          ]
+          "columns": ["name"]
         }
       },
       "policies": {},
@@ -262,12 +256,8 @@
           "name": "place_sources_place_id_places_id_fk",
           "tableFrom": "place_sources",
           "tableTo": "places",
-          "columnsFrom": [
-            "place_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["place_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -275,12 +265,8 @@
           "name": "place_sources_source_id_sources_id_fk",
           "tableFrom": "place_sources",
           "tableTo": "sources",
-          "columnsFrom": [
-            "source_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["source_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -288,10 +274,7 @@
       "compositePrimaryKeys": {
         "place_sources_place_id_source_id_pk": {
           "name": "place_sources_place_id_source_id_pk",
-          "columns": [
-            "place_id",
-            "source_id"
-          ]
+          "columns": ["place_id", "source_id"]
         }
       },
       "uniqueConstraints": {},
@@ -351,12 +334,8 @@
           "name": "place_tags_place_id_places_id_fk",
           "tableFrom": "place_tags",
           "tableTo": "places",
-          "columnsFrom": [
-            "place_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["place_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -364,12 +343,8 @@
           "name": "place_tags_tag_id_tags_id_fk",
           "tableFrom": "place_tags",
           "tableTo": "tags",
-          "columnsFrom": [
-            "tag_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["tag_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -377,10 +352,7 @@
       "compositePrimaryKeys": {
         "place_tags_place_id_tag_id_pk": {
           "name": "place_tags_place_id_tag_id_pk",
-          "columns": [
-            "place_id",
-            "tag_id"
-          ]
+          "columns": ["place_id", "tag_id"]
         }
       },
       "uniqueConstraints": {},
@@ -524,9 +496,7 @@
         "places_google_place_id_unique": {
           "name": "places_google_place_id_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "google_place_id"
-          ]
+          "columns": ["google_place_id"]
         }
       },
       "policies": {},
@@ -601,10 +571,7 @@
         "sources_type_external_id_unique": {
           "name": "sources_type_external_id_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "type",
-            "external_id"
-          ]
+          "columns": ["type", "external_id"]
         }
       },
       "policies": {},
@@ -690,12 +657,8 @@
           "name": "tags_namespace_id_namespaces_id_fk",
           "tableFrom": "tags",
           "tableTo": "namespaces",
-          "columnsFrom": [
-            "namespace_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["namespace_id"],
+          "columnsTo": ["id"],
           "onDelete": "restrict",
           "onUpdate": "no action"
         }
@@ -705,9 +668,7 @@
         "tags_name_unique": {
           "name": "tags_name_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "name"
-          ]
+          "columns": ["name"]
         }
       },
       "policies": {},

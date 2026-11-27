@@ -5,7 +5,8 @@ Database IDs are UUIDs; TypeScript properties use camelCase
 and PostgreSQL columns use snake_case.
 
 - Place deletion sets `deleted_at` and preserves the place and its associations.
-  A direct Google Maps re-import clears `deleted_at` and restores the same place ID.
+  A direct Google Maps re-import clears `deleted_at`
+  and restores the same place ID.
   Instagram imports skip deleted places.
 - Deleting a tag or source cascades to its join-table associations.
 - Sources have a nullable `external_id`, unique within each source `type`.
