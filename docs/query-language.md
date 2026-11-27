@@ -9,6 +9,7 @@ Combine predicates with `AND`, `OR`, and `NOT`.
 | ---------- | ---------------------------------------------------------- |
 | `tag`      | Exact tag names and `*` wildcard patterns                  |
 | `source`   | Discovery source by provider type, ID, URL, or text        |
+| `savedBy`  | Exact Places username of any saver                         |
 | `name`     | Place name                                                 |
 | `address`  | Place address                                              |
 | `notes`    | Place notes                                                |
@@ -59,6 +60,18 @@ source[text:coffee] source[text:cocktails]
 - Separate source predicates can match different attached sources.
 - `source[]` and `has[source]` require any attached source;
   `!source[...]` excludes places with a matching source.
+
+## Saved-by filters
+
+`savedBy` matches places saved by the given Places username,
+including places with multiple savers.
+Usernames match exactly and are case-sensitive.
+
+```text
+savedBy[evan] tag[favorite]
+savedBy[evan] OR savedBy[alice]
+!savedBy[evan]
+```
 
 ## Location filters
 

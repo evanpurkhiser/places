@@ -7,7 +7,15 @@ import {randomUUID} from 'node:crypto';
 import {fileURLToPath} from 'node:url';
 
 import {createDatabase} from '../db/index.ts';
-import {places, placeSources, sources, placeTags, tags} from '../db/schema.ts';
+import {
+  places,
+  placeSaves,
+  placeSources,
+  sources,
+  placeTags,
+  tags,
+  users,
+} from '../db/schema.ts';
 
 import {compilePlaceQuery} from './index.ts';
 
@@ -56,6 +64,16 @@ describe.skipIf(!testUrl)('filter engine with PostgreSQL', () => {
         },
       ])
       .returning();
+    const savers = await db
+      .insert(users)
+      .values([{username: 'evan'}, {username: 'alice'}])
+      .returning();
+    await db.insert(placeSaves).values([
+      {placeId: saved[0]!.id, userId: savers[0]!.id},
+      {placeId: saved[0]!.id, userId: savers[1]!.id},
+      {placeId: saved[1]!.id, userId: savers[1]!.id},
+    ]);
+
     const assigned = await db
       .insert(tags)
       .values([{name: 'cafe'}, {name: 'laptop-friendly'}])
@@ -166,6 +184,19 @@ describe.skipIf(!testUrl)('filter engine with PostgreSQL', () => {
       'Cafe',
       'Empty',
     ]);
+  });
+
+  it.each([
+    ['savedBy[evan]', ['Cafe']],
+    ['savedBy[username:alice]', ['Bar', 'Cafe']],
+    ['savedBy[evan] savedBy[alice]', ['Cafe']],
+    ['savedBy[evan] OR savedBy[alice]', ['Bar', 'Cafe']],
+    ['!savedBy[evan]', ['Bar', 'Empty']],
+    ['savedBy[EVAN]', []],
+    ['savedBy[ev*]', []],
+    ['savedBy[unknown]', []],
+  ])('matches place savers: %s', async (query, expected) => {
+    expect(await names(query)).toEqual(expected);
   });
 
   it('matches whole-place tag negation and avoids duplicate results', async () => {
