@@ -30,10 +30,11 @@ Pushes to `main` publish `ghcr.io/evanpurkhiser/places:latest`.
 Run the user commands from a root shell on the production server.
 `list` reports each user's UUID and whether the user is the default.
 Requests without an authorization header use the default user.
+A fresh database seeds the default user as `admin`.
 
 ```bash
 podman exec places-server /app/dockerStart.sh users list
-podman exec places-server /app/dockerStart.sh users rename USER_ID evan
+podman exec places-server /app/dockerStart.sh users rename USER_ID NEW_USERNAME
 podman exec places-server /app/dockerStart.sh users create vivian
 podman exec places-server /app/dockerStart.sh users rotate-token USER_ID
 podman exec places-server /app/dockerStart.sh users revoke-token USER_ID
