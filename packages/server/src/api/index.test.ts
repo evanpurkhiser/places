@@ -20,7 +20,7 @@ describe('import HTTP API', () => {
 
   it('queues an import', async () => {
     const jobId = randomUUID();
-    importers.enqueueImport.mockResolvedValue({jobId, type: 'instagram'});
+    importers.enqueueImport.mockResolvedValue({jobId, importType: 'instagram'});
     const app = createApp(context);
     const response = await app.request('http://places.test/api/imports', {
       method: 'POST',
@@ -31,7 +31,7 @@ describe('import HTTP API', () => {
     expect(response.status).toBe(202);
     await expect(response.json()).resolves.toEqual({
       jobId,
-      type: 'instagram',
+      importType: 'instagram',
     });
     expect(importers.enqueueImport).toHaveBeenCalledExactlyOnceWith(
       'https://www.instagram.com/p/example/',
@@ -57,7 +57,7 @@ describe('import HTTP API', () => {
     } as unknown as Context;
     importers.getImportStatus.mockResolvedValue({
       jobId,
-      type: 'instagram',
+      importType: 'instagram',
       sourceId,
       state: 'completed',
       placeIds,
@@ -70,7 +70,7 @@ describe('import HTTP API', () => {
     expect(response.headers.get('Cache-Control')).toBe('no-store');
     await expect(response.json()).resolves.toEqual({
       jobId,
-      type: 'instagram',
+      importType: 'instagram',
       sourceId,
       state: 'completed',
       placeIds,

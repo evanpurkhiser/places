@@ -74,7 +74,7 @@ pnpm places import runs --limit 100
 pnpm places import runs JOB_ID
 ```
 
-Import returns a job ID and provider type (`gmaps` or `instagram`).
+Import returns a job ID and `importType` (`gmaps` or `instagram`).
 `--wait` polls once per second until completion and prints the result as JSON.
 Repeat `--tag` to apply tags, `--notes TEXT` for a place note,
 and `--tag-note NAME NOTE` for a per-assignment note.

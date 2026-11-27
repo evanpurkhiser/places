@@ -1,4 +1,4 @@
-import {afterEach, describe, expect, it} from 'vitest';
+import {afterEach, describe, expect, it, vi} from 'vitest';
 import {z} from 'zod';
 
 import {mkdtemp, mkdir, rm, writeFile} from 'node:fs/promises';
@@ -7,10 +7,13 @@ import path from 'node:path';
 
 import {createApp} from './app.ts';
 import type {Context} from './context.ts';
+import * as imports from './importers/index.ts';
 
 const temporaryDirectories: string[] = [];
 
 afterEach(async () => {
+  vi.restoreAllMocks();
+
   await Promise.all(
     temporaryDirectories
       .splice(0)
@@ -145,6 +148,56 @@ describe('MCP endpoint', () => {
         structuredContent: {
           filters: expect.arrayContaining([expect.objectContaining({name: 'tag'})]),
         },
+      },
+    });
+  });
+
+  const queuedImport = {
+    jobId: '86289ff6-214e-4b6c-94be-cc239be4da55',
+    importType: 'gmaps',
+  } as const;
+  const importRun = {
+    ...queuedImport,
+    state: 'created' as const,
+    placeIds: [],
+    error: null,
+  };
+
+  it.each([
+    {
+      name: 'places_import',
+      args: {input: 'gmaps:ChIJtest'},
+      output: queuedImport,
+    },
+    {
+      name: 'places_get_import_run',
+      args: {jobId: queuedImport.jobId},
+      output: importRun,
+    },
+    {
+      name: 'places_list_import_runs',
+      args: {limit: 1},
+      output: [importRun],
+    },
+  ])('serializes $name results as MCP content', async ({name, args, output}) => {
+    const status = {...importRun, sourceId: null};
+    vi.spyOn(imports, 'enqueueImport').mockResolvedValue(queuedImport);
+    vi.spyOn(imports, 'getImportStatus').mockResolvedValue(status);
+    vi.spyOn(imports, 'listImportStatuses').mockResolvedValue([status]);
+    const app = createApp({} as Context);
+
+    const response = await post(app, {
+      jsonrpc: '2.0',
+      id: 3,
+      method: 'tools/call',
+      params: {name, arguments: args},
+    });
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({
+      result: {
+        content: [{type: 'text', text: JSON.stringify(output)}],
+        ...(!Array.isArray(output) && {structuredContent: output}),
       },
     });
   });

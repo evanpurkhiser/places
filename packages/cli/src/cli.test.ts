@@ -227,7 +227,7 @@ describe('waiting for imports', () => {
   const jobId = '9a53fa46-9d9d-4dac-b0b2-f3a8334900ef';
   const completed = {
     jobId,
-    type: 'gmaps',
+    importType: 'gmaps',
     state: 'completed',
     placeIds: ['1c8e915f-992c-4862-a45f-857408b49792'],
     error: null,
@@ -247,7 +247,7 @@ describe('waiting for imports', () => {
     }
 
     const places = {
-      import: vi.fn().mockResolvedValue({jobId, type: 'gmaps'}),
+      import: vi.fn().mockResolvedValue({jobId, importType: 'gmaps'}),
       getImportRun: vi.fn().mockResolvedValue(completed),
     };
 
@@ -257,7 +257,7 @@ describe('waiting for imports', () => {
   it('returns the queued job without polling by default', async () => {
     const {places, run} = setup(false);
 
-    await expect(run()).resolves.toEqual({jobId, type: 'gmaps'});
+    await expect(run()).resolves.toEqual({jobId, importType: 'gmaps'});
     expect(places.getImportRun).not.toHaveBeenCalled();
   });
 
@@ -314,11 +314,11 @@ describe('waiting for imports', () => {
     }
     const status = {
       ...completed,
-      type: 'instagram',
+      importType: 'instagram',
       placeIds: [completed.placeIds[0], jobId],
     };
     const places = {
-      import: vi.fn().mockResolvedValue({jobId, type: 'instagram'}),
+      import: vi.fn().mockResolvedValue({jobId, importType: 'instagram'}),
       getImportRun: vi
         .fn()
         .mockResolvedValueOnce({...status, state: 'active', placeIds: []})
