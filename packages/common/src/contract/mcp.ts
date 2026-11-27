@@ -109,6 +109,13 @@ export const mcpTools = {
       annotations: readOnly,
     }),
   },
+  users: {
+    list: mcp.tool({
+      name: 'list_users',
+      description: 'List Places usernames and user IDs.',
+      annotations: readOnly,
+    }),
+  },
   query: {
     describe: mcp.tool({
       name: 'query_describe',
