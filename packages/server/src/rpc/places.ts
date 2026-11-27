@@ -3,7 +3,7 @@ import {contract} from '@places/common/contract';
 import {type PlaceSort, placeSource} from '@places/common/contract/place';
 import type {Point} from '@places/common/filter-engine/values/geographic-point';
 import {SearchError} from '@places/common/search';
-import {and, asc, desc, eq, getTableColumns, inArray, or, sql} from 'drizzle-orm';
+import {and, asc, desc, eq, getTableColumns, inArray, isNull, or, sql} from 'drizzle-orm';
 import {z} from 'zod';
 
 import type {Context} from '../context.ts';
@@ -20,6 +20,19 @@ import {rethrowImportError} from './import-errors.ts';
 const api = implement(contract.places).$context<Context>();
 
 export const placeRouter = api.router({
+  delete: api.delete.handler(async ({input, context: {db}, errors}) => {
+    const [deleted] = await db
+      .update(places)
+      .set({deletedAt: sql`now()`})
+      .where(and(eq(places.id, input.id), isNull(places.deletedAt)))
+      .returning({id: places.id});
+
+    if (!deleted) {
+      throw errors.NOT_FOUND();
+    }
+
+    return deleted;
+  }),
   searchGoogle: api.searchGoogle.handler(async ({input, context: {google}}) => {
     const results = await google.search(input.query, 10).catch(rethrowGoogleError);
 
@@ -252,12 +265,12 @@ async function resolvePlaceTag(
   placeId: string,
   nameOrId: string,
 ) {
-  // Keep both parents alive until the assignment transaction commits.
+  // Keep the place active and the tag present until the assignment commits.
   const [place] = await db
     .select({id: places.id})
     .from(places)
-    .where(eq(places.id, placeId))
-    .for('key share');
+    .where(and(eq(places.id, placeId), isNull(places.deletedAt)))
+    .for('share');
 
   if (!place) {
     throw new ORPCError('NOT_FOUND', {message: `Place not found: ${placeId}`});
@@ -282,12 +295,15 @@ async function resolvePlaceTag(
   return tag.id;
 }
 
-function queryPredicate(
+async function queryPredicate(
   query: string | undefined,
   referenceLocation: string | undefined,
   context: Pick<Context, 'db' | 'google'>,
 ) {
-  return preparePlaceQuery(query ?? '', {...context, referenceLocation}).catch(error => {
+  const {predicate, referencePoint} = await preparePlaceQuery(query ?? '', {
+    ...context,
+    referenceLocation,
+  }).catch(error => {
     if (error instanceof SearchError) {
       throw new ORPCError('BAD_REQUEST', {
         message: error.message,
@@ -297,4 +313,6 @@ function queryPredicate(
 
     rethrowGoogleError(error);
   });
+
+  return {predicate: and(isNull(places.deletedAt), predicate), referencePoint};
 }

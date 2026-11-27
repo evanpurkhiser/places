@@ -62,6 +62,12 @@ export const mcpTools = {
     }),
   },
   places: {
+    delete: mcp.tool({
+      name: 'places_delete',
+      description:
+        'Remove a saved place by UUID while preserving its notes, tags, and sources. Re-import the place directly from Google Maps to restore it.',
+      annotations: {...destructive, idempotentHint: true},
+    }),
     searchGoogle: mcp.tool({
       name: 'places_search_google',
       description: 'Search Google Maps for places that can be imported.',

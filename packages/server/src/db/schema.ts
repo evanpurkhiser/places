@@ -63,6 +63,7 @@ export const places = pgTable(
     businessStatus: text('business_status'),
     googleMetadata: jsonb('google_metadata').$type<GoogleMetadata>(),
     lastSync: timestamp('last_sync', {withTimezone: true}),
+    deletedAt: timestamp('deleted_at', {withTimezone: true}),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },

@@ -1,4 +1,4 @@
-import {eq, getTableColumns, sql} from 'drizzle-orm';
+import {and, eq, getTableColumns, isNull, sql} from 'drizzle-orm';
 import type {PgBoss} from 'pg-boss';
 import {z} from 'zod';
 
@@ -15,7 +15,8 @@ export const syncQueue = 'gmaps-sync';
 export const syncPayload = z.object({placeId: z.uuid()});
 
 export async function syncPlace(db: Database, google: GooglePlaces, placeId: string) {
-  const [before] = await db.select().from(places).where(eq(places.id, placeId));
+  const activePlace = and(eq(places.id, placeId), isNull(places.deletedAt));
+  const [before] = await db.select().from(places).where(activePlace);
 
   if (!before) {
     return {placeId, status: 'missing' as const};
@@ -31,7 +32,7 @@ export async function syncPlace(db: Database, google: GooglePlaces, placeId: str
         longitude: sql<number>`ST_X(${places.coordinates}::geometry)`,
       })
       .from(places)
-      .where(eq(places.id, placeId))
+      .where(activePlace)
       .for('update');
 
     if (!current) {

@@ -9,19 +9,26 @@ import type {ImportOptions} from './types.ts';
 
 type ImportAssignment = ImportOptions['tags'][number];
 
+async function findPlace(db: Pick<Database, 'select'>, googlePlaceId: string) {
+  const [place] = await db
+    .select({id: places.id, deletedAt: places.deletedAt})
+    .from(places)
+    .where(eq(places.googlePlaceId, googlePlaceId))
+    .for('no key update');
+
+  return place;
+}
+
 async function savePlace(
   db: Pick<Database, 'select' | 'insert'>,
   google: GooglePlaces,
   googlePlaceId: string,
   notes?: string,
 ) {
-  const [existing] = await db
-    .select({id: places.id})
-    .from(places)
-    .where(eq(places.googlePlaceId, googlePlaceId));
+  const existing = await findPlace(db, googlePlaceId);
 
   if (existing) {
-    return {placeId: existing.id, created: false};
+    return {...existing, created: false};
   }
 
   const details = await google.getMetadata(googlePlaceId);
@@ -41,22 +48,19 @@ async function savePlace(
       coordinates: `SRID=4326;POINT(${details.location.longitude} ${details.location.latitude})`,
     })
     .onConflictDoNothing({target: places.googlePlaceId})
-    .returning({id: places.id});
+    .returning({id: places.id, deletedAt: places.deletedAt});
 
   if (inserted) {
-    return {placeId: inserted.id, created: true};
+    return {...inserted, created: true};
   }
 
-  const [canonical] = await db
-    .select({id: places.id})
-    .from(places)
-    .where(eq(places.googlePlaceId, details.id));
+  const canonical = await findPlace(db, details.id);
 
   if (!canonical) {
     throw new Error('Place disappeared during import. Retry the import.');
   }
 
-  return {placeId: canonical.id, created: false};
+  return {...canonical, created: false};
 }
 
 export function importPlace(
@@ -68,7 +72,19 @@ export function importPlace(
   source?: PlaceSourceInput,
 ) {
   return db.transaction(async tx => {
-    const {placeId, created} = await savePlace(tx, google, googlePlaceId, notes);
+    const {
+      id: placeId,
+      created,
+      deletedAt,
+    } = await savePlace(tx, google, googlePlaceId, notes);
+
+    if (deletedAt && source) {
+      return {placeIds: []};
+    }
+
+    if (deletedAt) {
+      await tx.update(places).set({deletedAt: null}).where(eq(places.id, placeId));
+    }
 
     if (created) {
       await applyInitialTags(tx, placeId, tags);

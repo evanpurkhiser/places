@@ -201,6 +201,11 @@ const placeListInput = queryInput
   );
 
 export const placeContract = {
+  delete: oc
+    .meta(mcpTools.places.delete)
+    .errors({NOT_FOUND: {message: 'Place not found.'}})
+    .input(place.pick({id: true}))
+    .output(place.pick({id: true})),
   searchGoogle: oc
     .meta(mcpTools.places.searchGoogle)
     .errors({SERVICE_UNAVAILABLE: {message: 'Google Places search is unavailable.'}})
