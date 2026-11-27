@@ -17,7 +17,6 @@ import {createApp} from '../app.ts';
 import {configSchema} from '../config.ts';
 import {createDatabase} from '../db/index.ts';
 import {places, placeSources, sources, placeTags, tags} from '../db/schema.ts';
-import {defaultUserId} from '../db/users.ts';
 import {testConfig} from '../fixtures/config.ts';
 import {GoogleUnavailableError} from '../services/google/errors.ts';
 import {createGooglePlaces} from '../services/google/index.ts';
@@ -56,7 +55,6 @@ describe.skipIf(!testUrl)('place filtering through API and CLI', () => {
     await db.insert(places).values([
       {
         id: cafeId,
-        addedByUserId: defaultUserId(db),
         googlePlaceId: 'cafe',
         name: 'Cafe',
         formattedAddress: 'New York',
@@ -67,7 +65,6 @@ describe.skipIf(!testUrl)('place filtering through API and CLI', () => {
       },
       {
         id: bakeryId,
-        addedByUserId: defaultUserId(db),
         googlePlaceId: 'bakery',
         name: 'Bakery',
         formattedAddress: 'New York',

@@ -1,11 +1,12 @@
 import type {PlaceSourceInput} from '@places/common/contract/source';
-import {eq, sql} from 'drizzle-orm';
+import {and, eq, sql} from 'drizzle-orm';
 
 import type {Database} from '../db/index.ts';
-import {places, placeSources, placeTags} from '../db/schema.ts';
+import {importRuns, places, placeSaves, placeSources, placeTags} from '../db/schema.ts';
 import {defaultUserId} from '../db/users.ts';
 import type {GooglePlaces} from '../services/google/index.ts';
 
+import {lockImportSource} from './place-saves.ts';
 import type {ImportOptions} from './types.ts';
 
 type ImportAssignment = ImportOptions['tags'][number];
@@ -24,7 +25,6 @@ async function savePlace(
   db: Pick<Database, 'select' | 'insert'>,
   google: GooglePlaces,
   googlePlaceId: string,
-  addedByUserId: string | undefined,
   notes?: string,
 ) {
   const existing = await findPlace(db, googlePlaceId);
@@ -38,7 +38,6 @@ async function savePlace(
     .insert(places)
     .values({
       googlePlaceId: details.id,
-      addedByUserId: addedByUserId ?? defaultUserId(db),
       name: details.displayName.text,
       userNote: notes || null,
       formattedAddress: details.formattedAddress,
@@ -73,14 +72,14 @@ export function importPlace(
   tags: ImportAssignment[] = [],
   notes?: string,
   source?: PlaceSourceInput,
-  addedByUserId?: string,
+  userId?: string,
 ) {
   return db.transaction(async tx => {
     const {
       id: placeId,
       created,
       deletedAt,
-    } = await savePlace(tx, google, googlePlaceId, addedByUserId, notes);
+    } = await savePlace(tx, google, googlePlaceId, notes);
 
     // Importing a source can discover several places. Keep deleted places hidden
     // until a direct Google Maps import targets the place for restoration.
@@ -91,6 +90,31 @@ export function importPlace(
     if (deletedAt) {
       await tx.update(places).set({deletedAt: null}).where(eq(places.id, placeId));
     }
+
+    if (source) {
+      await lockImportSource(tx, source.sourceId);
+    }
+
+    // Repeat Instagram imports link their run even if some places are still pending.
+    const sourceUsers = source
+      ? await tx
+          .selectDistinct({userId: importRuns.requestedByUserId})
+          .from(importRuns)
+          .where(
+            and(
+              eq(importRuns.sourceId, source.sourceId),
+              eq(importRuns.type, 'instagram'),
+            ),
+          )
+      : [];
+    const saverIds = new Set([
+      userId ?? defaultUserId(tx),
+      ...sourceUsers.map(user => user.userId),
+    ]);
+    await tx
+      .insert(placeSaves)
+      .values([...saverIds].map(userId => ({placeId, userId})))
+      .onConflictDoNothing();
 
     if (created) {
       await applyInitialTags(tx, placeId, tags);

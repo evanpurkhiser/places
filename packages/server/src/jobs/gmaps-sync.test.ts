@@ -14,7 +14,6 @@ import {configSchema} from '../config.ts';
 import {isUniqueViolation} from '../db/errors.ts';
 import {createDatabase} from '../db/index.ts';
 import {places, placeTags, tags} from '../db/schema.ts';
-import {defaultUserId} from '../db/users.ts';
 import {testConfig} from '../fixtures/config.ts';
 import {createGooglePlaces} from '../services/google/index.ts';
 
@@ -80,7 +79,6 @@ describe.skipIf(!testUrl)('place sync with PostgreSQL and pg-boss', () => {
     const [place] = await db
       .insert(places)
       .values({
-        addedByUserId: defaultUserId(db),
         googlePlaceId: 'test',
         name: 'Original cafe',
         formattedAddress: 'Old address',
@@ -176,7 +174,6 @@ describe.skipIf(!testUrl)('place sync with PostgreSQL and pg-boss', () => {
   it('rolls back an ID collision without changing either saved place', async () => {
     await syncPlace(db, google, placeId);
     await db.insert(places).values({
-      addedByUserId: defaultUserId(db),
       googlePlaceId: 'replacement',
       name: 'Existing owner',
       formattedAddress: 'NY',
@@ -243,7 +240,6 @@ describe.skipIf(!testUrl)('place sync with PostgreSQL and pg-boss', () => {
 
   it('filters selection and deduplicates jobs before any provider calls', async () => {
     await db.insert(places).values({
-      addedByUserId: defaultUserId(db),
       googlePlaceId: 'other',
       name: 'Bakery',
       formattedAddress: 'NY',

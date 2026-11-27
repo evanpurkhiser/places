@@ -155,7 +155,10 @@ export async function recordImportCapture(
 ) {
   await db
     .update(importRuns)
-    .set({sourceId: output.sourceId, output})
+    .set({
+      sourceId: output.sourceId,
+      output: sql`coalesce(${importRuns.output}, ${JSON.stringify(output)}::jsonb)`,
+    })
     .where(eq(importRuns.id, id));
 }
 

@@ -8,6 +8,9 @@ and PostgreSQL columns use snake_case.
   A direct Google Maps re-import clears `deleted_at`
   and restores the same place ID.
   Instagram imports skip deleted places.
+- A place save records the first time a user imported a place.
+  Repeated imports keep the original save timestamp.
+  Place creation time tracks when the place entered the shared catalog.
 - Deleting a tag or source cascades to its join-table associations.
 - Sources have a nullable `external_id`, unique within each source `type`.
   Multiple sources without an external ID are allowed.

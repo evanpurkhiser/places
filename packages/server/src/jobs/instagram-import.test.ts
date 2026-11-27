@@ -14,6 +14,7 @@ import {createDatabase} from '../db/index.ts';
 import {
   importRuns,
   places,
+  placeSaves,
   placeSources,
   placeTags,
   sources,
@@ -231,8 +232,8 @@ describe.skipIf(!testUrl)('Instagram ingestion with PostgreSQL and pg-boss', () 
     userId: defaultUserId,
   });
 
-  async function dispatchImport() {
-    const submitted = await enqueueImport(url, context());
+  async function dispatchImport(userId = defaultUserId) {
+    const submitted = await enqueueImport(url, {...context(), userId});
     const [parent] = await jobs.fetch(importQueue);
     const job = await jobs.getJobById(importQueue, parent!.id);
     const result = await importInstagramPost(
@@ -240,7 +241,7 @@ describe.skipIf(!testUrl)('Instagram ingestion with PostgreSQL and pg-boss', () 
       dependencies,
       shortcode,
       {tags: []},
-      {id: parent!.id, requestedByUserId: defaultUserId},
+      {id: parent!.id, requestedByUserId: userId},
     );
     await recordImportStarted(db, job!.id, 'instagram', job!.data);
     await recordImportCompleted(db, job!.id, result);
@@ -448,13 +449,24 @@ describe.skipIf(!testUrl)('Instagram ingestion with PostgreSQL and pg-boss', () 
 
   it('recovers pending jobs and saved places for a skipped capture', async () => {
     await dispatchImport();
-    const repeat = await dispatchImport();
+    const [second] = await db
+      .insert(users)
+      .values({username: 'repeat-saver'})
+      .returning();
+    const repeat = await dispatchImport(second!.id);
     expect(repeat.skipped).toBe(true);
     expect(await getImportStatus(repeat.jobId, context())).toMatchObject({
       state: 'active',
     });
     const children = await jobs.fetch(googleQueue, {batchSize: 10});
     const saved = await Promise.all(children.map(child => completePlace(child.id)));
+    const saves = await db.select().from(placeSaves);
+    expect(saves).toHaveLength(4);
+    for (const placeId of saved) {
+      expect(
+        new Set(saves.filter(save => save.placeId === placeId).map(save => save.userId)),
+      ).toEqual(new Set([defaultUserId, second!.id]));
+    }
     expect(await getImportStatus(repeat.jobId, context())).toMatchObject({
       state: 'completed',
       placeIds: expect.arrayContaining(saved),
@@ -570,17 +582,19 @@ describe.skipIf(!testUrl)('Instagram ingestion with PostgreSQL and pg-boss', () 
       user!.id,
     ]);
 
-    const saved = await db.select().from(places);
-    expect(saved.map(place => place.addedByUserId)).toEqual([user!.id, user!.id]);
-    await importPlace(db, dependencies.google, saved[0]!.googlePlaceId);
-    const [reimported] = await db
+    const saves = await db.select().from(placeSaves);
+    expect(saves.map(save => save.userId)).toEqual([user!.id, user!.id]);
+    await dispatchImport();
+    const additionalSaves = await db
       .select()
-      .from(places)
-      .where(eq(places.id, saved[0]!.id));
-    expect(reimported?.addedByUserId).toBe(user!.id);
+      .from(placeSaves)
+      .where(eq(placeSaves.userId, defaultUserId));
+    expect(new Set(additionalSaves.map(save => save.placeId))).toEqual(
+      new Set(saves.map(save => save.placeId)),
+    );
     await jobs.deleteAllJobs(importQueue);
     await jobs.deleteAllJobs(googleQueue);
-    expect(await db.select().from(importRuns)).toEqual(runs);
+    expect(await db.select().from(importRuns)).toEqual(expect.arrayContaining(runs));
     const status = await getImportStatus(submitted.jobId, {db});
     expect(status).toMatchObject({state: 'completed', error: null});
     expect(status.placeIds).toHaveLength(2);
@@ -779,6 +793,19 @@ describe.skipIf(!testUrl)('Instagram ingestion with PostgreSQL and pg-boss', () 
     expect(results.map(result => result.skipped).toSorted()).toEqual([false, true]);
     expect(await db.select().from(sources)).toHaveLength(1);
     expect(await jobs.findJobs(googleQueue)).toHaveLength(2);
+  });
+
+  it('queues the same post for two users', async () => {
+    const [second] = await db
+      .insert(users)
+      .values({username: 'queued-saver'})
+      .returning();
+    const first = await enqueueInstagramImport(jobs, db, url, undefined, defaultUserId);
+    const repeat = await enqueueInstagramImport(jobs, db, url, undefined, second!.id);
+
+    expect(first).toEqual(expect.any(String));
+    expect(repeat).toEqual(expect.any(String));
+    expect(repeat).not.toBe(first);
   });
 
   it('deduplicates different share URLs for the same queued post', async () => {

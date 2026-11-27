@@ -71,9 +71,6 @@ export const places = pgTable(
     googlePlaceId: text('google_place_id').notNull().unique(),
     name: text('name').notNull(),
     formattedAddress: text('formatted_address').notNull(),
-    addedByUserId: uuid('added_by_user_id')
-      .notNull()
-      .references(() => users.id, {onDelete: 'restrict'}),
     googleMapsUrl: text('google_maps_url'),
     coordinates: geographyPoint('coordinates').notNull(),
     userNote: text('user_note'),
@@ -94,6 +91,23 @@ export const places = pgTable(
       'places_hours_weekly_open_bounds',
       sql`${table.hoursWeeklyOpen} <@ '{[0,10080)}'::int4multirange`,
     ),
+  ],
+);
+
+export const placeSaves = pgTable(
+  'place_saves',
+  {
+    placeId: uuid('place_id')
+      .notNull()
+      .references(() => places.id, {onDelete: 'cascade'}),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, {onDelete: 'restrict'}),
+    savedAt: timestamp('saved_at', {withTimezone: true}).defaultNow().notNull(),
+  },
+  table => [
+    primaryKey({columns: [table.placeId, table.userId]}),
+    index('place_saves_user_id_idx').on(table.userId),
   ],
 );
 
