@@ -138,6 +138,7 @@ describe('MCP endpoint', () => {
       'places_get_import_run',
       'places_list_import_runs',
       'query_describe',
+      'list_users',
     ]);
     expect(
       body.result.tools.find(tool => tool.name === 'places_list')?.annotations,

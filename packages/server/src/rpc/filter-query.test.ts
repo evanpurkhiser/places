@@ -14,9 +14,10 @@ import {fileURLToPath} from 'node:url';
 import {promisify} from 'node:util';
 
 import {createApp} from '../app.ts';
+import {hashToken} from '../auth.ts';
 import {configSchema} from '../config.ts';
 import {createDatabase} from '../db/index.ts';
-import {places, placeSources, sources, placeTags, tags} from '../db/schema.ts';
+import {places, placeSources, sources, placeTags, tags, users} from '../db/schema.ts';
 import {testConfig} from '../fixtures/config.ts';
 import {GoogleUnavailableError} from '../services/google/errors.ts';
 import {createGooglePlaces} from '../services/google/index.ts';
@@ -89,6 +90,37 @@ describe.skipIf(!testUrl)('place filtering through API and CLI', () => {
     await db.$client.end();
     await admin.query(`DROP DATABASE IF EXISTS "${databaseName}" WITH (FORCE)`);
     await admin.end();
+  });
+
+  it('lists Places user identities through MCP', async () => {
+    const token = 'list-users-test-token';
+    const [evan] = await db
+      .insert(users)
+      .values({username: 'evan', tokenHash: hashToken(token)})
+      .returning();
+
+    const response = await app.request('/mcp', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'tools/call',
+        params: {name: 'list_users', arguments: {}},
+      }),
+    });
+
+    expect(response.status).toBe(200);
+    const {result} = await response.json();
+    expect(result.structuredContent).toEqual({
+      users: [
+        {id: expect.any(String), username: 'admin'},
+        {id: evan!.id, username: 'evan'},
+      ],
+    });
   });
 
   it('filters sources through the API', async () => {
