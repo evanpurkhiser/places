@@ -1,36 +1,27 @@
-import {serve} from '@hono/node-server';
 import {createORPCClient} from '@orpc/client';
 import {RPCLink} from '@orpc/client/fetch';
 import type {Client} from '@places/common/contract';
 import {migrate} from 'drizzle-orm/node-postgres/migrator';
-import {Pool} from 'pg';
 import {PgBoss} from 'pg-boss';
 import {afterAll, beforeAll, describe, expect, it, vi} from 'vitest';
 
-import {execFile} from 'node:child_process';
 import {randomUUID} from 'node:crypto';
-import {once} from 'node:events';
 import {fileURLToPath} from 'node:url';
-import {promisify} from 'node:util';
 
 import {createApp} from '../app.ts';
 import {hashToken} from '../auth.ts';
 import {configSchema} from '../config.ts';
-import {createDatabase} from '../db/index.ts';
 import {places, placeSources, sources, placeTags, tags, users} from '../db/schema.ts';
+import {withPlacesCli} from '../fixtures/cli.ts';
 import {testConfig} from '../fixtures/config.ts';
+import {temporaryDatabase} from '../fixtures/database.ts';
 import {GoogleUnavailableError} from '../services/google/errors.ts';
 import {createGooglePlaces} from '../services/google/index.ts';
 
-const exec = promisify(execFile);
 const testUrl = process.env.TEST_DATABASE_URL;
 
 describe.skipIf(!testUrl)('place filtering through API and CLI', () => {
-  const databaseName = `places_test_${randomUUID().replaceAll('-', '')}`;
-  const admin = new Pool({connectionString: testUrl});
-  const url = new URL(testUrl ?? 'postgres://localhost/places');
-  url.pathname = `/${databaseName}`;
-  const db = createDatabase(url.href);
+  const {db, url, create, close} = temporaryDatabase('places_test', testUrl);
   const google = {...createGooglePlaces(), search: vi.fn()};
   const app = createApp({
     db,
@@ -49,7 +40,7 @@ describe.skipIf(!testUrl)('place filtering through API and CLI', () => {
   const bakeryId = randomUUID();
 
   beforeAll(async () => {
-    await admin.query(`CREATE DATABASE "${databaseName}"`);
+    await create();
     await migrate(db, {
       migrationsFolder: fileURLToPath(new URL('../../drizzle', import.meta.url)),
     });
@@ -87,9 +78,7 @@ describe.skipIf(!testUrl)('place filtering through API and CLI', () => {
   }, 30000);
 
   afterAll(async () => {
-    await db.$client.end();
-    await admin.query(`DROP DATABASE IF EXISTS "${databaseName}" WITH (FORCE)`);
-    await admin.end();
+    await close();
   });
 
   it('lists Places user identities through MCP', async () => {
@@ -201,104 +190,110 @@ describe.skipIf(!testUrl)('place filtering through API and CLI', () => {
     expect(google.search).toHaveBeenCalledWith('Origin, NYC');
   });
 
-  it('uses a parsed geographic point as @ref and for distance sorting', async () => {
-    google.search.mockClear();
-    const referenceLocation = 'point(-74, 40)';
-    const nearby = await client.places.list({
-      query: 'location[radius(@ref, 1mi)]',
-      referenceLocation,
+  describe('Reference locations and Google errors', () => {
+    it('uses a parsed geographic point as @ref and for distance sorting', async () => {
+      google.search.mockClear();
+      const referenceLocation = 'point(-74, 40)';
+      const nearby = await client.places.list({
+        query: 'location[radius(@ref, 1mi)]',
+        referenceLocation,
+      });
+
+      expect(nearby.map(place => place.id)).toEqual([cafeId]);
+      const nearest = await client.places.list({referenceLocation, sort: 'distance'});
+      const farthest = await client.places.list({
+        referenceLocation,
+        sort: 'distance-desc',
+      });
+
+      expect(nearest.map(place => place.id)).toEqual([cafeId, bakeryId]);
+      expect(farthest.map(place => place.id)).toEqual([bakeryId, cafeId]);
+      expect(google.search).not.toHaveBeenCalled();
     });
 
-    expect(nearby.map(place => place.id)).toEqual([cafeId]);
-    const nearest = await client.places.list({referenceLocation, sort: 'distance'});
-    const farthest = await client.places.list({
-      referenceLocation,
-      sort: 'distance-desc',
+    it('resolves a reference-location name through the geographic point resolver', async () => {
+      google.search.mockClear();
+      google.search.mockResolvedValueOnce([
+        {
+          id: 'origin',
+          displayName: {text: 'Origin'},
+          formattedAddress: 'New York',
+          googleMapsUri: 'https://maps.google.com/?q=origin',
+          location: {longitude: -74, latitude: 40},
+        },
+      ]);
+
+      const result = await client.places.list({
+        query: 'location[radius(@ref, 1mi)]',
+        referenceLocation: 'Origin, NYC',
+      });
+
+      expect(result.map(place => place.id)).toEqual([cafeId]);
+      expect(google.search).toHaveBeenCalledExactlyOnceWith('Origin, NYC');
     });
 
-    expect(nearest.map(place => place.id)).toEqual([cafeId, bakeryId]);
-    expect(farthest.map(place => place.id)).toEqual([bakeryId, cafeId]);
-    expect(google.search).not.toHaveBeenCalled();
-  });
-
-  it('resolves a reference-location name through the geographic point resolver', async () => {
-    google.search.mockClear();
-    google.search.mockResolvedValueOnce([
-      {
-        id: 'origin',
-        displayName: {text: 'Origin'},
-        formattedAddress: 'New York',
-        googleMapsUri: 'https://maps.google.com/?q=origin',
-        location: {longitude: -74, latitude: 40},
-      },
-    ]);
-
-    const result = await client.places.list({
-      query: 'location[radius(@ref, 1mi)]',
-      referenceLocation: 'Origin, NYC',
+    it('requires a reference location for distance sorting', async () => {
+      await expect(client.places.list({sort: 'distance'})).rejects.toMatchObject({
+        code: 'BAD_REQUEST',
+      });
     });
 
-    expect(result.map(place => place.id)).toEqual([cafeId]);
-    expect(google.search).toHaveBeenCalledExactlyOnceWith('Origin, NYC');
-  });
-
-  it('requires a reference location for distance sorting', async () => {
-    await expect(client.places.list({sort: 'distance'})).rejects.toMatchObject({
-      code: 'BAD_REQUEST',
-    });
-  });
-
-  it('returns query diagnostics for unmatched origins and service errors for outages', async () => {
-    google.search.mockResolvedValueOnce([]);
-    await expect(
-      client.places.list({query: 'location[radius("missing", 1mi)]'}),
-    ).rejects.toMatchObject({
-      code: 'BAD_REQUEST',
-      data: {
-        diagnostics: [{code: 'invalid_value', message: 'No place found for "missing".'}],
-      },
-    });
-    google.search.mockRejectedValueOnce(
-      new GoogleUnavailableError('Google Places search failed. Try again.'),
-    );
-    await expect(
-      client.places.list({query: 'location[radius("NYC", 1mi)]'}),
-    ).rejects.toMatchObject({
-      code: 'SERVICE_UNAVAILABLE',
-      message: 'Google Places search failed. Try again.',
-    });
-  });
-
-  it('maps shared Google input errors to query diagnostics and import errors', async () => {
-    await expect(
-      client.places.list({query: 'location[radius("gmaps:bad/id", 1mi)]'}),
-    ).rejects.toMatchObject({
-      code: 'BAD_REQUEST',
-      data: {diagnostics: [{code: 'invalid_value', message: 'Invalid Google Place ID.'}]},
-    });
-    await expect(client.places.import({input: 'gmaps:bad/id'})).rejects.toMatchObject({
-      code: 'BAD_REQUEST',
-      message: 'Invalid Google Place ID.',
-    });
-  });
-
-  it('maps Google availability errors at the import RPC boundary', async () => {
-    const resolve = vi
-      .spyOn(google, 'resolve')
-      .mockRejectedValueOnce(
-        new GoogleUnavailableError('Could not reach Google Maps. Try again.'),
-      );
-
-    try {
+    it('returns query diagnostics for unmatched origins and service errors for outages', async () => {
+      google.search.mockResolvedValueOnce([]);
       await expect(
-        client.places.import({input: 'https://maps.app.goo.gl/example'}),
+        client.places.list({query: 'location[radius("missing", 1mi)]'}),
+      ).rejects.toMatchObject({
+        code: 'BAD_REQUEST',
+        data: {
+          diagnostics: [
+            {code: 'invalid_value', message: 'No place found for "missing".'},
+          ],
+        },
+      });
+      google.search.mockRejectedValueOnce(
+        new GoogleUnavailableError('Google Places search failed. Try again.'),
+      );
+      await expect(
+        client.places.list({query: 'location[radius("NYC", 1mi)]'}),
       ).rejects.toMatchObject({
         code: 'SERVICE_UNAVAILABLE',
-        message: 'Could not reach Google Maps. Try again.',
+        message: 'Google Places search failed. Try again.',
       });
-    } finally {
-      resolve.mockRestore();
-    }
+    });
+
+    it('maps shared Google input errors to query diagnostics and import errors', async () => {
+      await expect(
+        client.places.list({query: 'location[radius("gmaps:bad/id", 1mi)]'}),
+      ).rejects.toMatchObject({
+        code: 'BAD_REQUEST',
+        data: {
+          diagnostics: [{code: 'invalid_value', message: 'Invalid Google Place ID.'}],
+        },
+      });
+      await expect(client.places.import({input: 'gmaps:bad/id'})).rejects.toMatchObject({
+        code: 'BAD_REQUEST',
+        message: 'Invalid Google Place ID.',
+      });
+    });
+
+    it('maps Google availability errors at the import RPC boundary', async () => {
+      const resolve = vi
+        .spyOn(google, 'resolve')
+        .mockRejectedValueOnce(
+          new GoogleUnavailableError('Could not reach Google Maps. Try again.'),
+        );
+
+      try {
+        await expect(
+          client.places.import({input: 'https://maps.app.goo.gl/example'}),
+        ).rejects.toMatchObject({
+          code: 'SERVICE_UNAVAILABLE',
+          message: 'Could not reach Google Maps. Try again.',
+        });
+      } finally {
+        resolve.mockRestore();
+      }
+    });
   });
 
   it.each([
@@ -329,34 +324,15 @@ describe.skipIf(!testUrl)('place filtering through API and CLI', () => {
   });
 
   it('prints filtered JSON and structured query errors through the CLI', async () => {
-    const server = serve({fetch: app.fetch, hostname: '127.0.0.1', port: 15190});
-
-    try {
-      if (!server.listening) {
-        await once(server, 'listening');
+    await withPlacesCli({fetch: app.fetch, port: 15190}, async ({run: cli}) => {
+      async function matchingIds(query: string) {
+        const {stdout} = await cli('list', '--query', query);
+        return JSON.parse(stdout).map((place: {id: string}) => place.id);
       }
 
-      const cli = (...args: string[]) =>
-        exec(process.execPath, [
-          fileURLToPath(new URL('../../../cli/src/main.ts', import.meta.url)),
-          '--server',
-          'http://127.0.0.1:15190',
-          ...args,
-        ]);
-      const {stdout} = await cli('list', '--query', 'tag[cafe]');
-      expect(JSON.parse(stdout).map((place: {id: string}) => place.id)).toEqual([cafeId]);
-      const {stdout: openPlaces} = await cli(
-        'list',
-        '--query',
-        'open["mon 6 pm", for:2h]',
-      );
-      expect(JSON.parse(openPlaces).map((place: {id: string}) => place.id)).toEqual([
-        cafeId,
-      ]);
-      const {stdout: sourced} = await cli('list', '--query', 'source[text:coffee]');
-      expect(JSON.parse(sourced).map((place: {id: string}) => place.id)).toEqual([
-        cafeId,
-      ]);
+      expect(await matchingIds('tag[cafe]')).toEqual([cafeId]);
+      expect(await matchingIds('open["mon 6 pm", for:2h]')).toEqual([cafeId]);
+      expect(await matchingIds('source[text:coffee]')).toEqual([cafeId]);
       const {stdout: documentation} = await cli('docs', 'filter');
       expect(documentation).toMatch(/^Filter language\n/);
       expect(documentation).toContain('Example: tag[favorite]');
@@ -373,10 +349,6 @@ describe.skipIf(!testUrl)('place filtering through API and CLI', () => {
           diagnostics: [{code: 'syntax', location: expect.any(Object)}],
         });
       }
-    } finally {
-      await new Promise<void>((resolve, reject) =>
-        server.close(error => (error ? reject(error) : resolve())),
-      );
-    }
+    });
   });
 });

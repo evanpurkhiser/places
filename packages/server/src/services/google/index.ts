@@ -189,6 +189,39 @@ function parseId(input: string): string {
   return result.data;
 }
 
+function placeIdFromUrl(url: URL) {
+  const explicit =
+    url.searchParams.get('query_place_id') ??
+    (url.searchParams.get('q')?.startsWith('place_id:')
+      ? url.searchParams.get('q')!.slice(9)
+      : null);
+
+  if (explicit) {
+    return parseId(explicit);
+  }
+
+  const data = url.pathname.split('/data=')[1] ?? url.searchParams.get('data');
+  const feature = url.searchParams.get('ftid');
+  const supported =
+    url.pathname.startsWith('/maps/place/') ||
+    url.pathname.startsWith('/maps/data=') ||
+    url.pathname === '/maps';
+
+  if (supported && ((data !== undefined && data !== null) || feature !== null)) {
+    const id = feature !== null ? featureIdToPlaceId(feature) : placeIdFromData(data!);
+
+    if (id) {
+      return id;
+    }
+
+    return invalid('Invalid or ambiguous Google Maps place identifier.');
+  }
+
+  if (url.pathname.startsWith('/maps/place/')) {
+    return invalid('This Maps link has no place identifier. Use gmaps:<place_id>.');
+  }
+}
+
 export function createGooglePlaces(apiKey?: string, fetcher: typeof fetch = fetch) {
   const client = apiKey ? new PlacesClient({apiKey, fallback: true}) : undefined;
 
@@ -212,36 +245,9 @@ export function createGooglePlaces(apiKey?: string, fetcher: typeof fetch = fetc
     let url = mapsUrl(input);
 
     for (let redirects = 0; redirects <= 5; redirects++) {
-      const explicit =
-        url.searchParams.get('query_place_id') ??
-        (url.searchParams.get('q')?.startsWith('place_id:')
-          ? url.searchParams.get('q')!.slice(9)
-          : null);
-
-      if (explicit) {
-        return parseId(explicit);
-      }
-
-      const data = url.pathname.split('/data=')[1] ?? url.searchParams.get('data');
-      const feature = url.searchParams.get('ftid');
-      const supported =
-        url.pathname.startsWith('/maps/place/') ||
-        url.pathname.startsWith('/maps/data=') ||
-        url.pathname === '/maps';
-
-      if (supported && ((data !== undefined && data !== null) || feature !== null)) {
-        const id =
-          feature !== null ? featureIdToPlaceId(feature) : placeIdFromData(data!);
-
-        if (id) {
-          return id;
-        }
-
-        return invalid('Invalid or ambiguous Google Maps place identifier.');
-      }
-
-      if (url.pathname.startsWith('/maps/place/')) {
-        return invalid('This Maps link has no place identifier. Use gmaps:<place_id>.');
+      const id = placeIdFromUrl(url);
+      if (id) {
+        return id;
       }
 
       const response = await followRedirect(url);

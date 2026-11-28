@@ -1,23 +1,20 @@
-import {serve} from '@hono/node-server';
 import {createORPCClient} from '@orpc/client';
 import {RPCLink} from '@orpc/client/fetch';
 import type {Client} from '@places/common/contract';
 import {migrate} from 'drizzle-orm/node-postgres/migrator';
-import {Pool} from 'pg';
 import {PgBoss} from 'pg-boss';
 import {afterAll, beforeAll, beforeEach, describe, expect, it, vi} from 'vitest';
 
-import {execFile} from 'node:child_process';
 import {randomUUID} from 'node:crypto';
 import {fileURLToPath} from 'node:url';
-import {promisify} from 'node:util';
 
 import {createApp} from '../app.ts';
 import {hashToken} from '../auth.ts';
 import {configSchema} from '../config.ts';
-import {createDatabase} from '../db/index.ts';
 import {places, placeSources, placeTags, sources, tags, users} from '../db/schema.ts';
+import {withPlacesCli} from '../fixtures/cli.ts';
 import {testConfig} from '../fixtures/config.ts';
+import {temporaryDatabase} from '../fixtures/database.ts';
 import {importPlace} from '../importers/import-place.ts';
 import {importQueue, registerImportWorker} from '../jobs/gmaps-import.ts';
 import {syncPlace} from '../jobs/gmaps-sync.ts';
@@ -27,7 +24,6 @@ import {
 } from '../jobs/instagram-import.ts';
 import {createGooglePlaces} from '../services/google/index.ts';
 
-const exec = promisify(execFile);
 const testUrl = process.env.TEST_DATABASE_URL;
 const details = {
   id: 'ChIJtest',
@@ -45,13 +41,7 @@ const details = {
 };
 
 describe.skipIf(!testUrl)('place import with PostgreSQL and pg-boss', () => {
-  const databaseName = `places_test_${randomUUID().replaceAll('-', '')}`;
-  const admin = new Pool({connectionString: testUrl});
-  const url = new URL(testUrl ?? 'postgres://localhost/places');
-
-  url.pathname = `/${databaseName}`;
-
-  const db = createDatabase(url.href);
+  const {db, url, create, close} = temporaryDatabase('places_test', testUrl);
   const jobs = new PgBoss(url.href);
   const config = configSchema.parse({...testConfig, database: {url: url.href}});
   const google = {
@@ -68,7 +58,7 @@ describe.skipIf(!testUrl)('place import with PostgreSQL and pg-boss', () => {
   );
 
   beforeAll(async () => {
-    await admin.query(`CREATE DATABASE "${databaseName}"`);
+    await create();
     await migrate(db, {
       migrationsFolder: fileURLToPath(new URL('../../drizzle', import.meta.url)),
     });
@@ -87,9 +77,7 @@ describe.skipIf(!testUrl)('place import with PostgreSQL and pg-boss', () => {
 
   afterAll(async () => {
     await jobs.stop();
-    await db.$client.end();
-    await admin.query(`DROP DATABASE IF EXISTS "${databaseName}" WITH (FORCE)`);
-    await admin.end();
+    await close();
   });
 
   async function waitForState(jobId: string, state: 'completed' | 'failed') {
@@ -140,586 +128,613 @@ describe.skipIf(!testUrl)('place import with PostgreSQL and pg-boss', () => {
     expect(await client.places.list()).toEqual([shared]);
   }, 20000);
 
-  it('attaches source details through the import worker', async () => {
-    const [source] = await db.insert(sources).values({type: 'instagram'}).returning();
-    const recommendation = {
-      sourceId: source!.id,
-      description: 'Recommended for the pastries.',
-      data: {evidence: 'Caption mentions pastries', timestamps: [2, 5]},
-    };
-    const jobId = await jobs.send(importQueue, {
-      googlePlaceId: 'ChIJtest',
-      notes: 'My own note',
-      source: recommendation,
-    });
-    const status = await waitForState(jobId!, 'completed');
+  describe('Source associations', () => {
+    it('attaches source details through the import worker', async () => {
+      const [source] = await db.insert(sources).values({type: 'instagram'}).returning();
+      const recommendation = {
+        sourceId: source!.id,
+        description: 'Recommended for the pastries.',
+        data: {evidence: 'Caption mentions pastries', timestamps: [2, 5]},
+      };
+      const jobId = await jobs.send(importQueue, {
+        googlePlaceId: 'ChIJtest',
+        notes: 'My own note',
+        source: recommendation,
+      });
+      const status = await waitForState(jobId!, 'completed');
 
-    expect(await db.select().from(placeSources)).toMatchObject([
-      {...recommendation, placeId: status.placeIds[0]},
-    ]);
-    expect(await db.select().from(places)).toMatchObject([{userNote: 'My own note'}]);
-  });
-
-  it('adds sources to an existing place and updates only supplied relation fields', async () => {
-    const [first, second] = await db
-      .insert(sources)
-      .values([{type: 'instagram'}, {type: 'instagram'}])
-      .returning();
-    const [original, review] = await db
-      .insert(tags)
-      .values([{name: 'favorite'}, {name: 'needs-review'}])
-      .returning();
-    const result = await importPlace(
-      db,
-      google,
-      'ChIJtest',
-      [{tagId: original!.id, note: 'My tag note'}],
-      'My place note',
-      {
-        sourceId: first!.id,
-        description: 'Original recommendation',
-        data: {evidence: 'Original caption'},
-      },
-    );
-    await importPlace(
-      db,
-      google,
-      'ChIJtest',
-      [{tagId: review!.id}, {tagId: original!.id, note: 'Replacement'}],
-      'Replacement',
-      {sourceId: second!.id},
-    );
-    expect(await db.select().from(placeTags)).toMatchObject([
-      {tagId: original!.id, note: 'My tag note'},
-    ]);
-    expect(await db.select().from(placeTags)).toHaveLength(1);
-    expect(await db.select().from(places)).toMatchObject([{userNote: 'My place note'}]);
-    await importPlace(db, google, 'ChIJtest', [], undefined, {
-      sourceId: first!.id,
-      description: 'Updated recommendation',
-    });
-    await importPlace(db, google, 'ChIJtest', [], undefined, {sourceId: first!.id});
-
-    const relations = await db.select().from(placeSources);
-    expect(relations).toHaveLength(2);
-    expect(relations.find(row => row.sourceId === first!.id)).toMatchObject({
-      placeId: result.placeIds[0],
-      description: 'Updated recommendation',
-      data: {evidence: 'Original caption'},
-    });
-    expect(google.getMetadata).toHaveBeenCalledTimes(1);
-
-    await importPlace(db, google, 'ChIJtest', [], undefined, {
-      sourceId: first!.id,
-      description: null,
-      data: null,
-    });
-    const cleared = await db.select().from(placeSources);
-    expect(cleared.find(row => row.sourceId === first!.id)).toMatchObject({
-      description: null,
-      data: null,
-    });
-  });
-
-  it('deduplicates source associations under concurrent imports', async () => {
-    const [source] = await db.insert(sources).values({type: 'instagram'}).returning();
-    const results = await Promise.all(
-      [1, 2].map(() =>
-        importPlace(db, google, 'ChIJtest', [], undefined, {
-          sourceId: source!.id,
-          description: 'A recommendation',
-        }),
-      ),
-    );
-    expect(results[0]).toEqual(results[1]);
-    expect(await db.select().from(placeSources)).toHaveLength(1);
-  });
-
-  it('rolls back a new place when its source does not exist', async () => {
-    await expect(
-      importPlace(db, google, 'ChIJtest', [], undefined, {
-        sourceId: randomUUID(),
-      }),
-    ).rejects.toThrow();
-    expect(await db.select().from(places)).toEqual([]);
-    expect(await db.select().from(placeSources)).toEqual([]);
-  });
-
-  it('queues only the resolved ID, persists metadata, and exposes named coordinates', async () => {
-    const submitted = await client.places.import({input: 'gmaps:ChIJtest'});
-    const job = await jobs.getJobById(importQueue, submitted.jobId);
-
-    expect(job?.data).toEqual({googlePlaceId: 'ChIJtest', tags: []});
-
-    const result = await waitForState(submitted.jobId, 'completed');
-    const saved = await client.places.list();
-
-    expect(result.placeIds).toEqual([saved[0]?.id]);
-    expect(saved).toHaveLength(1);
-    expect(saved[0]).toMatchObject({
-      name: 'Test Cafe',
-      formattedAddress: 'New York, NY',
-      googleMapsUrl: details.googleMapsUri,
-      coordinates: details.location,
-      timeZone: details.timeZone,
-      hoursWeeklyOpen: details.hoursWeeklyOpen,
-      businessStatus: details.businessStatus,
-      googleMetadata: details.googleMetadata,
-      lastSync: expect.any(Date),
-    });
-  }, 20000);
-
-  it('imports missing hours and refreshes canonical IDs without duplicate places', async () => {
-    google.getMetadata.mockResolvedValue({
-      ...details,
-      id: 'canonical',
-      timeZone: null,
-      hoursWeeklyOpen: null,
-      businessStatus: null,
-    });
-    const first = await importPlace(db, google, 'oldId');
-    const repeated = await importPlace(db, google, 'anotherOldId');
-    expect(repeated).toEqual(first);
-    const saved = await client.places.list();
-    expect(saved).toHaveLength(1);
-    expect(saved[0]).toMatchObject({
-      googlePlaceId: 'canonical',
-      timeZone: null,
-      hoursWeeklyOpen: null,
-      businessStatus: null,
-      lastSync: expect.any(Date),
-    });
-  });
-
-  it('reuses existing places and handles concurrent imports without duplicate rows', async () => {
-    const [first, second] = await Promise.all([
-      importPlace(db, google, 'ChIJtest'),
-      importPlace(db, google, 'ChIJtest'),
-    ]);
-
-    expect(first).toEqual(second);
-    expect(await client.places.list()).toHaveLength(1);
-    google.getMetadata.mockClear();
-
-    const submitted = await client.places.import({input: 'gmaps:ChIJtest'});
-
-    const completed = await waitForState(submitted.jobId, 'completed');
-    expect(completed.placeIds).toEqual(first.placeIds);
-    expect(google.getMetadata).not.toHaveBeenCalled();
-  }, 20000);
-
-  it('preserves the winning import assignments when concurrent imports create the same place', async () => {
-    const importedTags = await db
-      .insert(tags)
-      .values([{name: 'first'}, {name: 'second'}])
-      .returning();
-    const results = await Promise.all(
-      importedTags.map(tag =>
-        importPlace(db, google, 'ChIJtest', [{tagId: tag.id, note: tag.name}], tag.name),
-      ),
-    );
-    expect(results[0]).toEqual(results[1]);
-    const [saved] = await db.select().from(places);
-    const winner = importedTags.find(tag => tag.name === saved!.userNote)!;
-    expect(await db.select().from(placeTags)).toMatchObject([
-      {tagId: winner.id, note: winner.name},
-    ]);
-    expect(await db.select().from(placeTags)).toHaveLength(1);
-  });
-
-  it('lists every tag association with metadata and notes, including on filtered places', async () => {
-    const {
-      placeIds: [placeId],
-    } = await importPlace(db, google, 'ChIJtest');
-    const [untagged] = await db
-      .insert(places)
-      .values({
-        googlePlaceId: 'untagged',
-        name: 'Untagged',
-        formattedAddress: '',
-        coordinates: 'SRID=4326;POINT(-74 40)',
-      })
-      .returning();
-    const cafe = await client.tags.create({
-      name: 'cafe',
-      icon: {emoji: '☕'},
-      description: 'Coffee shops',
-    });
-    const favorite = await client.tags.create({name: 'favorite', icon: {emoji: '⭐'}});
-    const cafeAssignment = await client.places.tag({
-      placeId: placeId!,
-      tag: cafe.id,
-      notes: 'Order the espresso',
-    });
-    const favoriteAssignment = await client.places.tag({
-      placeId: placeId!,
-      tag: favorite.id,
+      expect(await db.select().from(placeSources)).toMatchObject([
+        {...recommendation, placeId: status.placeIds[0]},
+      ]);
+      expect(await db.select().from(places)).toMatchObject([{userNote: 'My own note'}]);
     });
 
-    const all = await client.places.list();
-    expect(all).toHaveLength(2);
-    expect(all.find(place => place.id === untagged!.id)?.tags).toEqual([]);
-
-    const filtered = await client.places.list({query: 'tag[cafe]'});
-    expect(filtered).toHaveLength(1);
-    expect(filtered[0]?.tags).toEqual([
-      {...cafeAssignment, tag: cafe},
-      {...favoriteAssignment, tag: favorite},
-    ]);
-    expect(await client.places.list({query: 'name[missing]'})).toEqual([]);
-
-    await client.tags.update({id: cafe.id, icon: {emoji: '🫖'}});
-    const updatedPlaces = await client.places.list({query: 'tag[cafe]'});
-
-    expect(updatedPlaces[0]?.tags[0]?.tag.icon).toEqual({emoji: '🫖'});
-    await client.places.untag({placeId: placeId!, tag: favorite.id});
-    const untaggedPlaces = await client.places.list({query: 'tag[cafe]'});
-
-    expect(untaggedPlaces[0]?.tags).toHaveLength(1);
-  });
-
-  it('lists every source association and its source metadata on filtered places', async () => {
-    const {
-      placeIds: [placeId],
-    } = await importPlace(db, google, 'ChIJtest');
-    const [otherPlace] = await db
-      .insert(places)
-      .values({
-        googlePlaceId: 'other',
-        name: 'Other',
-        formattedAddress: '',
-        coordinates: 'SRID=4326;POINT(-74 40)',
-      })
-      .returning();
-    const [first, second] = await db
-      .insert(sources)
-      .values([
+    it('adds sources to an existing place and updates only supplied relation fields', async () => {
+      const [first, second] = await db
+        .insert(sources)
+        .values([{type: 'instagram'}, {type: 'instagram'}])
+        .returning();
+      const [original, review] = await db
+        .insert(tags)
+        .values([{name: 'favorite'}, {name: 'needs-review'}])
+        .returning();
+      const result = await importPlace(
+        db,
+        google,
+        'ChIJtest',
+        [{tagId: original!.id, note: 'My tag note'}],
+        'My place note',
         {
-          type: 'instagram',
-          externalId: 'first',
-          url: 'https://www.instagram.com/p/first/',
-          description: 'A cafe post',
-          data: {
-            caption: 'Coffee',
-            username: 'alice',
-            postedAt: null,
-            thumbnailUrl: null,
-          },
-        },
-        {type: 'instagram', externalId: 'second'},
-      ])
-      .returning();
-    const [firstAssignment, secondAssignment] = await db
-      .insert(placeSources)
-      .values([
-        {
-          placeId: placeId!,
           sourceId: first!.id,
-          description: 'Order the coffee',
-          data: {evidence: 'Caption mentions coffee'},
-          createdAt: new Date('2026-09-20T00:00:00Z'),
+          description: 'Original recommendation',
+          data: {evidence: 'Original caption'},
         },
-        {
-          placeId: placeId!,
-          sourceId: second!.id,
-          createdAt: new Date('2026-09-21T00:00:00Z'),
-        },
-      ])
-      .returning();
+      );
+      await importPlace(
+        db,
+        google,
+        'ChIJtest',
+        [{tagId: review!.id}, {tagId: original!.id, note: 'Replacement'}],
+        'Replacement',
+        {sourceId: second!.id},
+      );
+      expect(await db.select().from(placeTags)).toMatchObject([
+        {tagId: original!.id, note: 'My tag note'},
+      ]);
+      expect(await db.select().from(placeTags)).toHaveLength(1);
+      expect(await db.select().from(places)).toMatchObject([{userNote: 'My place note'}]);
+      await importPlace(db, google, 'ChIJtest', [], undefined, {
+        sourceId: first!.id,
+        description: 'Updated recommendation',
+      });
+      await importPlace(db, google, 'ChIJtest', [], undefined, {sourceId: first!.id});
 
-    const all = await client.places.list();
-    expect(all.find(place => place.id === otherPlace!.id)?.sources).toEqual([]);
+      const relations = await db.select().from(placeSources);
+      expect(relations).toHaveLength(2);
+      expect(relations.find(row => row.sourceId === first!.id)).toMatchObject({
+        placeId: result.placeIds[0],
+        description: 'Updated recommendation',
+        data: {evidence: 'Original caption'},
+      });
+      expect(google.getMetadata).toHaveBeenCalledTimes(1);
 
-    const filtered = await client.places.list({query: 'source[text:coffee]'});
-    expect(filtered).toHaveLength(1);
-    expect(filtered[0]?.sources).toEqual([
-      {...secondAssignment, source: second},
-      {...firstAssignment, source: first},
-    ]);
-  });
-
-  it('sorts places by name, saved date, or latest recommendation', async () => {
-    const saved = await db
-      .insert(places)
-      .values([
-        {
-          googlePlaceId: 'beta',
-          name: 'Beta',
-          formattedAddress: '',
-          coordinates: 'SRID=4326;POINT(-74 40)',
-          createdAt: new Date('2026-01-03T00:00:00Z'),
-        },
-        {
-          googlePlaceId: 'alpha',
-          name: 'Alpha',
-          formattedAddress: '',
-          coordinates: 'SRID=4326;POINT(-74 40)',
-          createdAt: new Date('2026-01-03T00:00:00Z'),
-        },
-        {
-          googlePlaceId: 'gamma',
-          name: 'Gamma',
-          formattedAddress: '',
-          coordinates: 'SRID=4326;POINT(-74 40)',
-          createdAt: new Date('2026-04-01T00:00:00Z'),
-        },
-      ])
-      .returning();
-    const savedByName = new Map(saved.map(place => [place.name, place]));
-    const recommendations = await db
-      .insert(sources)
-      .values([{type: 'instagram'}, {type: 'instagram'}])
-      .returning();
-
-    await db.insert(placeSources).values([
-      {
-        placeId: savedByName.get('Beta')!.id,
-        sourceId: recommendations[0]!.id,
-        createdAt: new Date('2026-03-01T00:00:00Z'),
-      },
-      {
-        placeId: savedByName.get('Alpha')!.id,
-        sourceId: recommendations[1]!.id,
-        createdAt: new Date('2026-03-01T00:00:00Z'),
-      },
-    ]);
-
-    const names = async (
-      sort?:
-        | 'name'
-        | 'name-asc'
-        | 'name-desc'
-        | 'recently-saved'
-        | 'recently-saved-asc'
-        | 'recently-saved-desc'
-        | 'recently-recommended'
-        | 'recently-recommended-asc'
-        | 'recently-recommended-desc',
-    ) => {
-      const listed = await client.places.list(sort ? {sort} : undefined);
-
-      return listed.map(place => place.name);
-    };
-
-    expect(await names('name')).toEqual(['Alpha', 'Beta', 'Gamma']);
-    expect(await names('name-asc')).toEqual(['Alpha', 'Beta', 'Gamma']);
-    expect(await names('name-desc')).toEqual(['Gamma', 'Beta', 'Alpha']);
-    expect(await names()).toEqual(['Gamma', 'Alpha', 'Beta']);
-    expect(await names('recently-saved')).toEqual(['Gamma', 'Alpha', 'Beta']);
-    expect(await names('recently-saved-asc')).toEqual(['Alpha', 'Beta', 'Gamma']);
-    expect(await names('recently-saved-desc')).toEqual(['Gamma', 'Alpha', 'Beta']);
-    expect(await names('recently-recommended')).toEqual(['Gamma', 'Alpha', 'Beta']);
-    expect(await names('recently-recommended-asc')).toEqual(['Alpha', 'Beta', 'Gamma']);
-    expect(await names('recently-recommended-desc')).toEqual(['Gamma', 'Alpha', 'Beta']);
-  });
-
-  it('resolves names and IDs, deduplicates tags, and preserves tags on reimport', async () => {
-    const cafe = await client.tags.create({name: 'cafe'});
-    const favorite = await client.tags.create({name: 'favorite'});
-    const submitted = await client.places.import({
-      input: 'gmaps:ChIJtest',
-      tags: [{tag: ' CAFE '}, {tag: cafe.id}, {tag: cafe.id}],
-    });
-    const result = await waitForState(submitted.jobId, 'completed');
-
-    expect(await db.select().from(placeTags)).toMatchObject([
-      {placeId: result.placeIds[0], tagId: cafe.id},
-    ]);
-
-    google.getMetadata.mockClear();
-    const repeated = await client.places.import({
-      input: 'gmaps:ChIJtest',
-      tags: [{tag: cafe.id}, {tag: favorite.id}],
+      await importPlace(db, google, 'ChIJtest', [], undefined, {
+        sourceId: first!.id,
+        description: null,
+        data: null,
+      });
+      const cleared = await db.select().from(placeSources);
+      expect(cleared.find(row => row.sourceId === first!.id)).toMatchObject({
+        description: null,
+        data: null,
+      });
     });
 
-    await waitForState(repeated.jobId, 'completed');
-    const savedTags = await db.select().from(placeTags);
-    expect(savedTags.map(row => row.tagId)).toEqual([cafe.id]);
-    expect(google.getMetadata).not.toHaveBeenCalled();
-  }, 20000);
+    it('deduplicates source associations under concurrent imports', async () => {
+      const [source] = await db.insert(sources).values({type: 'instagram'}).returning();
+      const results = await Promise.all(
+        [1, 2].map(() =>
+          importPlace(db, google, 'ChIJtest', [], undefined, {
+            sourceId: source!.id,
+            description: 'A recommendation',
+          }),
+        ),
+      );
+      expect(results[0]).toEqual(results[1]);
+      expect(await db.select().from(placeSources)).toHaveLength(1);
+    });
 
-  it('applies initial tag notes, resolves aliases, and preserves them on reimport', async () => {
-    const bathroom = await client.tags.create({name: 'nice-bathroom'});
-    const cafe = await client.tags.create({name: 'cafe'});
+    it('rolls back a new place when its source does not exist', async () => {
+      await expect(
+        importPlace(db, google, 'ChIJtest', [], undefined, {
+          sourceId: randomUUID(),
+        }),
+      ).rejects.toThrow();
+      expect(await db.select().from(places)).toEqual([]);
+      expect(await db.select().from(placeSources)).toEqual([]);
+    });
+  });
 
-    for (const [tagNotes, expected] of [
-      [
-        [
-          {tag: ' Nice-Bathroom ', note: 'Old'},
-          {tag: bathroom.id, note: '  Code 1234\nDownstairs  '},
-        ],
-        '  Code 1234\nDownstairs  ',
-      ],
-      [[], '  Code 1234\nDownstairs  '],
-      [[{tag: bathroom.name, note: 'Code 5678'}], '  Code 1234\nDownstairs  '],
-      [[{tag: bathroom.id, note: ''}], '  Code 1234\nDownstairs  '],
-    ] as const) {
+  describe('Place imports', () => {
+    it('queues only the resolved ID, persists metadata, and exposes named coordinates', async () => {
+      const submitted = await client.places.import({input: 'gmaps:ChIJtest'});
+      const job = await jobs.getJobById(importQueue, submitted.jobId);
+
+      expect(job?.data).toEqual({googlePlaceId: 'ChIJtest', tags: []});
+
+      const result = await waitForState(submitted.jobId, 'completed');
+      const saved = await client.places.list();
+
+      expect(result.placeIds).toEqual([saved[0]?.id]);
+      expect(saved).toHaveLength(1);
+      expect(saved[0]).toMatchObject({
+        name: 'Test Cafe',
+        formattedAddress: 'New York, NY',
+        googleMapsUrl: details.googleMapsUri,
+        coordinates: details.location,
+        timeZone: details.timeZone,
+        hoursWeeklyOpen: details.hoursWeeklyOpen,
+        businessStatus: details.businessStatus,
+        googleMetadata: details.googleMetadata,
+        lastSync: expect.any(Date),
+      });
+    }, 20000);
+
+    it('imports missing hours and refreshes canonical IDs without duplicate places', async () => {
+      google.getMetadata.mockResolvedValue({
+        ...details,
+        id: 'canonical',
+        timeZone: null,
+        hoursWeeklyOpen: null,
+        businessStatus: null,
+      });
+      const first = await importPlace(db, google, 'oldId');
+      const repeated = await importPlace(db, google, 'anotherOldId');
+      expect(repeated).toEqual(first);
+      const saved = await client.places.list();
+      expect(saved).toHaveLength(1);
+      expect(saved[0]).toMatchObject({
+        googlePlaceId: 'canonical',
+        timeZone: null,
+        hoursWeeklyOpen: null,
+        businessStatus: null,
+        lastSync: expect.any(Date),
+      });
+    });
+
+    it('reuses existing places and handles concurrent imports without duplicate rows', async () => {
+      const [first, second] = await Promise.all([
+        importPlace(db, google, 'ChIJtest'),
+        importPlace(db, google, 'ChIJtest'),
+      ]);
+
+      expect(first).toEqual(second);
+      expect(await client.places.list()).toHaveLength(1);
+      google.getMetadata.mockClear();
+
+      const submitted = await client.places.import({input: 'gmaps:ChIJtest'});
+
+      const completed = await waitForState(submitted.jobId, 'completed');
+      expect(completed.placeIds).toEqual(first.placeIds);
+      expect(google.getMetadata).not.toHaveBeenCalled();
+    }, 20000);
+
+    it('preserves the winning import assignments when concurrent imports create the same place', async () => {
+      const importedTags = await db
+        .insert(tags)
+        .values([{name: 'first'}, {name: 'second'}])
+        .returning();
+      const results = await Promise.all(
+        importedTags.map(tag =>
+          importPlace(
+            db,
+            google,
+            'ChIJtest',
+            [{tagId: tag.id, note: tag.name}],
+            tag.name,
+          ),
+        ),
+      );
+      expect(results[0]).toEqual(results[1]);
+      const [saved] = await db.select().from(places);
+      const winner = importedTags.find(tag => tag.name === saved!.userNote)!;
+      expect(await db.select().from(placeTags)).toMatchObject([
+        {tagId: winner.id, note: winner.name},
+      ]);
+      expect(await db.select().from(placeTags)).toHaveLength(1);
+    });
+  });
+
+  describe('Place listing', () => {
+    it('lists every tag association with metadata and notes, including on filtered places', async () => {
+      const {
+        placeIds: [placeId],
+      } = await importPlace(db, google, 'ChIJtest');
+      const [untagged] = await db
+        .insert(places)
+        .values({
+          googlePlaceId: 'untagged',
+          name: 'Untagged',
+          formattedAddress: '',
+          coordinates: 'SRID=4326;POINT(-74 40)',
+        })
+        .returning();
+      const cafe = await client.tags.create({
+        name: 'cafe',
+        icon: {emoji: '☕'},
+        description: 'Coffee shops',
+      });
+      const favorite = await client.tags.create({name: 'favorite', icon: {emoji: '⭐'}});
+      const cafeAssignment = await client.places.tag({
+        placeId: placeId!,
+        tag: cafe.id,
+        notes: 'Order the espresso',
+      });
+      const favoriteAssignment = await client.places.tag({
+        placeId: placeId!,
+        tag: favorite.id,
+      });
+
+      const all = await client.places.list();
+      expect(all).toHaveLength(2);
+      expect(all.find(place => place.id === untagged!.id)?.tags).toEqual([]);
+
+      const filtered = await client.places.list({query: 'tag[cafe]'});
+      expect(filtered).toHaveLength(1);
+      expect(filtered[0]?.tags).toEqual([
+        {...cafeAssignment, tag: cafe},
+        {...favoriteAssignment, tag: favorite},
+      ]);
+      expect(await client.places.list({query: 'name[missing]'})).toEqual([]);
+
+      await client.tags.update({id: cafe.id, icon: {emoji: '🫖'}});
+      const updatedPlaces = await client.places.list({query: 'tag[cafe]'});
+
+      expect(updatedPlaces[0]?.tags[0]?.tag.icon).toEqual({emoji: '🫖'});
+      await client.places.untag({placeId: placeId!, tag: favorite.id});
+      const untaggedPlaces = await client.places.list({query: 'tag[cafe]'});
+
+      expect(untaggedPlaces[0]?.tags).toHaveLength(1);
+    });
+
+    it('lists every source association and its source metadata on filtered places', async () => {
+      const {
+        placeIds: [placeId],
+      } = await importPlace(db, google, 'ChIJtest');
+      const [otherPlace] = await db
+        .insert(places)
+        .values({
+          googlePlaceId: 'other',
+          name: 'Other',
+          formattedAddress: '',
+          coordinates: 'SRID=4326;POINT(-74 40)',
+        })
+        .returning();
+      const [first, second] = await db
+        .insert(sources)
+        .values([
+          {
+            type: 'instagram',
+            externalId: 'first',
+            url: 'https://www.instagram.com/p/first/',
+            description: 'A cafe post',
+            data: {
+              caption: 'Coffee',
+              username: 'alice',
+              postedAt: null,
+              thumbnailUrl: null,
+            },
+          },
+          {type: 'instagram', externalId: 'second'},
+        ])
+        .returning();
+      const [firstAssignment, secondAssignment] = await db
+        .insert(placeSources)
+        .values([
+          {
+            placeId: placeId!,
+            sourceId: first!.id,
+            description: 'Order the coffee',
+            data: {evidence: 'Caption mentions coffee'},
+            createdAt: new Date('2026-09-20T00:00:00Z'),
+          },
+          {
+            placeId: placeId!,
+            sourceId: second!.id,
+            createdAt: new Date('2026-09-21T00:00:00Z'),
+          },
+        ])
+        .returning();
+
+      const all = await client.places.list();
+      expect(all.find(place => place.id === otherPlace!.id)?.sources).toEqual([]);
+
+      const filtered = await client.places.list({query: 'source[text:coffee]'});
+      expect(filtered).toHaveLength(1);
+      expect(filtered[0]?.sources).toEqual([
+        {...secondAssignment, source: second},
+        {...firstAssignment, source: first},
+      ]);
+    });
+
+    it('sorts places by name, saved date, or latest recommendation', async () => {
+      const saved = await db
+        .insert(places)
+        .values([
+          {
+            googlePlaceId: 'beta',
+            name: 'Beta',
+            formattedAddress: '',
+            coordinates: 'SRID=4326;POINT(-74 40)',
+            createdAt: new Date('2026-01-03T00:00:00Z'),
+          },
+          {
+            googlePlaceId: 'alpha',
+            name: 'Alpha',
+            formattedAddress: '',
+            coordinates: 'SRID=4326;POINT(-74 40)',
+            createdAt: new Date('2026-01-03T00:00:00Z'),
+          },
+          {
+            googlePlaceId: 'gamma',
+            name: 'Gamma',
+            formattedAddress: '',
+            coordinates: 'SRID=4326;POINT(-74 40)',
+            createdAt: new Date('2026-04-01T00:00:00Z'),
+          },
+        ])
+        .returning();
+      const savedByName = new Map(saved.map(place => [place.name, place]));
+      const recommendations = await db
+        .insert(sources)
+        .values([{type: 'instagram'}, {type: 'instagram'}])
+        .returning();
+
+      await db.insert(placeSources).values([
+        {
+          placeId: savedByName.get('Beta')!.id,
+          sourceId: recommendations[0]!.id,
+          createdAt: new Date('2026-03-01T00:00:00Z'),
+        },
+        {
+          placeId: savedByName.get('Alpha')!.id,
+          sourceId: recommendations[1]!.id,
+          createdAt: new Date('2026-03-01T00:00:00Z'),
+        },
+      ]);
+
+      const names = async (
+        sort?:
+          | 'name'
+          | 'name-asc'
+          | 'name-desc'
+          | 'recently-saved'
+          | 'recently-saved-asc'
+          | 'recently-saved-desc'
+          | 'recently-recommended'
+          | 'recently-recommended-asc'
+          | 'recently-recommended-desc',
+      ) => {
+        const listed = await client.places.list(sort ? {sort} : undefined);
+
+        return listed.map(place => place.name);
+      };
+
+      expect(await names('name')).toEqual(['Alpha', 'Beta', 'Gamma']);
+      expect(await names('name-asc')).toEqual(['Alpha', 'Beta', 'Gamma']);
+      expect(await names('name-desc')).toEqual(['Gamma', 'Beta', 'Alpha']);
+      expect(await names()).toEqual(['Gamma', 'Alpha', 'Beta']);
+      expect(await names('recently-saved')).toEqual(['Gamma', 'Alpha', 'Beta']);
+      expect(await names('recently-saved-asc')).toEqual(['Alpha', 'Beta', 'Gamma']);
+      expect(await names('recently-saved-desc')).toEqual(['Gamma', 'Alpha', 'Beta']);
+      expect(await names('recently-recommended')).toEqual(['Gamma', 'Alpha', 'Beta']);
+      expect(await names('recently-recommended-asc')).toEqual(['Alpha', 'Beta', 'Gamma']);
+      expect(await names('recently-recommended-desc')).toEqual([
+        'Gamma',
+        'Alpha',
+        'Beta',
+      ]);
+    });
+  });
+
+  describe('Tags and saved places', () => {
+    it('resolves names and IDs, deduplicates tags, and preserves tags on reimport', async () => {
+      const cafe = await client.tags.create({name: 'cafe'});
+      const favorite = await client.tags.create({name: 'favorite'});
       const submitted = await client.places.import({
         input: 'gmaps:ChIJtest',
-        tags: [{tag: cafe.name}, ...tagNotes, {tag: bathroom.id}],
-        notes: 'General place note',
+        tags: [{tag: ' CAFE '}, {tag: cafe.id}, {tag: cafe.id}],
       });
+      const result = await waitForState(submitted.jobId, 'completed');
 
-      await waitForState(submitted.jobId, 'completed');
-      const assignments = await db.select().from(placeTags);
-
-      expect(assignments).toHaveLength(2);
-      expect(assignments).toEqual(
-        expect.arrayContaining([
-          expect.objectContaining({tagId: bathroom.id, note: expected}),
-          expect.objectContaining({tagId: cafe.id, note: null}),
-        ]),
-      );
-      expect(await client.places.list()).toMatchObject([
-        {userNote: 'General place note'},
+      expect(await db.select().from(placeTags)).toMatchObject([
+        {placeId: result.placeIds[0], tagId: cafe.id},
       ]);
-    }
-  }, 60000);
 
-  it('tags existing places, preserves and edits notes, and removes assignments idempotently', async () => {
-    const {
-      placeIds: [placeId],
-    } = await importPlace(db, google, 'ChIJtest');
-    const tag = await client.tags.create({name: 'nice-bathroom'});
-    const input = {placeId: placeId!, tag: tag.id};
-    const first = await client.places.tag({...input, tag: ' Nice-Bathroom '});
-
-    expect(first).toMatchObject({placeId, tagId: tag.id, note: null});
-
-    for (const [notes, expected] of [
-      ['  Code 1234\nDownstairs  ', '  Code 1234\nDownstairs  '],
-      [undefined, '  Code 1234\nDownstairs  '],
-      ['Code 5678', 'Code 5678'],
-      ['', null],
-    ]) {
-      expect(await client.places.tag({...input, notes: notes ?? undefined})).toEqual({
-        ...first,
-        note: expected,
+      google.getMetadata.mockClear();
+      const repeated = await client.places.import({
+        input: 'gmaps:ChIJtest',
+        tags: [{tag: cafe.id}, {tag: favorite.id}],
       });
-      expect(await db.select().from(placeTags)).toHaveLength(1);
-    }
 
-    await client.places.tag({...input, notes: 'Removed with assignment'});
-    expect(await client.places.untag({...input, tag: tag.name})).toEqual({
-      placeId,
-      tagId: tag.id,
-      removed: true,
+      await waitForState(repeated.jobId, 'completed');
+      const savedTags = await db.select().from(placeTags);
+      expect(savedTags.map(row => row.tagId)).toEqual([cafe.id]);
+      expect(google.getMetadata).not.toHaveBeenCalled();
+    }, 20000);
+
+    it('applies initial tag notes, resolves aliases, and preserves them on reimport', async () => {
+      const bathroom = await client.tags.create({name: 'nice-bathroom'});
+      const cafe = await client.tags.create({name: 'cafe'});
+
+      for (const [tagNotes, expected] of [
+        [
+          [
+            {tag: ' Nice-Bathroom ', note: 'Old'},
+            {tag: bathroom.id, note: '  Code 1234\nDownstairs  '},
+          ],
+          '  Code 1234\nDownstairs  ',
+        ],
+        [[], '  Code 1234\nDownstairs  '],
+        [[{tag: bathroom.name, note: 'Code 5678'}], '  Code 1234\nDownstairs  '],
+        [[{tag: bathroom.id, note: ''}], '  Code 1234\nDownstairs  '],
+      ] as const) {
+        const submitted = await client.places.import({
+          input: 'gmaps:ChIJtest',
+          tags: [{tag: cafe.name}, ...tagNotes, {tag: bathroom.id}],
+          notes: 'General place note',
+        });
+
+        await waitForState(submitted.jobId, 'completed');
+        const assignments = await db.select().from(placeTags);
+
+        expect(assignments).toHaveLength(2);
+        expect(assignments).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({tagId: bathroom.id, note: expected}),
+            expect.objectContaining({tagId: cafe.id, note: null}),
+          ]),
+        );
+        expect(await client.places.list()).toMatchObject([
+          {userNote: 'General place note'},
+        ]);
+      }
+    }, 60000);
+
+    it('tags existing places, preserves and edits notes, and removes assignments idempotently', async () => {
+      const {
+        placeIds: [placeId],
+      } = await importPlace(db, google, 'ChIJtest');
+      const tag = await client.tags.create({name: 'nice-bathroom'});
+      const input = {placeId: placeId!, tag: tag.id};
+      const first = await client.places.tag({...input, tag: ' Nice-Bathroom '});
+
+      expect(first).toMatchObject({placeId, tagId: tag.id, note: null});
+
+      for (const [notes, expected] of [
+        ['  Code 1234\nDownstairs  ', '  Code 1234\nDownstairs  '],
+        [undefined, '  Code 1234\nDownstairs  '],
+        ['Code 5678', 'Code 5678'],
+        ['', null],
+      ]) {
+        expect(await client.places.tag({...input, notes: notes ?? undefined})).toEqual({
+          ...first,
+          note: expected,
+        });
+        expect(await db.select().from(placeTags)).toHaveLength(1);
+      }
+
+      await client.places.tag({...input, notes: 'Removed with assignment'});
+      expect(await client.places.untag({...input, tag: tag.name})).toEqual({
+        placeId,
+        tagId: tag.id,
+        removed: true,
+      });
+      expect(await client.places.untag(input)).toEqual({
+        placeId,
+        tagId: tag.id,
+        removed: false,
+      });
+      expect(await db.select().from(placeTags)).toEqual([]);
+      expect(await client.tags.get({id: tag.id})).toMatchObject({id: tag.id});
+      expect(await client.places.list()).toHaveLength(1);
+      expect(await client.places.tag(input)).toMatchObject({note: null});
     });
-    expect(await client.places.untag(input)).toEqual({
-      placeId,
-      tagId: tag.id,
-      removed: false,
-    });
-    expect(await db.select().from(placeTags)).toEqual([]);
-    expect(await client.tags.get({id: tag.id})).toMatchObject({id: tag.id});
-    expect(await client.places.list()).toHaveLength(1);
-    expect(await client.places.tag(input)).toMatchObject({note: null});
-  });
 
-  it('soft-deletes a saved place through MCP until it is directly re-imported', async () => {
-    const [source] = await db
-      .insert(sources)
-      .values({type: 'instagram', externalId: 'delete-test'})
-      .returning();
-    const tag = await client.tags.create({name: 'delete-test'});
-    const {
-      placeIds: [placeId],
-    } = await importPlace(db, google, 'ChIJtest', [{tagId: tag.id}], 'Try the pastries', {
-      sourceId: source!.id,
-      description: 'Recommended for the pastries',
-    });
+    it('soft-deletes a saved place through MCP until it is directly re-imported', async () => {
+      const [source] = await db
+        .insert(sources)
+        .values({type: 'instagram', externalId: 'delete-test'})
+        .returning();
+      const tag = await client.tags.create({name: 'delete-test'});
+      const {
+        placeIds: [placeId],
+      } = await importPlace(
+        db,
+        google,
+        'ChIJtest',
+        [{tagId: tag.id}],
+        'Try the pastries',
+        {
+          sourceId: source!.id,
+          description: 'Recommended for the pastries',
+        },
+      );
 
-    const response = await app.request('/mcp', {
-      method: 'POST',
-      headers: {'content-type': 'application/json'},
-      body: JSON.stringify({
-        jsonrpc: '2.0',
-        id: 1,
-        method: 'tools/call',
-        params: {name: 'places_delete', arguments: {id: placeId}},
-      }),
-    });
-    expect(response.status).toBe(200);
-    expect(await response.json()).toMatchObject({
-      result: {structuredContent: {id: placeId}},
-    });
-    expect(await client.places.list()).toEqual([]);
-    expect(await client.places.list({query: `id["${placeId}"]`})).toEqual([]);
-    expect(await syncPlace(db, google, placeId!)).toEqual({placeId, status: 'missing'});
-    await expect(
-      client.places.untag({placeId: placeId!, tag: tag.id}),
-    ).rejects.toMatchObject({
-      code: 'NOT_FOUND',
-    });
-
-    await expect(client.places.delete({id: placeId!})).rejects.toMatchObject({
-      code: 'NOT_FOUND',
-    });
-
-    expect(
-      await importPlace(db, google, 'ChIJtest', [], undefined, {
-        sourceId: source!.id,
-        description: 'Another recommendation',
-      }),
-    ).toEqual({placeIds: []});
-    expect(await client.places.list()).toEqual([]);
-
-    expect(await importPlace(db, google, 'ChIJtest')).toEqual({placeIds: [placeId]});
-    expect(await client.places.list()).toMatchObject([
-      {
-        id: placeId,
-        userNote: 'Try the pastries',
-        tags: [{tagId: tag.id}],
-        sources: [{sourceId: source!.id, description: 'Recommended for the pastries'}],
-      },
-    ]);
-  });
-
-  it('rejects missing places and tags for assignment commands', async () => {
-    const {
-      placeIds: [placeId],
-    } = await importPlace(db, google, 'ChIJtest');
-    const tag = await client.tags.create({name: 'favorite'});
-
-    for (const action of [client.places.tag, client.places.untag]) {
-      await expect(action({placeId: randomUUID(), tag: tag.name})).rejects.toMatchObject({
+      const response = await app.request('/mcp', {
+        method: 'POST',
+        headers: {'content-type': 'application/json'},
+        body: JSON.stringify({
+          jsonrpc: '2.0',
+          id: 1,
+          method: 'tools/call',
+          params: {name: 'places_delete', arguments: {id: placeId}},
+        }),
+      });
+      expect(response.status).toBe(200);
+      expect(await response.json()).toMatchObject({
+        result: {structuredContent: {id: placeId}},
+      });
+      expect(await client.places.list()).toEqual([]);
+      expect(await client.places.list({query: `id["${placeId}"]`})).toEqual([]);
+      expect(await syncPlace(db, google, placeId!)).toEqual({placeId, status: 'missing'});
+      await expect(
+        client.places.untag({placeId: placeId!, tag: tag.id}),
+      ).rejects.toMatchObject({
         code: 'NOT_FOUND',
       });
 
-      for (const missing of ['missing', randomUUID()]) {
-        await expect(action({placeId: placeId!, tag: missing})).rejects.toMatchObject({
+      await expect(client.places.delete({id: placeId!})).rejects.toMatchObject({
+        code: 'NOT_FOUND',
+      });
+
+      expect(
+        await importPlace(db, google, 'ChIJtest', [], undefined, {
+          sourceId: source!.id,
+          description: 'Another recommendation',
+        }),
+      ).toEqual({placeIds: []});
+      expect(await client.places.list()).toEqual([]);
+
+      expect(await importPlace(db, google, 'ChIJtest')).toEqual({placeIds: [placeId]});
+      expect(await client.places.list()).toMatchObject([
+        {
+          id: placeId,
+          userNote: 'Try the pastries',
+          tags: [{tagId: tag.id}],
+          sources: [{sourceId: source!.id, description: 'Recommended for the pastries'}],
+        },
+      ]);
+    });
+
+    it('rejects missing places and tags for assignment commands', async () => {
+      const {
+        placeIds: [placeId],
+      } = await importPlace(db, google, 'ChIJtest');
+      const tag = await client.tags.create({name: 'favorite'});
+
+      for (const action of [client.places.tag, client.places.untag]) {
+        await expect(
+          action({placeId: randomUUID(), tag: tag.name}),
+        ).rejects.toMatchObject({
           code: 'NOT_FOUND',
         });
+
+        for (const missing of ['missing', randomUUID()]) {
+          await expect(action({placeId: placeId!, tag: missing})).rejects.toMatchObject({
+            code: 'NOT_FOUND',
+          });
+        }
       }
-    }
 
-    expect(await db.select().from(placeTags)).toEqual([]);
-  });
+      expect(await db.select().from(placeTags)).toEqual([]);
+    });
 
-  it('rejects unknown tag names and IDs before queuing', async () => {
-    const send = vi.spyOn(jobs, 'send');
+    it('rejects unknown tag names and IDs before queuing', async () => {
+      const send = vi.spyOn(jobs, 'send');
 
-    try {
-      for (const tag of ['missing', randomUUID()]) {
+      try {
+        for (const tag of ['missing', randomUUID()]) {
+          await expect(
+            client.places.import({input: 'gmaps:ChIJtest', tags: [{tag}]}),
+          ).rejects.toMatchObject({
+            code: 'BAD_REQUEST',
+            message: `Tag not found: ${tag}`,
+          });
+        }
+
         await expect(
-          client.places.import({input: 'gmaps:ChIJtest', tags: [{tag}]}),
-        ).rejects.toMatchObject({
-          code: 'BAD_REQUEST',
-          message: `Tag not found: ${tag}`,
-        });
+          client.places.import({
+            input: 'gmaps:ChIJtest',
+            tags: [{tag: 'missing', note: 'Code'}],
+          }),
+        ).rejects.toMatchObject({code: 'BAD_REQUEST', message: 'Tag not found: missing'});
+
+        expect(send).not.toHaveBeenCalled();
+      } finally {
+        send.mockRestore();
       }
-
-      await expect(
-        client.places.import({
-          input: 'gmaps:ChIJtest',
-          tags: [{tag: 'missing', note: 'Code'}],
-        }),
-      ).rejects.toMatchObject({code: 'BAD_REQUEST', message: 'Tag not found: missing'});
-
-      expect(send).not.toHaveBeenCalled();
-    } finally {
-      send.mockRestore();
-    }
+    });
   });
 
   it('saves initial notes and preserves them on reimport', async () => {
@@ -774,62 +789,52 @@ describe.skipIf(!testUrl)('place import with PostgreSQL and pg-boss', () => {
   }, 20000);
 
   it('imports, lists, and deletes places through the actual CLI', async () => {
-    const server = serve({fetch: app.fetch, hostname: '127.0.0.1', port: 15189});
-    const cliPath = fileURLToPath(new URL('../../../cli/src/main.ts', import.meta.url));
-    const cli = (...args: string[]) =>
-      exec(process.execPath, [cliPath, '--server', 'http://127.0.0.1:15189', ...args]);
+    await withPlacesCli(
+      {fetch: app.fetch, port: 15189},
+      async ({run: cli, json: cliJson}) => {
+        const tag = await client.tags.create({name: 'favorite'});
+        const submitted = await cliJson(
+          'import',
+          'gmaps:ChIJtest',
+          '--tag',
+          tag.name,
+          '--tag',
+          tag.id,
+          '--tag-note',
+          tag.name,
+          'Order the Espresso',
+          '--notes',
+          'Try the espresso tonic',
+        );
 
-    try {
-      const tag = await client.tags.create({name: 'favorite'});
-      const importOutput = await cli(
-        'import',
-        'gmaps:ChIJtest',
-        '--tag',
-        tag.name,
-        '--tag',
-        tag.id,
-        '--tag-note',
-        tag.name,
-        'Order the Espresso',
-        '--notes',
-        'Try the espresso tonic',
-      );
-      const submitted = JSON.parse(importOutput.stdout);
-
-      await waitForState(submitted.jobId, 'completed');
-      const statusOutput = await cli('import', 'runs', submitted.jobId);
-      expect(JSON.parse(statusOutput.stdout).state).toBe('completed');
-      const statusListOutput = await cli('import', 'runs');
-      expect(JSON.parse(statusListOutput.stdout)).toContainEqual(
-        expect.objectContaining({jobId: submitted.jobId, state: 'completed'}),
-      );
-      const listOutput = await cli('list');
-      expect(JSON.parse(listOutput.stdout)).toHaveLength(1);
-      const notesOutput = await cli('list');
-      expect(JSON.parse(notesOutput.stdout)[0].userNote).toBe('Try the espresso tonic');
-      expect(await db.select().from(placeTags)).toMatchObject([
-        {tagId: tag.id, note: 'Order the Espresso'},
-      ]);
-      const [saved] = await client.places.list();
-      const tagOutput = await cli('tag', saved!.id, tag.name, '--notes', 'Updated note');
-      expect(JSON.parse(tagOutput.stdout)).toMatchObject({
-        tagId: tag.id,
-        note: 'Updated note',
-      });
-      const untagOutput = await cli('untag', saved!.id, tag.id);
-      expect(JSON.parse(untagOutput.stdout)).toMatchObject({
-        removed: true,
-      });
-      expect(await db.select().from(placeTags)).toEqual([]);
-      const deleteOutput = await cli('delete', saved!.id);
-      expect(JSON.parse(deleteOutput.stdout)).toEqual({id: saved!.id});
-      const remainingOutput = await cli('list');
-      expect(JSON.parse(remainingOutput.stdout)).toEqual([]);
-      await expect(cli('import', 'https://evil.test')).rejects.toMatchObject({code: 1});
-    } finally {
-      await new Promise<void>((resolve, reject) =>
-        server.close(error => (error ? reject(error) : resolve())),
-      );
-    }
+        await waitForState(submitted.jobId, 'completed');
+        expect(await cliJson('import', 'runs', submitted.jobId)).toMatchObject({
+          state: 'completed',
+        });
+        expect(await cliJson('import', 'runs')).toContainEqual(
+          expect.objectContaining({jobId: submitted.jobId, state: 'completed'}),
+        );
+        expect(await cliJson('list')).toEqual([
+          expect.objectContaining({userNote: 'Try the espresso tonic'}),
+        ]);
+        expect(await db.select().from(placeTags)).toMatchObject([
+          {tagId: tag.id, note: 'Order the Espresso'},
+        ]);
+        const [saved] = await client.places.list();
+        expect(
+          await cliJson('tag', saved!.id, tag.name, '--notes', 'Updated note'),
+        ).toMatchObject({
+          tagId: tag.id,
+          note: 'Updated note',
+        });
+        expect(await cliJson('untag', saved!.id, tag.id)).toMatchObject({
+          removed: true,
+        });
+        expect(await db.select().from(placeTags)).toEqual([]);
+        expect(await cliJson('delete', saved!.id)).toEqual({id: saved!.id});
+        expect(await cliJson('list')).toEqual([]);
+        await expect(cli('import', 'https://evil.test')).rejects.toMatchObject({code: 1});
+      },
+    );
   }, 20000);
 });

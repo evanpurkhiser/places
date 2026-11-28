@@ -19,6 +19,15 @@ export function pinImage(id: string) {
   }
 
   context.scale(2, 2);
+  drawPinBackground(context);
+
+  const emoji = id.slice(imagePrefix.length);
+  drawPinGlyph(context, emoji);
+
+  return context.getImageData(0, 0, 74, 74);
+}
+
+function drawPinBackground(context: CanvasRenderingContext2D) {
   context.beginPath();
   context.arc(18.5, 18.5, 17, 0, Math.PI * 2);
   context.fillStyle = '#ffffff';
@@ -26,8 +35,9 @@ export function pinImage(id: string) {
   context.strokeStyle = '#d6d9d3';
   context.lineWidth = 1;
   context.stroke();
+}
 
-  const emoji = id.slice(imagePrefix.length);
+function drawPinGlyph(context: CanvasRenderingContext2D, emoji: string) {
   context.fillStyle = '#61785a';
   context.strokeStyle = '#61785a';
 
@@ -47,8 +57,6 @@ export function pinImage(id: string) {
     context.arc(12, 10, 3, 0, Math.PI * 2);
     context.stroke();
   }
-
-  return context.getImageData(0, 0, 74, 74);
 }
 
 export const labelLayout: SymbolLayerSpecification['layout'] = {

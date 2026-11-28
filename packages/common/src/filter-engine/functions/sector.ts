@@ -1,8 +1,35 @@
 import {defineFunction, InvalidValueError} from '../definitions.ts';
 import {degrees} from '../values/degrees.ts';
 import {distance} from '../values/distance.ts';
-import {geographicPoint} from '../values/geographic-point.ts';
+import {geographicPoint, type Point} from '../values/geographic-point.ts';
 import {geographicPredicate} from '../values/geographic-predicate.ts';
+
+function directionDotProduct(origin: Point, target: Point) {
+  const radians = (degrees: number) => (degrees * Math.PI) / 180;
+  const originLatitude = radians(origin.latitude);
+  const targetLatitude = radians(target.latitude);
+  const longitudeDifference = radians(target.longitude - origin.longitude);
+  return (
+    Math.sin(originLatitude) * Math.sin(targetLatitude) +
+    Math.cos(originLatitude) * Math.cos(targetLatitude) * Math.cos(longitudeDifference)
+  );
+}
+
+function validateTarget(origin: Point, target: Point, range: number | undefined) {
+  if (
+    target.latitude === origin.latitude &&
+    (Math.abs(target.latitude) === 90 ||
+      (target.longitude - origin.longitude) % 360 === 0)
+  ) {
+    throw new InvalidValueError('sector towards must differ from its origin');
+  }
+
+  if (range === undefined && directionDotProduct(origin, target) <= 0) {
+    throw new InvalidValueError(
+      'sector towards must be within 90 degrees of its origin when range is omitted',
+    );
+  }
+}
 
 export const sector = defineFunction({
   name: 'sector',
@@ -91,33 +118,8 @@ export const sector = defineFunction({
       throw new InvalidValueError('sector range must be less than 10000km');
     }
 
-    if (
-      towardsValue &&
-      towardsValue.latitude === origin.value.latitude &&
-      (Math.abs(towardsValue.latitude) === 90 ||
-        (towardsValue.longitude - origin.value.longitude) % 360 === 0)
-    ) {
-      throw new InvalidValueError('sector towards must differ from its origin');
-    }
-
-    if (towardsValue && rangeValue === undefined) {
-      const radians = (degrees: number) => (degrees * Math.PI) / 180;
-      const originLatitude = radians(origin.value.latitude);
-      const targetLatitude = radians(towardsValue.latitude);
-      const longitudeDifference = radians(
-        towardsValue.longitude - origin.value.longitude,
-      );
-      const dot =
-        Math.sin(originLatitude) * Math.sin(targetLatitude) +
-        Math.cos(originLatitude) *
-          Math.cos(targetLatitude) *
-          Math.cos(longitudeDifference);
-
-      if (dot <= 0) {
-        throw new InvalidValueError(
-          'sector towards must be within 90 degrees of its origin when range is omitted',
-        );
-      }
+    if (towardsValue) {
+      validateTarget(origin.value, towardsValue, rangeValue);
     }
 
     const common = {

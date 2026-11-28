@@ -3,7 +3,6 @@ import {RPCLink} from '@orpc/client/fetch';
 import type {Client} from '@places/common/contract';
 import {eq, sql} from 'drizzle-orm';
 import {migrate} from 'drizzle-orm/node-postgres/migrator';
-import {Pool} from 'pg';
 import {afterAll, beforeAll, beforeEach, describe, expect, it, vi} from 'vitest';
 
 import {randomUUID} from 'node:crypto';
@@ -12,9 +11,9 @@ import {fileURLToPath} from 'node:url';
 import {createApp} from '../app.ts';
 import {configSchema} from '../config.ts';
 import {isUniqueViolation} from '../db/errors.ts';
-import {createDatabase} from '../db/index.ts';
 import {places, placeTags, tags} from '../db/schema.ts';
 import {testConfig} from '../fixtures/config.ts';
+import {temporaryDatabase} from '../fixtures/database.ts';
 import {createGooglePlaces} from '../services/google/index.ts';
 
 import {registerSyncWorker, syncPlace, syncQueue} from './gmaps-sync.ts';
@@ -37,11 +36,7 @@ const details = {
 };
 
 describe.skipIf(!testUrl)('place sync with PostgreSQL and pg-boss', () => {
-  const databaseName = `places_sync_${randomUUID().replaceAll('-', '')}`;
-  const admin = new Pool({connectionString: testUrl});
-  const url = new URL(testUrl ?? 'postgres://localhost/places');
-  url.pathname = `/${databaseName}`;
-  const db = createDatabase(url.href);
+  const {db, url, create, close} = temporaryDatabase('places_sync', testUrl);
   const google = {
     ...createGooglePlaces(),
     getMetadata: vi.fn().mockResolvedValue(details),
@@ -56,7 +51,7 @@ describe.skipIf(!testUrl)('place sync with PostgreSQL and pg-boss', () => {
   let placeId: string;
 
   beforeAll(async () => {
-    await admin.query(`CREATE DATABASE "${databaseName}"`);
+    await create();
     await migrate(db, {
       migrationsFolder: fileURLToPath(new URL('../../drizzle', import.meta.url)),
     });
@@ -91,9 +86,7 @@ describe.skipIf(!testUrl)('place sync with PostgreSQL and pg-boss', () => {
 
   afterAll(async () => {
     await jobs?.stop();
-    await db.$client.end();
-    await admin.query(`DROP DATABASE IF EXISTS "${databaseName}" WITH (FORCE)`);
-    await admin.end();
+    await close();
   });
 
   const read = async () => {

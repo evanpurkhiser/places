@@ -170,349 +170,353 @@ describe('Instagram capture', () => {
     });
   });
 
-  it('starts videos with timestamps and retrieves images only through the frame tool', async () => {
-    const {run, requests, getFrames} = harness([
-      response([
-        call('getVideoFrames', {videoId: 'media-1', timestamps: [2, 5]}, 'frames'),
-      ]),
-      response([call()]),
-      response([final()]),
-    ]);
-    getFrames.mockResolvedValue([
-      {url: 'data:image/jpeg;base64,YQ==', timestampSeconds: 2},
-      {url: 'data:image/jpeg;base64,Yg==', timestampSeconds: 5},
-    ]);
+  describe('Media tools and model input', () => {
+    it('starts videos with timestamps and retrieves images only through the frame tool', async () => {
+      const {run, requests, getFrames} = harness([
+        response([
+          call('getVideoFrames', {videoId: 'media-1', timestamps: [2, 5]}, 'frames'),
+        ]),
+        response([call()]),
+        response([final()]),
+      ]);
+      getFrames.mockResolvedValue([
+        {url: 'data:image/jpeg;base64,YQ==', timestampSeconds: 2},
+        {url: 'data:image/jpeg;base64,Yg==', timestampSeconds: 5},
+      ]);
 
-    await run();
-    expect(getFrames).toHaveBeenCalledWith([2, 5], expect.any(AbortSignal));
-    expect(JSON.stringify(requests[0]!.input)).not.toContain('input_image');
-    expect(JSON.stringify(requests[0]!.input)).toContain('durationSeconds');
-    const result = (requests[1]!.input as Array<{type: string; output?: unknown}>).find(
-      item => item.type === 'function_call_output',
-    );
-    expect(result?.output).toEqual([
-      {type: 'input_text', text: 'Video media-1 frame at 2s'},
-      {type: 'input_image', image_url: 'data:image/jpeg;base64,YQ==', detail: 'auto'},
-      {type: 'input_text', text: 'Video media-1 frame at 5s'},
-      {type: 'input_image', image_url: 'data:image/jpeg;base64,Yg==', detail: 'auto'},
-    ]);
-  });
-
-  it('routes concurrent frame requests by video ID and preserves mixed input order', async () => {
-    const {openai, google, requests} = harness([
-      response([
-        call('getVideoFrames', {videoId: 'media-1', timestamps: [2]}, 'first'),
-        call('getVideoFrames', {videoId: 'media-3', timestamps: [2]}, 'second'),
-      ]),
-      response([final({places: [], unresolved: []})]),
-    ]);
-    const first = vi
-      .fn()
-      .mockResolvedValue([{url: 'data:image/jpeg;base64,YQ==', timestampSeconds: 2}]);
-    const second = vi
-      .fn()
-      .mockResolvedValue([{url: 'data:image/jpeg;base64,Yg==', timestampSeconds: 2}]);
-    const video = {
-      kind: 'video' as const,
-      durationSeconds: 10,
-      [Symbol.asyncDispose]: async () => {},
-    };
-    await capture(
-      {openai, google},
-      {
-        ...fixture.metadata,
-        caption: 'Mixed post',
-        media: [
-          {
-            ...video,
-            id: 'media-1',
-            transcript: [{start: 0, end: 3, text: 'First cafe'}],
-            getFrames: first,
-          },
-          {kind: 'image', id: 'media-2', image: 'data:image/jpeg;base64,Yw=='},
-          {
-            ...video,
-            id: 'media-3',
-            transcript: [{start: 0, end: 3, text: 'Second cafe'}],
-            getFrames: second,
-          },
-        ],
-        [Symbol.asyncDispose]: async () => {},
-      },
-      fixture.catalog,
-      fixture.options,
-    );
-    expect(first).toHaveBeenCalledWith([2], expect.any(AbortSignal));
-    expect(second).toHaveBeenCalledWith([2], expect.any(AbortSignal));
-    const content = (
-      requests[0]!.input as Array<{content: Array<{type: string; text?: string}>}>
-    )[0]!.content;
-    expect(content.map(item => item.type)).toEqual([
-      'input_text',
-      'input_text',
-      'input_text',
-      'input_image',
-      'input_text',
-    ]);
-    expect(JSON.parse(content[1]!.text!)).toMatchObject({
-      id: 'media-1',
-      transcript: [{text: 'First cafe'}],
-    });
-    expect(content[2]!.text).toBe('Image media-2');
-    expect(JSON.parse(content[4]!.text!)).toMatchObject({
-      id: 'media-3',
-      transcript: [{text: 'Second cafe'}],
-    });
-    const outputs = (
-      requests[1]!.input as Array<{type: string; output?: unknown}>
-    ).filter(item => item.type === 'function_call_output');
-    expect(outputs.map(item => item.output)).toEqual([
-      [
+      await run();
+      expect(getFrames).toHaveBeenCalledWith([2, 5], expect.any(AbortSignal));
+      expect(JSON.stringify(requests[0]!.input)).not.toContain('input_image');
+      expect(JSON.stringify(requests[0]!.input)).toContain('durationSeconds');
+      const result = (requests[1]!.input as Array<{type: string; output?: unknown}>).find(
+        item => item.type === 'function_call_output',
+      );
+      expect(result?.output).toEqual([
         {type: 'input_text', text: 'Video media-1 frame at 2s'},
         {type: 'input_image', image_url: 'data:image/jpeg;base64,YQ==', detail: 'auto'},
-      ],
-      [
-        {type: 'input_text', text: 'Video media-3 frame at 2s'},
+        {type: 'input_text', text: 'Video media-1 frame at 5s'},
         {type: 'input_image', image_url: 'data:image/jpeg;base64,Yg==', detail: 'auto'},
-      ],
-    ]);
-    expect(JSON.stringify(requests[0]!.tools)).toContain('media-3');
-  });
+      ]);
+    });
 
-  it('checks timestamps against the selected video duration', async () => {
-    const {run, getFrames} = harness([
-      response([call('getVideoFrames', {videoId: 'media-1', timestamps: [60]})]),
-    ]);
-    await expect(run()).rejects.toMatchObject({code: 'invalid_output'});
-    expect(getFrames).not.toHaveBeenCalled();
-  });
+    it('routes concurrent frame requests by video ID and preserves mixed input order', async () => {
+      const {openai, google, requests} = harness([
+        response([
+          call('getVideoFrames', {videoId: 'media-1', timestamps: [2]}, 'first'),
+          call('getVideoFrames', {videoId: 'media-3', timestamps: [2]}, 'second'),
+        ]),
+        response([final({places: [], unresolved: []})]),
+      ]);
+      const first = vi
+        .fn()
+        .mockResolvedValue([{url: 'data:image/jpeg;base64,YQ==', timestampSeconds: 2}]);
+      const second = vi
+        .fn()
+        .mockResolvedValue([{url: 'data:image/jpeg;base64,Yg==', timestampSeconds: 2}]);
+      const video = {
+        kind: 'video' as const,
+        durationSeconds: 10,
+        [Symbol.asyncDispose]: async () => {},
+      };
+      await capture(
+        {openai, google},
+        {
+          ...fixture.metadata,
+          caption: 'Mixed post',
+          media: [
+            {
+              ...video,
+              id: 'media-1',
+              transcript: [{start: 0, end: 3, text: 'First cafe'}],
+              getFrames: first,
+            },
+            {kind: 'image', id: 'media-2', image: 'data:image/jpeg;base64,Yw=='},
+            {
+              ...video,
+              id: 'media-3',
+              transcript: [{start: 0, end: 3, text: 'Second cafe'}],
+              getFrames: second,
+            },
+          ],
+          [Symbol.asyncDispose]: async () => {},
+        },
+        fixture.catalog,
+        fixture.options,
+      );
+      expect(first).toHaveBeenCalledWith([2], expect.any(AbortSignal));
+      expect(second).toHaveBeenCalledWith([2], expect.any(AbortSignal));
+      const content = (
+        requests[0]!.input as Array<{content: Array<{type: string; text?: string}>}>
+      )[0]!.content;
+      expect(content.map(item => item.type)).toEqual([
+        'input_text',
+        'input_text',
+        'input_text',
+        'input_image',
+        'input_text',
+      ]);
+      expect(JSON.parse(content[1]!.text!)).toMatchObject({
+        id: 'media-1',
+        transcript: [{text: 'First cafe'}],
+      });
+      expect(content[2]!.text).toBe('Image media-2');
+      expect(JSON.parse(content[4]!.text!)).toMatchObject({
+        id: 'media-3',
+        transcript: [{text: 'Second cafe'}],
+      });
+      const outputs = (
+        requests[1]!.input as Array<{type: string; output?: unknown}>
+      ).filter(item => item.type === 'function_call_output');
+      expect(outputs.map(item => item.output)).toEqual([
+        [
+          {type: 'input_text', text: 'Video media-1 frame at 2s'},
+          {type: 'input_image', image_url: 'data:image/jpeg;base64,YQ==', detail: 'auto'},
+        ],
+        [
+          {type: 'input_text', text: 'Video media-3 frame at 2s'},
+          {type: 'input_image', image_url: 'data:image/jpeg;base64,Yg==', detail: 'auto'},
+        ],
+      ]);
+      expect(JSON.stringify(requests[0]!.tools)).toContain('media-3');
+    });
 
-  it('groups assignable tags and omits excluded tags and empty groups', () => {
-    const prompt = buildCapturePrompt(
-      fixture.catalog,
-      captureOptions.parse(fixture.options),
+    it('checks timestamps against the selected video duration', async () => {
+      const {run, getFrames} = harness([
+        response([call('getVideoFrames', {videoId: 'media-1', timestamps: [60]})]),
+      ]);
+      await expect(run()).rejects.toMatchObject({code: 'invalid_output'});
+      expect(getFrames).not.toHaveBeenCalled();
+    });
+
+    it('groups assignable tags and omits excluded tags and empty groups', () => {
+      const prompt = buildCapturePrompt(
+        fixture.catalog,
+        captureOptions.parse(fixture.options),
+      );
+
+      expect(prompt).toContain(
+        '## type — What kind of place this is\n  - type.cafe — Coffee shops and cafes\n  - type.restaurant',
+      );
+      expect(prompt).not.toContain('rating.favorite');
+      expect(prompt).not.toContain('needs-review');
+      expect(prompt).not.toContain('## rating');
+      expect(prompt).not.toContain('## Ungrouped');
+      expect(prompt).toContain(fixture.options.instructions);
+    });
+
+    it.each(['excludedNamespaces', 'excludedTags', 'requiredNamespaces'])(
+      'requires explicit %s configuration before making a request',
+      async name => {
+        const {run, fetcher} = harness();
+        await expect(run({[name]: undefined})).rejects.toMatchObject({name: 'ZodError'});
+        expect(fetcher).not.toHaveBeenCalled();
+      },
     );
 
-    expect(prompt).toContain(
-      '## type — What kind of place this is\n  - type.cafe — Coffee shops and cafes\n  - type.restaurant',
-    );
-    expect(prompt).not.toContain('rating.favorite');
-    expect(prompt).not.toContain('needs-review');
-    expect(prompt).not.toContain('## rating');
-    expect(prompt).not.toContain('## Ungrouped');
-    expect(prompt).toContain(fixture.options.instructions);
-  });
+    it('passes an explicitly configured reasoning effort to the model', async () => {
+      const {run, requests} = harness();
+      await run({reasoningEffort: 'medium'});
 
-  it.each(['excludedNamespaces', 'excludedTags', 'requiredNamespaces'])(
-    'requires explicit %s configuration before making a request',
-    async name => {
-      const {run, fetcher} = harness();
-      await expect(run({[name]: undefined})).rejects.toMatchObject({name: 'ZodError'});
-      expect(fetcher).not.toHaveBeenCalled();
-    },
-  );
-
-  it('passes an explicitly configured reasoning effort to the model', async () => {
-    const {run, requests} = harness();
-    await run({reasoningEffort: 'medium'});
-
-    expect(requests[0]!.reasoning).toEqual({effort: 'medium'});
-  });
-
-  it('supports refined searches while replaying reasoning state', async () => {
-    const reasoning = {
-      type: 'reasoning',
-      id: 'rs_1',
-      summary: [],
-      encrypted_content: 'opaque-reasoning',
-    };
-    const {run, requests, google} = harness([
-      response([reasoning, call()]),
-      response([
-        call(
-          'searchPlaces',
-          {query: 'Example Cafe Orchard Street Manhattan', limit: 3},
-          'call_2',
-        ),
-      ]),
-      response([final()]),
-    ]);
-    google.search.mockResolvedValueOnce([]);
-
-    await run();
-    expect(google.search).toHaveBeenCalledTimes(2);
-    expect(requests[2]!.input).toEqual(
-      expect.arrayContaining([
-        reasoning,
-        expect.objectContaining({
-          type: 'function_call_output',
-          call_id: 'call_2',
-          output: JSON.stringify(fixture.candidates),
-        }),
-      ]),
-    );
-  });
-
-  it('resolves selections from earlier searches in the completed run', async () => {
-    const {run, google} = harness([
-      response([call()]),
-      response([call('searchPlaces', {query: 'Another cafe', limit: 3}, 'call_2')]),
-      response([final()]),
-    ]);
-    google.search
-      .mockResolvedValueOnce([fixture.candidates[1]!])
-      .mockResolvedValueOnce([fixture.candidates[0]!]);
-
-    const result = await run();
-    expect(result.places[0]).toMatchObject({
-      googlePlaceId: fixture.candidates[1]!.id,
-      formattedAddress: fixture.candidates[1]!.formattedAddress,
+      expect(requests[0]!.reasoning).toEqual({effort: 'medium'});
     });
   });
 
-  it('resolves places from parallel searches in one turn', async () => {
-    const item = fixture.output.places[0]!;
-    const {run, google, requests} = harness([
-      response([
-        call('searchPlaces', {query: 'Cafe Manhattan', limit: 3}, 'call_1'),
-        call('searchPlaces', {query: 'Cafe Brooklyn', limit: 3}, 'call_2'),
-      ]),
-      response([
-        final({
-          places: [item, {...item, googlePlaceId: fixture.candidates[0]!.id}],
-          unresolved: [],
-        }),
-      ]),
-    ]);
-    google.search
-      .mockResolvedValueOnce([fixture.candidates[1]!])
-      .mockResolvedValueOnce([fixture.candidates[0]!]);
+  describe('Search and capture results', () => {
+    it('supports refined searches while replaying reasoning state', async () => {
+      const reasoning = {
+        type: 'reasoning',
+        id: 'rs_1',
+        summary: [],
+        encrypted_content: 'opaque-reasoning',
+      };
+      const {run, requests, google} = harness([
+        response([reasoning, call()]),
+        response([
+          call(
+            'searchPlaces',
+            {query: 'Example Cafe Orchard Street Manhattan', limit: 3},
+            'call_2',
+          ),
+        ]),
+        response([final()]),
+      ]);
+      google.search.mockResolvedValueOnce([]);
 
-    const result = await run();
-    expect(result.places.map(place => place.googlePlaceId)).toEqual([
-      fixture.candidates[1]!.id,
-      fixture.candidates[0]!.id,
-    ]);
-    expect(result.metadata.searches).toEqual([
-      {query: 'Cafe Manhattan', limit: 3, candidates: [fixture.candidates[1]!]},
-      {query: 'Cafe Brooklyn', limit: 3, candidates: [fixture.candidates[0]!]},
-    ]);
-    expect(google.search).toHaveBeenCalledTimes(2);
-    expect(requests[1]!.input).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({type: 'function_call_output', call_id: 'call_1'}),
-        expect.objectContaining({type: 'function_call_output', call_id: 'call_2'}),
-      ]),
-    );
-  });
+      await run();
+      expect(google.search).toHaveBeenCalledTimes(2);
+      expect(requests[2]!.input).toEqual(
+        expect.arrayContaining([
+          reasoning,
+          expect.objectContaining({
+            type: 'function_call_output',
+            call_id: 'call_2',
+            output: JSON.stringify(fixture.candidates),
+          }),
+        ]),
+      );
+    });
 
-  it('supports multiple places and collapses repeated tag assignments', async () => {
-    const item = fixture.output.places[0]!;
-    const {run} = harness([
-      response([call()]),
-      response([
-        final({
-          places: [
-            {...item, tags: ['type.cafe', 'type.cafe']},
-            {...item, googlePlaceId: 'ChIJwrongBranch'},
-          ],
-          unresolved: [],
-        }),
-      ]),
-    ]);
+    it('resolves selections from earlier searches in the completed run', async () => {
+      const {run, google} = harness([
+        response([call()]),
+        response([call('searchPlaces', {query: 'Another cafe', limit: 3}, 'call_2')]),
+        response([final()]),
+      ]);
+      google.search
+        .mockResolvedValueOnce([fixture.candidates[1]!])
+        .mockResolvedValueOnce([fixture.candidates[0]!]);
 
-    const result = await run();
-    expect(result.places).toHaveLength(2);
-    expect(result.places[0]!.tagIds).toEqual([fixture.catalog.tags[0]!.id]);
-  });
+      const result = await run();
+      expect(result.places[0]).toMatchObject({
+        googlePlaceId: fixture.candidates[1]!.id,
+        formattedAddress: fixture.candidates[1]!.formattedAddress,
+      });
+    });
 
-  it.each([
-    {places: [], unresolved: []},
-    {
-      places: [],
-      unresolved: [{name: 'Example Cafe', reason: 'The branch is ambiguous.'}],
-    },
-  ])('preserves empty and unresolved outcomes', async result => {
-    const {run} = harness([response([final(result)])]);
-    expect(await run()).toMatchObject(result);
-  });
+    it('resolves places from parallel searches in one turn', async () => {
+      const item = fixture.output.places[0]!;
+      const {run, google, requests} = harness([
+        response([
+          call('searchPlaces', {query: 'Cafe Manhattan', limit: 3}, 'call_1'),
+          call('searchPlaces', {query: 'Cafe Brooklyn', limit: 3}, 'call_2'),
+        ]),
+        response([
+          final({
+            places: [item, {...item, googlePlaceId: fixture.candidates[0]!.id}],
+            unresolved: [],
+          }),
+        ]),
+      ]);
+      google.search
+        .mockResolvedValueOnce([fixture.candidates[1]!])
+        .mockResolvedValueOnce([fixture.candidates[0]!]);
 
-  it.each([
-    {googlePlaceId: 'invented'},
-    {tags: ['rating.favorite']},
-    {tags: ['needs-review']},
-    {tags: ['type.invented']},
-    {tags: ['vibe.casual']},
-  ])('rejects ungrounded output or invalid tagging: %j', async change => {
-    const output = {
-      ...fixture.output,
-      places: [{...fixture.output.places[0], ...change}],
-    };
-    const {run} = harness([response([call()]), response([final(output)])]);
-    await expect(run()).rejects.toMatchObject({code: 'invalid_output'});
-  });
+      const result = await run();
+      expect(result.places.map(place => place.googlePlaceId)).toEqual([
+        fixture.candidates[1]!.id,
+        fixture.candidates[0]!.id,
+      ]);
+      expect(result.metadata.searches).toEqual([
+        {query: 'Cafe Manhattan', limit: 3, candidates: [fixture.candidates[1]!]},
+        {query: 'Cafe Brooklyn', limit: 3, candidates: [fixture.candidates[0]!]},
+      ]);
+      expect(google.search).toHaveBeenCalledTimes(2);
+      expect(requests[1]!.input).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({type: 'function_call_output', call_id: 'call_1'}),
+          expect.objectContaining({type: 'function_call_output', call_id: 'call_2'}),
+        ]),
+      );
+    });
 
-  it('rejects duplicate place IDs', async () => {
-    const {run} = harness([
-      response([call()]),
-      response([
-        final({
-          places: [fixture.output.places[0], fixture.output.places[0]],
-          unresolved: [],
-        }),
-      ]),
-    ]);
-    await expect(run()).rejects.toMatchObject({code: 'invalid_output'});
-  });
+    it('supports multiple places and collapses repeated tag assignments', async () => {
+      const item = fixture.output.places[0]!;
+      const {run} = harness([
+        response([call()]),
+        response([
+          final({
+            places: [
+              {...item, tags: ['type.cafe', 'type.cafe']},
+              {...item, googlePlaceId: 'ChIJwrongBranch'},
+            ],
+            unresolved: [],
+          }),
+        ]),
+      ]);
 
-  it.each([
-    call('writePlace'),
-    call('searchPlaces', {query: '', limit: 5}),
-    call('searchPlaces', {query: 'NYC', limit: 100}),
-  ])('rejects invalid tool calls before reaching Google: %j', async toolCall => {
-    const {run, google} = harness([response([toolCall])]);
-    await expect(run()).rejects.toMatchObject({code: 'invalid_output'});
-    expect(google.search).not.toHaveBeenCalled();
-  });
+      const result = await run();
+      expect(result.places).toHaveLength(2);
+      expect(result.places[0]!.tagIds).toEqual([fixture.catalog.tags[0]!.id]);
+    });
 
-  it('lets the SDK report malformed tool JSON back to the model', async () => {
-    const {run, google, requests} = harness([
-      response([{...call(), arguments: '{'}]),
-      response([final({places: [], unresolved: []})]),
-    ]);
-    expect(await run()).toMatchObject({places: [], unresolved: []});
-    expect(google.search).not.toHaveBeenCalled();
-    expect(requests[1]!.input).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({type: 'function_call_output', call_id: 'call_1'}),
-      ]),
-    );
-  });
+    it.each([
+      {places: [], unresolved: []},
+      {
+        places: [],
+        unresolved: [{name: 'Example Cafe', reason: 'The branch is ambiguous.'}],
+      },
+    ])('preserves empty and unresolved outcomes', async result => {
+      const {run} = harness([response([final(result)])]);
+      expect(await run()).toMatchObject(result);
+    });
 
-  it('bounds repeated searches with the SDK turn limit', async () => {
-    const {run, google, fetcher} = harness([
-      response([call()]),
-      response([call('searchPlaces', {query: 'Cafe Manhattan', limit: 3}, 'call_2')]),
-    ]);
-    await expect(run({maxTurns: 2})).rejects.toMatchObject({code: 'turn_limit'});
-    expect(google.search).toHaveBeenCalledTimes(2);
-    expect(fetcher).toHaveBeenCalledTimes(2);
-  });
+    it.each([
+      {googlePlaceId: 'invented'},
+      {tags: ['rating.favorite']},
+      {tags: ['needs-review']},
+      {tags: ['type.invented']},
+      {tags: ['vibe.casual']},
+    ])('rejects ungrounded output or invalid tagging: %j', async change => {
+      const output = {
+        ...fixture.output,
+        places: [{...fixture.output.places[0], ...change}],
+      };
+      const {run} = harness([response([call()]), response([final(output)])]);
+      await expect(run()).rejects.toMatchObject({code: 'invalid_output'});
+    });
 
-  it('distinguishes refusals from empty captures', async () => {
-    const {run} = harness([
-      response([{...final(), content: [{type: 'refusal', refusal: 'No'}]}]),
-    ]);
-    await expect(run()).rejects.toMatchObject({code: 'refused'});
-  });
+    it('rejects duplicate place IDs', async () => {
+      const {run} = harness([
+        response([call()]),
+        response([
+          final({
+            places: [fixture.output.places[0], fixture.output.places[0]],
+            unresolved: [],
+          }),
+        ]),
+      ]);
+      await expect(run()).rejects.toMatchObject({code: 'invalid_output'});
+    });
 
-  it('rejects malformed model JSON', async () => {
-    const {run} = harness([
-      response([
-        {...final(), content: [{type: 'output_text', text: '{', annotations: []}]},
-      ]),
-    ]);
-    await expect(run()).rejects.toMatchObject({code: 'invalid_output'});
+    it.each([
+      call('writePlace'),
+      call('searchPlaces', {query: '', limit: 5}),
+      call('searchPlaces', {query: 'NYC', limit: 100}),
+    ])('rejects invalid tool calls before reaching Google: %j', async toolCall => {
+      const {run, google} = harness([response([toolCall])]);
+      await expect(run()).rejects.toMatchObject({code: 'invalid_output'});
+      expect(google.search).not.toHaveBeenCalled();
+    });
+
+    it('lets the SDK report malformed tool JSON back to the model', async () => {
+      const {run, google, requests} = harness([
+        response([{...call(), arguments: '{'}]),
+        response([final({places: [], unresolved: []})]),
+      ]);
+      expect(await run()).toMatchObject({places: [], unresolved: []});
+      expect(google.search).not.toHaveBeenCalled();
+      expect(requests[1]!.input).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({type: 'function_call_output', call_id: 'call_1'}),
+        ]),
+      );
+    });
+
+    it('bounds repeated searches with the SDK turn limit', async () => {
+      const {run, google, fetcher} = harness([
+        response([call()]),
+        response([call('searchPlaces', {query: 'Cafe Manhattan', limit: 3}, 'call_2')]),
+      ]);
+      await expect(run({maxTurns: 2})).rejects.toMatchObject({code: 'turn_limit'});
+      expect(google.search).toHaveBeenCalledTimes(2);
+      expect(fetcher).toHaveBeenCalledTimes(2);
+    });
+
+    it('distinguishes refusals from empty captures', async () => {
+      const {run} = harness([
+        response([{...final(), content: [{type: 'refusal', refusal: 'No'}]}]),
+      ]);
+      await expect(run()).rejects.toMatchObject({code: 'refused'});
+    });
+
+    it('rejects malformed model JSON', async () => {
+      const {run} = harness([
+        response([
+          {...final(), content: [{type: 'output_text', text: '{', annotations: []}]},
+        ]),
+      ]);
+      await expect(run()).rejects.toMatchObject({code: 'invalid_output'});
+    });
   });
 
   it('sanitizes provider failures', async () => {

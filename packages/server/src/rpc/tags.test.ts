@@ -1,36 +1,26 @@
-import {serve} from '@hono/node-server';
 import {createORPCClient} from '@orpc/client';
 import {RPCLink} from '@orpc/client/fetch';
 import type {Client} from '@places/common/contract';
 import {eq} from 'drizzle-orm';
 import {migrate} from 'drizzle-orm/node-postgres/migrator';
-import {Pool} from 'pg';
 import {PgBoss} from 'pg-boss';
 import {afterAll, beforeAll, beforeEach, describe, expect, it} from 'vitest';
 
-import {execFile} from 'node:child_process';
 import {randomUUID} from 'node:crypto';
 import {fileURLToPath} from 'node:url';
-import {promisify} from 'node:util';
 
 import {createApp} from '../app.ts';
 import {configSchema} from '../config.ts';
-import {createDatabase} from '../db/index.ts';
 import {places, placeTags, tags} from '../db/schema.ts';
+import {withPlacesCli} from '../fixtures/cli.ts';
 import {testConfig} from '../fixtures/config.ts';
+import {temporaryDatabase} from '../fixtures/database.ts';
 import {createGooglePlaces} from '../services/google/index.ts';
 
-const exec = promisify(execFile);
 const testUrl = process.env.TEST_DATABASE_URL;
 
 describe.skipIf(!testUrl)('tag API and CLI against PostgreSQL', () => {
-  const databaseName = `places_test_${randomUUID().replaceAll('-', '')}`;
-  const admin = new Pool({connectionString: testUrl});
-  const url = new URL(testUrl ?? 'postgres://localhost/places');
-
-  url.pathname = `/${databaseName}`;
-
-  const db = createDatabase(url.href);
+  const {db, url, create, close} = temporaryDatabase('places_test', testUrl);
   const config = configSchema.parse({...testConfig, database: {url: url.href}});
   const app = createApp({
     db,
@@ -47,7 +37,7 @@ describe.skipIf(!testUrl)('tag API and CLI against PostgreSQL', () => {
   );
 
   beforeAll(async () => {
-    await admin.query(`CREATE DATABASE "${databaseName}"`);
+    await create();
     await migrate(db, {
       migrationsFolder: fileURLToPath(new URL('../../drizzle', import.meta.url)),
     });
@@ -75,28 +65,31 @@ describe.skipIf(!testUrl)('tag API and CLI against PostgreSQL', () => {
   });
 
   afterAll(async () => {
-    await db.$client.end();
-    await admin.query(`DROP DATABASE IF EXISTS "${databaseName}" WITH (FORCE)`);
-    await admin.end();
+    await close();
   });
 
   it('hides archived tags while preserving lookup, assignments, and filtering', async () => {
-    const tag = await client.tags.create({name: 'old-list'});
-    expect(tag.archived).toBe(false);
-    const [place] = await db
-      .insert(places)
-      .values({
-        googlePlaceId: 'archived-test',
-        name: 'Cafe',
-        formattedAddress: 'NYC',
-        coordinates: 'SRID=4326;POINT(-74 40)',
-      })
-      .returning();
-    await client.places.tag({
-      placeId: place!.id,
-      tag: tag.id,
-      notes: 'Keep this context',
-    });
+    async function assignTagToPlace() {
+      const tag = await client.tags.create({name: 'old-list'});
+      expect(tag.archived).toBe(false);
+      const [place] = await db
+        .insert(places)
+        .values({
+          googlePlaceId: 'archived-test',
+          name: 'Cafe',
+          formattedAddress: 'NYC',
+          coordinates: 'SRID=4326;POINT(-74 40)',
+        })
+        .returning();
+      await client.places.tag({
+        placeId: place!.id,
+        tag: tag.id,
+        notes: 'Keep this context',
+      });
+      return {tag, place};
+    }
+
+    const {tag, place} = await assignTagToPlace();
     await client.tags.update({id: tag.id, archived: true});
 
     expect(await client.tags.list()).toEqual([]);
@@ -289,46 +282,26 @@ describe.skipIf(!testUrl)('tag API and CLI against PostgreSQL', () => {
   });
 
   it('runs the actual CLI through HTTP with JSON output and nonzero failures', async () => {
-    const server = serve({fetch: app.fetch, hostname: '127.0.0.1', port: 15188});
-    const cliPath = fileURLToPath(new URL('../../../cli/src/main.ts', import.meta.url));
-    const cli = (...args: string[]) =>
-      exec(process.execPath, [
-        cliPath,
-        '--server',
-        'http://127.0.0.1:15188',
-        'tags',
-        ...args,
-      ]);
+    await withPlacesCli(
+      {fetch: app.fetch, port: 15188, prefix: ['tags']},
+      async ({run: cli, json: cliJson}) => {
+        const tag = await cliJson('create', ' CAFE ');
 
-    try {
-      const createdOutput = await cli('create', ' CAFE ');
-      const tag = JSON.parse(createdOutput.stdout);
-
-      expect(tag.name).toBe('cafe');
-      const listOutput = await cli('list');
-      expect(JSON.parse(listOutput.stdout)).toEqual([tag]);
-      const getOutput = await cli('get', tag.id);
-      expect(JSON.parse(getOutput.stdout)).toEqual(tag);
-      const updatedOutput = await cli('update', tag.id, 'Coffee');
-      expect(JSON.parse(updatedOutput.stdout).name).toBe('coffee');
-      await cli('update', tag.id, '--archive');
-      const archivedList = await cli('list');
-      const archivedTag = await cli('get', tag.id);
-      expect(JSON.parse(archivedList.stdout)).toEqual([]);
-      expect(JSON.parse(archivedTag.stdout).archived).toBe(true);
-      await cli('update', tag.id, '--unarchive');
-      const restoredList = await cli('list');
-      expect(JSON.parse(restoredList.stdout)).toHaveLength(1);
-      await expect(cli('create', 'coffee')).rejects.toMatchObject({code: 1});
-      await cli('delete', tag.id);
-      await expect(cli('get', tag.id)).rejects.toMatchObject({code: 1});
-      await expect(cli('create', '   ')).rejects.toMatchObject({code: 1});
-      const emptyOutput = await cli('list');
-      expect(JSON.parse(emptyOutput.stdout)).toEqual([]);
-    } finally {
-      await new Promise<void>((resolve, reject) =>
-        server.close(error => (error ? reject(error) : resolve())),
-      );
-    }
+        expect(tag.name).toBe('cafe');
+        expect(await cliJson('list')).toEqual([tag]);
+        expect(await cliJson('get', tag.id)).toEqual(tag);
+        expect(await cliJson('update', tag.id, 'Coffee')).toMatchObject({name: 'coffee'});
+        await cli('update', tag.id, '--archive');
+        expect(await cliJson('list')).toEqual([]);
+        expect(await cliJson('get', tag.id)).toMatchObject({archived: true});
+        await cli('update', tag.id, '--unarchive');
+        expect(await cliJson('list')).toHaveLength(1);
+        await expect(cli('create', 'coffee')).rejects.toMatchObject({code: 1});
+        await cli('delete', tag.id);
+        await expect(cli('get', tag.id)).rejects.toMatchObject({code: 1});
+        await expect(cli('create', '   ')).rejects.toMatchObject({code: 1});
+        expect(await cliJson('list')).toEqual([]);
+      },
+    );
   }, 20000);
 });

@@ -1,6 +1,6 @@
 import 'maplibre-gl/dist/maplibre-gl.css';
 
-import {useCallback, useEffect, useMemo, useRef, useState} from 'react';
+import {useCallback, useEffect, useMemo, useRef, useState, type RefObject} from 'react';
 
 import {Button} from '@base-ui/react/button';
 import type {Point} from '@places/common/filter-engine/values/geographic-point';
@@ -37,57 +37,12 @@ interface Props {
   onUserLocationChange: (location: Point) => void;
 }
 
-export function MapView({
-  places,
-  fitResults,
-  selected,
-  target,
-  onSelect,
-  onBoundsChange,
-  onUserLocationChange,
-}: Props) {
-  const map = useRef<MapRef>(null);
+function useMapLocation(
+  map: RefObject<MapRef | null>,
+  loaded: boolean,
+  onUserLocationChange: (location: Point) => void,
+) {
   const focusUserOnFirstLocation = useRef(false);
-  const container = useRef<HTMLDivElement>(null);
-  const [loaded, setLoaded] = useState(false);
-
-  useEffect(() => {
-    if (!container.current) {
-      return;
-    }
-
-    const observer = new ResizeObserver(() => map.current?.resize());
-    observer.observe(container.current);
-    return () => observer.disconnect();
-  }, []);
-  const [hoveredId, setHoveredId] = useState<string | null>(null);
-  const hoveredPlace = places.find(place => place.id === hoveredId);
-  const primaryEmoji = placeEmoji(hoveredPlace?.tags);
-  const hoverTags = (hoveredPlace?.tags ?? [])
-    .map(({tag}) => tag)
-    .filter(tag => tag.icon?.emoji && tag.icon.emoji !== primaryEmoji)
-    .toSorted((a, b) => a.name.localeCompare(b.name));
-  const data = useMemo(
-    () => ({
-      type: 'FeatureCollection' as const,
-      features: places.map(place => ({
-        type: 'Feature' as const,
-        geometry: {
-          type: 'Point' as const,
-          coordinates: [place.coordinates.longitude, place.coordinates.latitude],
-        },
-        properties: {
-          id: place.id,
-          name: place.name,
-          icon: pinImageId(placeEmoji(place.tags)),
-          selected: place.id === selected?.id,
-        },
-      })),
-    }),
-    [places, selected?.id],
-  );
-  const [dark, setDark] = useState(false);
-  const [error, setError] = useState('');
   const [locationError, setLocationError] = useState('');
   const [userLocation, setUserLocation] = useState<Point | null>(null);
   const receiveLocation = useCallback(
@@ -142,7 +97,78 @@ export function MapView({
     );
 
     return () => window.navigator.geolocation.clearWatch(watchId);
-  }, [loaded, receiveLocation, receiveLocationError]);
+  }, [loaded, map, receiveLocation, receiveLocationError]);
+
+  const setFocusOnNextLocation = useCallback((focus: boolean) => {
+    focusUserOnFirstLocation.current = focus;
+  }, []);
+
+  return {
+    locationError,
+    userLocation,
+    receiveLocation,
+    receiveLocationError,
+    setFocusOnNextLocation,
+  };
+}
+
+export function MapView({
+  places,
+  fitResults,
+  selected,
+  target,
+  onSelect,
+  onBoundsChange,
+  onUserLocationChange,
+}: Props) {
+  const map = useRef<MapRef>(null);
+  const container = useRef<HTMLDivElement>(null);
+  const [loaded, setLoaded] = useState(false);
+
+  useEffect(() => {
+    if (!container.current) {
+      return;
+    }
+
+    const observer = new ResizeObserver(() => map.current?.resize());
+    observer.observe(container.current);
+    return () => observer.disconnect();
+  }, []);
+  const [hoveredId, setHoveredId] = useState<string | null>(null);
+  const hoveredPlace = places.find(place => place.id === hoveredId);
+  const primaryEmoji = placeEmoji(hoveredPlace?.tags);
+  const hoverTags = (hoveredPlace?.tags ?? [])
+    .map(({tag}) => tag)
+    .filter(tag => tag.icon?.emoji && tag.icon.emoji !== primaryEmoji)
+    .toSorted((a, b) => a.name.localeCompare(b.name));
+  const data = useMemo(
+    () => ({
+      type: 'FeatureCollection' as const,
+      features: places.map(place => ({
+        type: 'Feature' as const,
+        geometry: {
+          type: 'Point' as const,
+          coordinates: [place.coordinates.longitude, place.coordinates.latitude],
+        },
+        properties: {
+          id: place.id,
+          name: place.name,
+          icon: pinImageId(placeEmoji(place.tags)),
+          selected: place.id === selected?.id,
+        },
+      })),
+    }),
+    [places, selected?.id],
+  );
+  const [dark, setDark] = useState(false);
+  const [error, setError] = useState('');
+  const {
+    locationError,
+    userLocation,
+    receiveLocation,
+    receiveLocationError,
+    setFocusOnNextLocation,
+  } = useMapLocation(map, loaded, onUserLocationChange);
 
   const reportBounds = useCallback(() => {
     const bounds = map.current?.getBounds();
@@ -200,10 +226,10 @@ export function MapView({
 
   useEffect(() => {
     if (fitResults && loaded) {
-      focusUserOnFirstLocation.current = false;
+      setFocusOnNextLocation(false);
       fit();
     }
-  }, [fitResults, fit, loaded]);
+  }, [fitResults, fit, loaded, setFocusOnNextLocation]);
 
   return (
     <div ref={container} className="map-container">
@@ -242,7 +268,7 @@ export function MapView({
               missing.target.addImage(missing.id, image, {pixelRatio: 2});
             }
           });
-          focusUserOnFirstLocation.current = !fitResults;
+          setFocusOnNextLocation(!fitResults);
           setLoaded(true);
           reportBounds();
         }}

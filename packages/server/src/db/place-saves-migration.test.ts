@@ -1,26 +1,29 @@
 import {readMigrationFiles} from 'drizzle-orm/migrator';
-import {Pool} from 'pg';
+import type {PoolClient} from 'pg';
 import {expect, it} from 'vitest';
 
 import {randomUUID} from 'node:crypto';
 import {fileURLToPath} from 'node:url';
 
-import {createDatabase} from './index.ts';
+import {temporaryDatabase} from '../fixtures/database.ts';
+
 import {placeSaves} from './schema.ts';
 
 const testUrl = process.env.TEST_DATABASE_URL;
 
+async function runStatements(connection: PoolClient, statements: readonly string[]) {
+  for (const statement of statements) {
+    await connection.query(statement);
+  }
+}
+
 it.skipIf(!testUrl)(
   'preserves existing place savers and their original timestamps',
   async () => {
-    const databaseName = `places_test_${randomUUID().replaceAll('-', '')}`;
-    const admin = new Pool({connectionString: testUrl});
-    const url = new URL(testUrl ?? 'postgres://localhost/places');
-    url.pathname = `/${databaseName}`;
-    const db = createDatabase(url.href);
+    const {db, create, close} = temporaryDatabase('places_test', testUrl);
 
     try {
-      await admin.query(`CREATE DATABASE "${databaseName}"`);
+      await create();
       const migrations = readMigrationFiles({
         migrationsFolder: fileURLToPath(new URL('../../drizzle', import.meta.url)),
       });
@@ -31,11 +34,10 @@ it.skipIf(!testUrl)(
 
       const connection = await db.$client.connect();
       try {
-        for (const migration of migrations.slice(0, migrationIndex)) {
-          for (const statement of migration.sql) {
-            await connection.query(statement);
-          }
-        }
+        await runStatements(
+          connection,
+          migrations.slice(0, migrationIndex).flatMap(migration => migration.sql),
+        );
 
         const placeId = randomUUID();
         const userId = randomUUID();
@@ -50,18 +52,14 @@ it.skipIf(!testUrl)(
           [placeId, userId, savedAt],
         );
 
-        for (const statement of migrations[migrationIndex]!.sql) {
-          await connection.query(statement);
-        }
+        await runStatements(connection, migrations[migrationIndex]!.sql);
 
         expect(await db.select().from(placeSaves)).toEqual([{placeId, userId, savedAt}]);
       } finally {
         connection.release();
       }
     } finally {
-      await db.$client.end();
-      await admin.query(`DROP DATABASE IF EXISTS "${databaseName}" WITH (FORCE)`);
-      await admin.end();
+      await close();
     }
   },
   30000,

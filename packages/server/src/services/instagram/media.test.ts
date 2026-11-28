@@ -53,6 +53,15 @@ function harness(hasAudio = true) {
   return {ffmpeg, fetcher, transcribe, dependencies, prepare};
 }
 
+function firstVideo(post: Awaited<ReturnType<typeof prepareInstagramPost>>) {
+  const media = post.media[0];
+  expect(media?.kind).toBe('video');
+  if (media?.kind !== 'video') {
+    throw new Error('Expected video');
+  }
+  return media;
+}
+
 describe('Instagram post preparation', () => {
   it('cleans up aborted preparation before making network requests', async () => {
     const {prepare, fetcher} = harness();
@@ -67,11 +76,7 @@ describe('Instagram post preparation', () => {
     const {prepare, ffmpeg, transcribe} = harness();
     const post = await prepare();
     expect(post).toMatchObject(metadata);
-    const media = post.media[0]!;
-    expect(media.kind).toBe('video');
-    if (media.kind !== 'video') {
-      throw new Error('Expected video');
-    }
+    const media = firstVideo(post);
 
     expect(media.transcript).toEqual([{start: 1, end: 3, text: 'A cafe'}]);
     expect(ffmpeg.image).not.toHaveBeenCalled();
@@ -101,10 +106,7 @@ describe('Instagram post preparation', () => {
   it('preserves frame order across concurrent requests', async () => {
     const {prepare, ffmpeg} = harness();
     await using post = await prepare();
-    const media = post.media[0]!;
-    if (media.kind !== 'video') {
-      throw new Error('Expected video');
-    }
+    const media = firstVideo(post);
     const [first, second] = await Promise.all([
       media.getFrames([2, 1, 2]),
       media.getFrames([1, 2]),
@@ -283,10 +285,7 @@ describe('Instagram post preparation', () => {
   it('waits for in-flight extraction to settle before removing files', async () => {
     const {prepare, ffmpeg} = harness();
     const post = await prepare();
-    const media = post.media[0]!;
-    if (media.kind !== 'video') {
-      throw new Error('Expected video');
-    }
+    const media = firstVideo(post);
     ffmpeg.image.mockImplementation(
       (_input, _time, signal) =>
         new Promise((_resolve, reject) => {

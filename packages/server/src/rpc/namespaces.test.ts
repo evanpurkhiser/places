@@ -3,7 +3,6 @@ import {createORPCClient} from '@orpc/client';
 import {RPCLink} from '@orpc/client/fetch';
 import type {Client} from '@places/common/contract';
 import {migrate} from 'drizzle-orm/node-postgres/migrator';
-import {Pool} from 'pg';
 import {PgBoss} from 'pg-boss';
 import {afterAll, beforeAll, beforeEach, describe, expect, it} from 'vitest';
 
@@ -14,22 +13,16 @@ import {promisify} from 'node:util';
 
 import {createApp} from '../app.ts';
 import {configSchema} from '../config.ts';
-import {createDatabase} from '../db/index.ts';
 import {namespaces, tags, places, placeTags} from '../db/schema.ts';
 import {testConfig} from '../fixtures/config.ts';
+import {temporaryDatabase} from '../fixtures/database.ts';
 import {createGooglePlaces} from '../services/google/index.ts';
 
 const exec = promisify(execFile);
 const testUrl = process.env.TEST_DATABASE_URL;
 
 describe.skipIf(!testUrl)('namespace API and CLI against PostgreSQL', () => {
-  const databaseName = `places_test_${randomUUID().replaceAll('-', '')}`;
-  const admin = new Pool({connectionString: testUrl});
-  const url = new URL(testUrl ?? 'postgres://localhost/places');
-
-  url.pathname = `/${databaseName}`;
-
-  const db = createDatabase(url.href);
+  const {db, url, create, close} = temporaryDatabase('places_test', testUrl);
   const config = configSchema.parse({...testConfig, database: {url: url.href}});
   const app = createApp({
     db,
@@ -46,7 +39,7 @@ describe.skipIf(!testUrl)('namespace API and CLI against PostgreSQL', () => {
   );
 
   beforeAll(async () => {
-    await admin.query(`CREATE DATABASE "${databaseName}"`);
+    await create();
     await migrate(db, {
       migrationsFolder: fileURLToPath(new URL('../../drizzle', import.meta.url)),
     });
@@ -60,9 +53,7 @@ describe.skipIf(!testUrl)('namespace API and CLI against PostgreSQL', () => {
   });
 
   afterAll(async () => {
-    await db.$client.end();
-    await admin.query(`DROP DATABASE IF EXISTS "${databaseName}" WITH (FORCE)`);
-    await admin.end();
+    await close();
   });
 
   it('normalizes, lists, reads, renames, and deletes namespaces through RPC', async () => {
@@ -114,70 +105,76 @@ describe.skipIf(!testUrl)('namespace API and CLI against PostgreSQL', () => {
     expect(await client.namespaces.get({id: other.id})).toEqual(other);
   });
 
-  it('creates, replaces, preserves, and clears namespace icons', async () => {
-    const tag = await client.namespaces.create({name: 'lunch', icon: {emoji: '🍱'}});
+  describe('Namespace metadata', () => {
+    it('creates, replaces, preserves, and clears namespace icons', async () => {
+      const tag = await client.namespaces.create({name: 'lunch', icon: {emoji: '🍱'}});
 
-    expect(tag.icon).toEqual({emoji: '🍱'});
-    const retrieved = await client.namespaces.get({id: tag.id});
-    expect(retrieved.icon).toEqual({emoji: '🍱'});
+      expect(tag.icon).toEqual({emoji: '🍱'});
+      const retrieved = await client.namespaces.get({id: tag.id});
+      expect(retrieved.icon).toEqual({emoji: '🍱'});
 
-    const updated = await client.namespaces.update({id: tag.id, icon: {emoji: '🍜'}});
+      const updated = await client.namespaces.update({id: tag.id, icon: {emoji: '🍜'}});
 
-    expect(updated).toMatchObject({name: 'lunch', icon: {emoji: '🍜'}});
-    expect(await client.namespaces.update({id: tag.id, name: 'dinner'})).toMatchObject({
-      name: 'dinner',
-      icon: {emoji: '🍜'},
-    });
-    expect(await client.namespaces.update({id: tag.id, icon: null})).toMatchObject({
-      name: 'dinner',
-      icon: null,
-    });
-    const cleared = await client.namespaces.get({id: tag.id});
-    expect(cleared.icon).toBeNull();
-  });
-
-  it('creates, edits, preserves, and clears namespace descriptions', async () => {
-    const tag = await client.namespaces.create({
-      name: 'lunch',
-      description: 'Weekday lunch spots',
+      expect(updated).toMatchObject({name: 'lunch', icon: {emoji: '🍜'}});
+      expect(await client.namespaces.update({id: tag.id, name: 'dinner'})).toMatchObject({
+        name: 'dinner',
+        icon: {emoji: '🍜'},
+      });
+      expect(await client.namespaces.update({id: tag.id, icon: null})).toMatchObject({
+        name: 'dinner',
+        icon: null,
+      });
+      const cleared = await client.namespaces.get({id: tag.id});
+      expect(cleared.icon).toBeNull();
     });
 
-    expect(tag.description).toBe('Weekday lunch spots');
-    expect(await client.namespaces.get({id: tag.id})).toEqual(tag);
-    expect(
-      await client.namespaces.update({id: tag.id, description: 'Quick lunches'}),
-    ).toMatchObject({name: 'lunch', description: 'Quick lunches'});
-    expect(
-      await client.namespaces.update({id: tag.id, name: 'weekday', icon: {emoji: '🍱'}}),
-    ).toMatchObject({description: 'Quick lunches'});
-    expect(await client.namespaces.update({id: tag.id, description: null})).toMatchObject(
-      {
+    it('creates, edits, preserves, and clears namespace descriptions', async () => {
+      const tag = await client.namespaces.create({
+        name: 'lunch',
+        description: 'Weekday lunch spots',
+      });
+
+      expect(tag.description).toBe('Weekday lunch spots');
+      expect(await client.namespaces.get({id: tag.id})).toEqual(tag);
+      expect(
+        await client.namespaces.update({id: tag.id, description: 'Quick lunches'}),
+      ).toMatchObject({name: 'lunch', description: 'Quick lunches'});
+      expect(
+        await client.namespaces.update({
+          id: tag.id,
+          name: 'weekday',
+          icon: {emoji: '🍱'},
+        }),
+      ).toMatchObject({description: 'Quick lunches'});
+      expect(
+        await client.namespaces.update({id: tag.id, description: null}),
+      ).toMatchObject({
         name: 'weekday',
         icon: {emoji: '🍱'},
         description: null,
+      });
+      const cleared = await client.namespaces.get({id: tag.id});
+      expect(cleared.description).toBeNull();
+    });
+
+    it.each([{}, {emoji: ''}, {emoji: 1}, {emoji: '🍱', url: 'icon.png'}])(
+      'rejects invalid icon JSON %j',
+      async icon => {
+        const tag = await client.namespaces.create({name: 'lunch'});
+
+        // Exercise runtime validation with values outside the client contract.
+        const invalidIcon = icon as unknown as {emoji: string};
+
+        await expect(
+          client.namespaces.create({name: 'dinner', icon: invalidIcon}),
+        ).rejects.toMatchObject({code: 'BAD_REQUEST'});
+        await expect(
+          client.namespaces.update({id: tag.id, icon: invalidIcon}),
+        ).rejects.toMatchObject({code: 'BAD_REQUEST'});
+        expect(await client.namespaces.get({id: tag.id})).toEqual(tag);
       },
     );
-    const cleared = await client.namespaces.get({id: tag.id});
-    expect(cleared.description).toBeNull();
   });
-
-  it.each([{}, {emoji: ''}, {emoji: 1}, {emoji: '🍱', url: 'icon.png'}])(
-    'rejects invalid icon JSON %j',
-    async icon => {
-      const tag = await client.namespaces.create({name: 'lunch'});
-
-      // Exercise runtime validation with values outside the client contract.
-      const invalidIcon = icon as unknown as {emoji: string};
-
-      await expect(
-        client.namespaces.create({name: 'dinner', icon: invalidIcon}),
-      ).rejects.toMatchObject({code: 'BAD_REQUEST'});
-      await expect(
-        client.namespaces.update({id: tag.id, icon: invalidIcon}),
-      ).rejects.toMatchObject({code: 'BAD_REQUEST'});
-      expect(await client.namespaces.get({id: tag.id})).toEqual(tag);
-    },
-  );
 
   it('validates input and reports missing namespaces', async () => {
     await expect(client.namespaces.create({name: ' \t '})).rejects.toMatchObject({
@@ -338,112 +335,121 @@ describe.skipIf(!testUrl)('namespace API and CLI against PostgreSQL', () => {
     ).rejects.toMatchObject({code: 'NOT_FOUND'});
   });
 
-  it('requires explicitly created namespaces', async () => {
-    const tag = await client.tags.create({name: 'cafe'});
-    await expect(client.tags.create({name: 'missing.cafe'})).rejects.toMatchObject({
-      code: 'NAMESPACE_NOT_FOUND',
-    });
-    await expect(
-      client.tags.update({id: tag.id, name: 'missing.cafe'}),
-    ).rejects.toMatchObject({code: 'NAMESPACE_NOT_FOUND'});
-    expect(await client.namespaces.list()).toEqual([]);
-    expect(await client.tags.get({id: tag.id})).toEqual(tag);
-  });
-
-  it.each(['.cafe', 'type.', 'type.cafe.bar', 'type. cafe', 'type .cafe'])(
-    'rejects malformed qualified names: %s',
-    async name => {
-      await expect(client.tags.create({name})).rejects.toMatchObject({
-        code: 'BAD_REQUEST',
-      });
+  describe('Qualified tag names and prefix changes', () => {
+    it('requires explicitly created namespaces', async () => {
       const tag = await client.tags.create({name: 'cafe'});
-      await expect(client.tags.update({id: tag.id, name})).rejects.toMatchObject({
-        code: 'BAD_REQUEST',
+      await expect(client.tags.create({name: 'missing.cafe'})).rejects.toMatchObject({
+        code: 'NAMESPACE_NOT_FOUND',
       });
-    },
-  );
-
-  it('renames namespace prefixes atomically and preserves place assignments', async () => {
-    const namespace = await client.namespaces.create({name: 'type'});
-    const cafe = await client.tags.create({name: 'type.cafe', icon: {emoji: '☕'}});
-    const bakery = await client.tags.create({name: 'type.bakery'});
-    const [place] = await db
-      .insert(places)
-      .values({
-        googlePlaceId: 'namespace-place',
-        name: 'Cafe',
-        formattedAddress: 'NYC',
-        coordinates: 'SRID=4326;POINT(-74 40)',
-      })
-      .returning();
-    const assignment = await client.places.tag({
-      placeId: place!.id,
-      tag: cafe.name,
-      notes: 'Espresso',
+      await expect(
+        client.tags.update({id: tag.id, name: 'missing.cafe'}),
+      ).rejects.toMatchObject({code: 'NAMESPACE_NOT_FOUND'});
+      expect(await client.namespaces.list()).toEqual([]);
+      expect(await client.tags.get({id: tag.id})).toEqual(tag);
     });
 
-    await client.namespaces.update({id: namespace.id, description: 'Place types'});
-    expect(await client.tags.get({id: cafe.id})).toEqual(cafe);
-    await client.namespaces.update({id: namespace.id, name: ' Category '});
-    expect(await client.tags.get({id: cafe.id})).toMatchObject({
-      id: cafe.id,
-      name: 'category.cafe',
-      namespaceId: namespace.id,
-      icon: cafe.icon,
-      createdAt: cafe.createdAt,
+    it.each(['.cafe', 'type.', 'type.cafe.bar', 'type. cafe', 'type .cafe'])(
+      'rejects malformed qualified names: %s',
+      async name => {
+        await expect(client.tags.create({name})).rejects.toMatchObject({
+          code: 'BAD_REQUEST',
+        });
+        const tag = await client.tags.create({name: 'cafe'});
+        await expect(client.tags.update({id: tag.id, name})).rejects.toMatchObject({
+          code: 'BAD_REQUEST',
+        });
+      },
+    );
+
+    it('renames namespace prefixes atomically and preserves place assignments', async () => {
+      async function createNamespacedPlace() {
+        const namespace = await client.namespaces.create({name: 'type'});
+        const cafe = await client.tags.create({name: 'type.cafe', icon: {emoji: '☕'}});
+        const bakery = await client.tags.create({name: 'type.bakery'});
+        const [place] = await db
+          .insert(places)
+          .values({
+            googlePlaceId: 'namespace-place',
+            name: 'Cafe',
+            formattedAddress: 'NYC',
+            coordinates: 'SRID=4326;POINT(-74 40)',
+          })
+          .returning();
+        const assignment = await client.places.tag({
+          placeId: place!.id,
+          tag: cafe.name,
+          notes: 'Espresso',
+        });
+
+        return {namespace, cafe, bakery, place, assignment};
+      }
+
+      const {namespace, cafe, bakery, place, assignment} = await createNamespacedPlace();
+      await client.namespaces.update({id: namespace.id, description: 'Place types'});
+      expect(await client.tags.get({id: cafe.id})).toEqual(cafe);
+      await client.namespaces.update({id: namespace.id, name: ' Category '});
+      expect(await client.tags.get({id: cafe.id})).toMatchObject({
+        id: cafe.id,
+        name: 'category.cafe',
+        namespaceId: namespace.id,
+        icon: cafe.icon,
+        createdAt: cafe.createdAt,
+      });
+      expect(await client.tags.get({id: bakery.id})).toMatchObject({
+        name: 'category.bakery',
+      });
+      const matches = await client.places.list({query: 'tag[category.*]'});
+      expect(matches).toHaveLength(1);
+      expect(matches[0]!.tags).toEqual([
+        expect.objectContaining({
+          ...assignment,
+          tag: expect.objectContaining({name: 'category.cafe'}),
+        }),
+      ]);
+      expect(await client.places.list({query: 'tag[category.cafe]'})).toHaveLength(1);
+      expect(await client.places.list({query: 'tag[type.*]'})).toEqual([]);
+      await expect(
+        client.places.tag({placeId: place!.id, tag: 'type.cafe'}),
+      ).rejects.toMatchObject({code: 'NOT_FOUND'});
+      await client.places.tag({placeId: place!.id, tag: 'category.cafe'});
+      await client.tags.update({id: cafe.id, name: 'category.coffee'});
+      expect(await client.places.list({query: 'tag[category.coffee]'})).toHaveLength(1);
+      await client.namespaces.create({name: 'taken'});
+      await expect(
+        client.namespaces.update({id: namespace.id, name: 'taken'}),
+      ).rejects.toMatchObject({code: 'CONFLICT'});
+      expect(await client.tags.get({id: cafe.id})).toMatchObject({
+        name: 'category.coffee',
+      });
     });
-    expect(await client.tags.get({id: bakery.id})).toMatchObject({
-      name: 'category.bakery',
+
+    it('keeps prefixes consistent when namespace rename races with tag creation', async () => {
+      const namespace = await client.namespaces.create({name: 'type'});
+      const [renamed, created] = await Promise.allSettled([
+        client.namespaces.update({id: namespace.id, name: 'category'}),
+        client.tags.create({name: 'type.cafe'}),
+      ]);
+      expect(renamed.status).toBe('fulfilled');
+
+      if (created.status === 'rejected') {
+        expect(created.reason).toMatchObject({code: 'NAMESPACE_NOT_FOUND'});
+      }
+
+      for (const tag of await client.tags.list()) {
+        expect(tag).toMatchObject({name: 'category.cafe', namespaceId: namespace.id});
+      }
     });
-    const matches = await client.places.list({query: 'tag[category.*]'});
-    expect(matches).toHaveLength(1);
-    expect(matches[0]!.tags).toEqual([
-      expect.objectContaining({
-        ...assignment,
-        tag: expect.objectContaining({name: 'category.cafe'}),
-      }),
-    ]);
-    expect(await client.places.list({query: 'tag[category.cafe]'})).toHaveLength(1);
-    expect(await client.places.list({query: 'tag[type.*]'})).toEqual([]);
-    await expect(
-      client.places.tag({placeId: place!.id, tag: 'type.cafe'}),
-    ).rejects.toMatchObject({code: 'NOT_FOUND'});
-    await client.places.tag({placeId: place!.id, tag: 'category.cafe'});
-    await client.tags.update({id: cafe.id, name: 'category.coffee'});
-    expect(await client.places.list({query: 'tag[category.coffee]'})).toHaveLength(1);
-    await client.namespaces.create({name: 'taken'});
-    await expect(
-      client.namespaces.update({id: namespace.id, name: 'taken'}),
-    ).rejects.toMatchObject({code: 'CONFLICT'});
-    expect(await client.tags.get({id: cafe.id})).toMatchObject({name: 'category.coffee'});
-  });
 
-  it('keeps prefixes consistent when namespace rename races with tag creation', async () => {
-    const namespace = await client.namespaces.create({name: 'type'});
-    const [renamed, created] = await Promise.allSettled([
-      client.namespaces.update({id: namespace.id, name: 'category'}),
-      client.tags.create({name: 'type.cafe'}),
-    ]);
-    expect(renamed.status).toBe('fulfilled');
-
-    if (created.status === 'rejected') {
-      expect(created.reason).toMatchObject({code: 'NAMESPACE_NOT_FOUND'});
-    }
-
-    for (const tag of await client.tags.list()) {
-      expect(tag).toMatchObject({name: 'category.cafe', namespaceId: namespace.id});
-    }
-  });
-
-  it('rejects concurrent duplicate qualified names', async () => {
-    await client.namespaces.create({name: 'type'});
-    const results = await Promise.allSettled([
-      client.tags.create({name: 'type.cafe'}),
-      client.tags.create({name: ' TYPE.CAFE '}),
-    ]);
-    expect(results.filter(result => result.status === 'fulfilled')).toHaveLength(1);
-    expect(results.find(result => result.status === 'rejected')).toMatchObject({
-      reason: {code: 'CONFLICT'},
+    it('rejects concurrent duplicate qualified names', async () => {
+      await client.namespaces.create({name: 'type'});
+      const results = await Promise.allSettled([
+        client.tags.create({name: 'type.cafe'}),
+        client.tags.create({name: ' TYPE.CAFE '}),
+      ]);
+      expect(results.filter(result => result.status === 'fulfilled')).toHaveLength(1);
+      expect(results.find(result => result.status === 'rejected')).toMatchObject({
+        reason: {code: 'CONFLICT'},
+      });
     });
   });
 

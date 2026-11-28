@@ -1,12 +1,10 @@
 import {eq, inArray, sql} from 'drizzle-orm';
 import {migrate} from 'drizzle-orm/node-postgres/migrator';
-import {Pool} from 'pg';
 import {afterAll, beforeAll, describe, expect, it} from 'vitest';
 
 import {randomUUID} from 'node:crypto';
 import {fileURLToPath} from 'node:url';
 
-import {createDatabase} from '../db/index.ts';
 import {
   places,
   placeSaves,
@@ -16,25 +14,20 @@ import {
   tags,
   users,
 } from '../db/schema.ts';
+import {temporaryDatabase} from '../fixtures/database.ts';
 
 import {compilePlaceQuery} from './index.ts';
 
 const testUrl = process.env.TEST_DATABASE_URL;
 
 describe.skipIf(!testUrl)('filter engine with PostgreSQL', () => {
-  const databaseName = `places_filter_${randomUUID().replaceAll('-', '')}`;
-  const admin = new Pool({connectionString: testUrl});
-  const url = new URL(testUrl ?? 'postgres://localhost/places');
-
-  url.pathname = `/${databaseName}`;
-
-  const db = createDatabase(url.href);
+  const {db, create, close} = temporaryDatabase('places_filter', testUrl);
   const aliceId = randomUUID();
   const bobId = randomUUID();
   const blankId = randomUUID();
 
   beforeAll(async () => {
-    await admin.query(`CREATE DATABASE "${databaseName}"`);
+    await create();
     await migrate(db, {
       migrationsFolder: fileURLToPath(new URL('../../drizzle', import.meta.url)),
     });
@@ -124,9 +117,7 @@ describe.skipIf(!testUrl)('filter engine with PostgreSQL', () => {
   }, 30000);
 
   afterAll(async () => {
-    await db.$client.end();
-    await admin.query(`DROP DATABASE IF EXISTS "${databaseName}" WITH (FORCE)`);
-    await admin.end();
+    await close();
   });
 
   async function names(query: string) {
