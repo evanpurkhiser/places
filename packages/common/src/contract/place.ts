@@ -126,7 +126,7 @@ export const importInput = z
   .min(1)
   .max(4096)
   .describe(
-    'Google Maps URL, gmaps:<place_id> reference, Instagram post or reel URL, or RedNote note or share URL.',
+    'Google Maps URL, gmaps:<place_id> reference, Instagram post or reel URL, or RedNote URL.',
   );
 export const importType = z
   .enum(['gmaps', 'instagram', 'rednote'])

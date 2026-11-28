@@ -2,11 +2,8 @@ import {rednoteSourceData} from '@places/common/contract/source';
 import type {PgBoss} from 'pg-boss';
 
 import type {CaptureResult} from '../services/media-import/index.ts';
-import {
-  fetchRedNoteMedia,
-  resolveRedNoteLink,
-  scrapeRedNotePost,
-} from '../services/rednote/scraper.ts';
+import {scrapeRedNotePost} from '../services/rednote/scraper.ts';
+import {fetchRedNoteMedia, resolveRedNoteLink} from '../services/rednote/transport.ts';
 import {canonicalNoteUrl} from '../services/rednote/urls.ts';
 
 import {importMediaPost, type MediaImportDependencies} from './import-media.ts';

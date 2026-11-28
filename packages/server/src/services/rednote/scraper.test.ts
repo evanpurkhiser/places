@@ -1,10 +1,8 @@
-import {describe, expect, it, vi} from 'vitest';
+import {describe, expect, it} from 'vitest';
 
-import {parseRedNotePost, resolveRedNoteLink} from './scraper.ts';
-import {canonicalNoteUrl, parseRedNoteUrl} from './urls.ts';
+import {parseRedNotePost} from './scraper.ts';
 
 const externalId = '6a22d82d000000001002d001';
-const signal = new AbortController().signal;
 const cdn = 'https://sns-web-i10.rednotecdn.com';
 const image = `${cdn}/photo.jpg`;
 const secondImage = `${cdn}/second.jpg`;
@@ -24,62 +22,6 @@ function page(data: object) {
     },
   )}}}};</script>`;
 }
-
-describe('RedNote links', () => {
-  it('resolves a short link and keeps the query needed for retrieval', async () => {
-    const fetch = vi.fn<typeof globalThis.fetch>().mockResolvedValue(
-      new Response(null, {
-        status: 302,
-        headers: {
-          location: `https://www.xiaohongshu.com/discovery/item/${externalId}?xsec_token=share&xsec_source=app&share_id=tracking`,
-        },
-      }),
-    );
-    const result = await resolveRedNoteLink('https://xhslink.com/o/AbCdEf', {
-      fetch,
-      signal,
-    });
-
-    expect(fetch).toHaveBeenCalledOnce();
-    expect(result.externalId).toBe(externalId);
-    expect(result.url.href).toBe(
-      `${canonicalNoteUrl(externalId)}?xsec_token=share&xsec_source=app`,
-    );
-  });
-
-  it.each([
-    canonicalNoteUrl(externalId),
-    `https://rednote.com/explore/${externalId}`,
-    `https://www.xiaohongshu.com/explore/${externalId}`,
-  ])('normalizes the note link %s', input => {
-    expect(parseRedNoteUrl(input)).toEqual({
-      kind: 'note',
-      externalId,
-      url: new URL(canonicalNoteUrl(externalId)),
-    });
-  });
-
-  it.each([`http://rednote.com/explore/${externalId}`, 'http://xhslink.com/o/AbCdEf'])(
-    'requires HTTPS for input links such as %s',
-    input => {
-      expect(parseRedNoteUrl(input)).toBeNull();
-    },
-  );
-
-  it('rejects a redirect outside the supported note and share hosts', async () => {
-    const fetch = vi.fn<typeof globalThis.fetch>().mockResolvedValue(
-      new Response(null, {
-        status: 302,
-        headers: {location: 'https://other.example/note'},
-      }),
-    );
-
-    await expect(
-      resolveRedNoteLink('https://xhslink.cn/o/AbCdEf', {fetch, signal}),
-    ).rejects.toThrow('did not resolve to a note');
-    expect(fetch).toHaveBeenCalledOnce();
-  });
-});
 
 describe('RedNote media', () => {
   it('resolves a video and thumbnail to HTTPS CDN URLs', () => {

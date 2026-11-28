@@ -28,12 +28,11 @@ export function parseRedNoteUrl(input: string | URL) {
 
   if (externalId) {
     const noteUrl = new URL(canonicalNoteUrl(externalId));
-    for (const key of ['xsec_token', 'xsec_source']) {
+    const query = ['xsec_token', 'xsec_source'].flatMap(key => {
       const value = url.searchParams.get(key);
-      if (value) {
-        noteUrl.searchParams.set(key, value);
-      }
-    }
+      return value ? [[key, value]] : [];
+    });
+    noteUrl.search = new URLSearchParams(query).toString();
 
     return {kind: 'note', externalId, url: noteUrl} as const;
   }
@@ -45,3 +44,8 @@ export function parseRedNoteUrl(input: string | URL) {
 
   return null;
 }
+
+export type NoteLink = Extract<
+  NonNullable<ReturnType<typeof parseRedNoteUrl>>,
+  {kind: 'note'}
+>;
