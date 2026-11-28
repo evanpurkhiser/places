@@ -59,6 +59,13 @@ describe('RedNote links', () => {
     });
   });
 
+  it.each([`http://rednote.com/explore/${externalId}`, 'http://xhslink.com/o/AbCdEf'])(
+    'requires HTTPS for input links such as %s',
+    input => {
+      expect(parseRedNoteUrl(input)).toBeNull();
+    },
+  );
+
   it('rejects a redirect outside the supported note and share hosts', async () => {
     const fetch = vi.fn<typeof globalThis.fetch>().mockResolvedValue(
       new Response(null, {
@@ -75,12 +82,14 @@ describe('RedNote links', () => {
 });
 
 describe('RedNote media', () => {
-  it('interprets a video note and its thumbnail', () => {
+  it('resolves a video and thumbnail to HTTPS CDN URLs', () => {
     const post = parseRedNotePost(
       page({
         type: 'video',
-        imageList: [{url: image}],
-        video: {media: {stream: clips}},
+        imageList: [{url: image.replace('https:', 'http:')}],
+        video: {
+          media: {stream: {h264: [{masterUrl: video.replace('https:', 'http:')}]}},
+        },
       }),
       externalId,
     );

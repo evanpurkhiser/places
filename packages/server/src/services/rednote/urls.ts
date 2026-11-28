@@ -16,17 +16,10 @@ export function canonicalNoteUrl(externalId: string) {
 export function parseRedNoteUrl(input: string | URL) {
   const url = URL.parse(input);
 
-  if (
-    !url ||
-    !['https:', 'http:'].includes(url.protocol) ||
-    url.username ||
-    url.password ||
-    url.port
-  ) {
+  if (!url || url.protocol !== 'https:' || url.username || url.password || url.port) {
     return null;
   }
 
-  url.protocol = 'https:';
   url.hash = '';
 
   const externalId = noteHosts.has(url.hostname)

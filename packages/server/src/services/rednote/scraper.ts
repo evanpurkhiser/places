@@ -182,6 +182,7 @@ function mediaUrl(input: string | null | undefined) {
     return null;
   }
 
+  // Page state can list HTTP URLs for assets that the CDN serves over HTTPS.
   url.protocol = 'https:';
   url.hash = '';
   return url.href;
