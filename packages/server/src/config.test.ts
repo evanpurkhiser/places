@@ -143,3 +143,54 @@ it('requires Instagram settings and a shared OpenAI key', () => {
     );
   }
 });
+
+it('uses shared social-posts settings without an Instagram section', () => {
+  const {instagram, ...config} = testConfig;
+  const database = {url: 'postgres://localhost/places'};
+
+  expect(
+    configSchema.parse({...config, database, 'social-posts': instagram}).instagram,
+  ).toEqual(configSchema.parse({...testConfig, database}).instagram);
+});
+
+it('merges capture fields and replaces tag lists for Instagram', () => {
+  const config = configSchema.parse({
+    ...testConfig,
+    database: {url: 'postgres://localhost/places'},
+    'social-posts': {
+      ...testConfig.instagram,
+      alwaysApplyTags: ['status.needs-review'],
+      capture: {model: 'shared', instructions: 'Shared guidance', maxTurns: 4},
+    },
+    instagram: {
+      alwaysApplyTags: [],
+      capture: {model: 'instagram'},
+    },
+  });
+
+  expect(config.instagram).toMatchObject({
+    alwaysApplyTags: [],
+    capture: {model: 'instagram', instructions: 'Shared guidance', maxTurns: 4},
+  });
+});
+
+it('validates shared defaults and reports missing effective settings at the provider path', () => {
+  const {instagram, ...config} = testConfig;
+  const input = {...config, database: {url: 'postgres://localhost/places'}};
+  const invalidDefaults = configSchema.safeParse({
+    ...input,
+    'social-posts': {capture: {maxTurns: 0}},
+    instagram,
+  });
+  const missingSetting = configSchema.safeParse({
+    ...input,
+    'social-posts': {...instagram, capture: {maxTurns: 4}},
+  });
+
+  expect(invalidDefaults.error?.issues).toContainEqual(
+    expect.objectContaining({path: ['social-posts', 'capture', 'maxTurns']}),
+  );
+  expect(missingSetting.error?.issues).toContainEqual(
+    expect.objectContaining({path: ['instagram', 'capture', 'model']}),
+  );
+});

@@ -60,6 +60,11 @@ instagram:
     instructions: Assign a type and evidence-supported atmosphere tags.
 ```
 
+Use `social-posts` for shared capture and tagging defaults.
+The `instagram` section supplies provider-specific overrides.
+Capture fields are inherited individually.
+Each list is replaced as a whole, and `[]` clears an inherited list.
+
 The OpenAI key lives at the top level, shared by model integrations:
 
 ```yaml

@@ -4,7 +4,7 @@ import {z} from 'zod';
 import {readFile} from 'node:fs/promises';
 import {parseArgs} from 'node:util';
 
-import {instagramConfig} from './config/instagram.ts';
+import {resolveSocialPostConfig, socialPostOverrides} from './config/media-import.ts';
 
 /**
  * Define per-queue throughput with a queue-specific concurrency default.
@@ -36,7 +36,7 @@ export const workersConfig = z
   .prefault({});
 export type WorkerQueueConfig = z.infer<typeof workersConfig>['gmaps-sync'];
 
-export const configSchema = z.strictObject({
+const configInput = z.strictObject({
   google: z
     .strictObject({
       apiKey: z
@@ -61,7 +61,12 @@ export const configSchema = z.strictObject({
         ),
     })
     .describe('OpenAI integration.'),
-  instagram: instagramConfig,
+  'social-posts': socialPostOverrides
+    .optional()
+    .describe('Shared capture and tagging defaults for social post importers.'),
+  instagram: socialPostOverrides
+    .optional()
+    .describe('Instagram capture and tagging overrides.'),
   workers: workersConfig,
   server: z
     .strictObject({
@@ -84,6 +89,22 @@ export const configSchema = z.strictObject({
     })
     .describe('Database connection settings.'),
 });
+
+export const configSchema = configInput.transform(
+  ({'social-posts': defaults, instagram, ...config}, ctx) => {
+    const resolved = resolveSocialPostConfig(defaults, instagram);
+
+    if (!resolved.success) {
+      for (const issue of resolved.error.issues) {
+        ctx.addIssue({...issue, path: ['instagram', ...issue.path]});
+      }
+
+      return z.NEVER;
+    }
+
+    return {...config, instagram: resolved.data};
+  },
+);
 
 export type Config = z.infer<typeof configSchema>;
 

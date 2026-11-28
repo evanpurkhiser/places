@@ -1,7 +1,7 @@
 import {tagReference} from '@places/common/contract/tag';
 import {z} from 'zod';
 
-export const mediaCaptureConfig = z.strictObject({
+const mediaCaptureFields = z.strictObject({
   model: z
     .string()
     .min(1)
@@ -13,7 +13,6 @@ export const mediaCaptureConfig = z.strictObject({
   instructions: z
     .string()
     .max(20000)
-    .default('')
     .describe(
       'Additional guidance for interpreting posts and assigning tags, such as when to use particular tags or which tags to prioritize. The model also receives assignable tags and namespaces with their descriptions.',
     ),
@@ -22,7 +21,6 @@ export const mediaCaptureConfig = z.strictObject({
     .int()
     .min(1)
     .max(50)
-    .default(12)
     .describe(
       'Maximum model turns in a capture run, including turns used to request tools.',
     ),
@@ -31,17 +29,22 @@ export const mediaCaptureConfig = z.strictObject({
     .int()
     .min(100)
     .max(32000)
-    .default(8000)
     .describe('Maximum output tokens requested per model response.'),
   timeoutMs: z
     .number()
     .int()
     .min(1)
     .max(600000)
-    .default(180000)
     .describe(
       'Time limit in milliseconds for capture. The importer also uses this budget for scraping and media preparation.',
     ),
+});
+
+export const mediaCaptureConfig = mediaCaptureFields.extend({
+  instructions: mediaCaptureFields.shape.instructions.default(''),
+  maxTurns: mediaCaptureFields.shape.maxTurns.default(12),
+  maxOutputTokens: mediaCaptureFields.shape.maxOutputTokens.default(8000),
+  timeoutMs: mediaCaptureFields.shape.timeoutMs.default(180000),
 });
 
 export const mediaImportConfig = z
@@ -69,3 +72,20 @@ export const mediaImportConfig = z
     capture: mediaCaptureConfig,
   })
   .describe('Media capture settings, tagging rules, and automatic tags.');
+
+export const socialPostOverrides = mediaImportConfig
+  .extend({capture: mediaCaptureFields.partial()})
+  .partial();
+
+type SocialPostOverrides = z.output<typeof socialPostOverrides>;
+
+export function resolveSocialPostConfig(
+  defaults: SocialPostOverrides | undefined,
+  overrides: SocialPostOverrides | undefined,
+) {
+  return mediaImportConfig.safeParse({
+    ...defaults,
+    ...overrides,
+    capture: {...defaults?.capture, ...overrides?.capture},
+  });
+}
