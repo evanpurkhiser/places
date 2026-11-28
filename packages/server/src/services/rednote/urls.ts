@@ -45,7 +45,4 @@ export function parseRedNoteUrl(input: string | URL) {
   return null;
 }
 
-export type NoteLink = Extract<
-  NonNullable<ReturnType<typeof parseRedNoteUrl>>,
-  {kind: 'note'}
->;
+export type RedNoteLink = NonNullable<ReturnType<typeof parseRedNoteUrl>>;

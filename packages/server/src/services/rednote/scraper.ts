@@ -3,9 +3,6 @@ import {z} from 'zod';
 
 import type {MediaPostSource, PostMediaSource} from '../media-import/index.ts';
 
-import {fetchRedNotePage, type FetchOptions} from './transport.ts';
-import type {NoteLink} from './urls.ts';
-
 const links = z.object({url: z.string().nullish()});
 const stream = z.record(
   z.string(),
@@ -33,16 +30,6 @@ const noteSchema = z.object({
 const pageState = z.object({
   noteData: z.object({data: z.object({noteData: noteSchema})}),
 });
-
-export async function scrapeRedNotePost(link: NoteLink, options: FetchOptions) {
-  const html = await fetchRedNotePage(link.url, options);
-
-  if (html === null) {
-    throw unavailableNote();
-  }
-
-  return parseRedNotePost(html, link.externalId);
-}
 
 function unavailableNote() {
   return new Error(

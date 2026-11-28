@@ -125,22 +125,24 @@ describe.skipIf(!testUrl)('RedNote imports with PostgreSQL and pg-boss', () => {
       title: 'Taipei cafes',
       imageList: [{url: thumbnailUrl}],
     };
+    const shareResponse = () =>
+      new Response(null, {
+        status: 302,
+        headers: {location: `${noteUrl}?xsec_token=share`},
+      });
+    const noteResponse = () =>
+      new Response(
+        `<script>window.__INITIAL_STATE__=${JSON.stringify({noteData: {data: {noteData: note}}})}</script>`,
+      );
     const fetch = vi
       .spyOn(globalThis, 'fetch')
-      .mockResolvedValueOnce(
-        new Response(null, {
-          status: 302,
-          headers: {location: `${noteUrl}?xsec_token=share`},
-        }),
-      )
-      .mockResolvedValueOnce(
-        new Response(
-          `<script>window.__INITIAL_STATE__=${JSON.stringify({noteData: {data: {noteData: note}}})}</script>`,
-        ),
-      )
+      .mockResolvedValueOnce(shareResponse())
+      .mockResolvedValueOnce(noteResponse())
       .mockResolvedValueOnce(
         new Response('photo', {headers: {'content-type': 'image/jpeg'}}),
-      );
+      )
+      .mockResolvedValueOnce(shareResponse())
+      .mockResolvedValueOnce(noteResponse());
 
     await registerRedNoteImportWorker(
       jobs,
@@ -172,6 +174,9 @@ describe.skipIf(!testUrl)('RedNote imports with PostgreSQL and pg-boss', () => {
         `https://www.xiaohongshu.com/explore/${externalId}`,
       );
 
+      expect(fetch).toHaveBeenCalledTimes(3);
+      const anotherShare = await importAndWait('https://xhslink.com/o/AnotherShare');
+
       expect(await db.select().from(sources)).toEqual([
         expect.objectContaining({
           id: first.sourceId,
@@ -180,7 +185,7 @@ describe.skipIf(!testUrl)('RedNote imports with PostgreSQL and pg-boss', () => {
           url: noteUrl,
         }),
       ]);
-      expect(fetch).toHaveBeenCalledTimes(3);
+      expect(fetch).toHaveBeenCalledTimes(5);
       expect(media.capture).toHaveBeenCalledExactlyOnceWith(
         expect.anything(),
         expect.anything(),
@@ -191,11 +196,13 @@ describe.skipIf(!testUrl)('RedNote imports with PostgreSQL and pg-boss', () => {
       );
       expect(await jobs.findJobs(googleQueue)).toHaveLength(1);
       expect(first).toMatchObject({importType: 'rednote', state: 'active'});
-      expect(repeat).toMatchObject({
-        importType: 'rednote',
-        sourceId: first.sourceId,
-        state: 'active',
-      });
+      for (const status of [repeat, anotherShare]) {
+        expect(status).toMatchObject({
+          importType: 'rednote',
+          sourceId: first.sourceId,
+          state: 'active',
+        });
+      }
     } finally {
       fetch.mockRestore();
       await jobs.offWork(importQueue);

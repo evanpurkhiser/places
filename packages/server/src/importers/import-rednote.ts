@@ -2,10 +2,15 @@ import {rednoteSourceData} from '@places/common/contract/source';
 import type {PgBoss} from 'pg-boss';
 
 import type {CaptureResult} from '../services/media-import/index.ts';
-import {scrapeRedNotePost} from '../services/rednote/scraper.ts';
-import {fetchRedNoteMedia, resolveRedNoteLink} from '../services/rednote/transport.ts';
-import {canonicalNoteUrl} from '../services/rednote/urls.ts';
+import {parseRedNotePost} from '../services/rednote/scraper.ts';
+import {fetchRedNoteMedia, fetchRedNotePage} from '../services/rednote/transport.ts';
+import {
+  canonicalNoteUrl,
+  parseRedNoteUrl,
+  type RedNoteLink,
+} from '../services/rednote/urls.ts';
 
+import {InvalidImportInputError} from './errors.ts';
 import {importMediaPost, type MediaImportDependencies} from './import-media.ts';
 import type {ImportRunIdentity} from './runs.ts';
 import type {ImportOptions} from './types.ts';
@@ -25,22 +30,44 @@ export async function importRedNotePost(
   options: ImportOptions,
   run: ImportRunIdentity,
 ) {
-  const resolvingSignal = AbortSignal.timeout(
-    Math.min(dependencies.config.capture.timeoutMs, 15000),
-  );
-  const note = await resolveRedNoteLink(input, {signal: resolvingSignal});
+  const link = parseRedNoteUrl(input);
+
+  if (!link) {
+    throw new InvalidImportInputError('Expected a RedNote URL.');
+  }
+
+  const source =
+    link.kind === 'note'
+      ? {
+          externalId: link.externalId,
+          async load(signal: AbortSignal) {
+            const {html} = await fetchRedNotePage(link, {signal});
+            return parseRedNotePost(html, link.externalId);
+          },
+        }
+      : await fetchSharedPost(link, dependencies.config.capture.timeoutMs);
 
   return importMediaPost(
     jobs,
     dependencies,
     provider,
     {
-      externalId: note.externalId,
-      url: canonicalNoteUrl(note.externalId),
-      load: signal => scrapeRedNotePost(note, {signal}),
+      ...source,
+      url: canonicalNoteUrl(source.externalId),
       fetchMedia: fetchRedNoteMedia,
     },
     options,
     run,
   );
+}
+
+async function fetchSharedPost(link: RedNoteLink, timeoutMs: number) {
+  const {externalId, html} = await fetchRedNotePage(link, {
+    signal: AbortSignal.timeout(timeoutMs),
+  });
+
+  return {
+    externalId,
+    load: () => Promise.resolve(parseRedNotePost(html, externalId)),
+  };
 }
