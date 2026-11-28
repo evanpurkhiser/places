@@ -4,11 +4,7 @@ import type {PgBoss} from 'pg-boss';
 import type {CaptureResult} from '../services/media-import/index.ts';
 import {parseRedNotePost} from '../services/rednote/scraper.ts';
 import {fetchRedNoteMedia, fetchRedNotePage} from '../services/rednote/transport.ts';
-import {
-  canonicalNoteUrl,
-  parseRedNoteUrl,
-  type RedNoteLink,
-} from '../services/rednote/urls.ts';
+import {canonicalNoteUrl, parseRedNoteUrl} from '../services/rednote/urls.ts';
 
 import {InvalidImportInputError} from './errors.ts';
 import {importMediaPost, type MediaImportDependencies} from './import-media.ts';
@@ -36,38 +32,21 @@ export async function importRedNotePost(
     throw new InvalidImportInputError('Expected a RedNote URL.');
   }
 
-  const source =
-    link.kind === 'note'
-      ? {
-          externalId: link.externalId,
-          async load(signal: AbortSignal) {
-            const {html} = await fetchRedNotePage(link, {signal});
-            return parseRedNotePost(html, link.externalId);
-          },
-        }
-      : await fetchSharedPost(link, dependencies.config.capture.timeoutMs);
+  const {externalId, html} = await fetchRedNotePage(link, {
+    signal: AbortSignal.timeout(dependencies.config.capture.timeoutMs),
+  });
 
   return importMediaPost(
     jobs,
     dependencies,
     provider,
     {
-      ...source,
-      url: canonicalNoteUrl(source.externalId),
+      externalId,
+      url: canonicalNoteUrl(externalId),
+      load: () => Promise.resolve(parseRedNotePost(html, externalId)),
       fetchMedia: fetchRedNoteMedia,
     },
     options,
     run,
   );
-}
-
-async function fetchSharedPost(link: RedNoteLink, timeoutMs: number) {
-  const {externalId, html} = await fetchRedNotePage(link, {
-    signal: AbortSignal.timeout(timeoutMs),
-  });
-
-  return {
-    externalId,
-    load: () => Promise.resolve(parseRedNotePost(html, externalId)),
-  };
 }

@@ -141,6 +141,7 @@ describe.skipIf(!testUrl)('RedNote imports with PostgreSQL and pg-boss', () => {
       .mockResolvedValueOnce(
         new Response('photo', {headers: {'content-type': 'image/jpeg'}}),
       )
+      .mockResolvedValueOnce(noteResponse())
       .mockResolvedValueOnce(shareResponse())
       .mockResolvedValueOnce(noteResponse());
 
@@ -174,7 +175,6 @@ describe.skipIf(!testUrl)('RedNote imports with PostgreSQL and pg-boss', () => {
         `https://www.xiaohongshu.com/explore/${externalId}`,
       );
 
-      expect(fetch).toHaveBeenCalledTimes(3);
       const anotherShare = await importAndWait('https://xhslink.com/o/AnotherShare');
 
       expect(await db.select().from(sources)).toEqual([
@@ -185,7 +185,14 @@ describe.skipIf(!testUrl)('RedNote imports with PostgreSQL and pg-boss', () => {
           url: noteUrl,
         }),
       ]);
-      expect(fetch).toHaveBeenCalledTimes(5);
+      expect(fetch.mock.calls.map(([url]) => String(url))).toEqual([
+        shortUrl,
+        `${noteUrl}?xsec_token=share`,
+        thumbnailUrl,
+        noteUrl,
+        'https://xhslink.com/o/AnotherShare',
+        `${noteUrl}?xsec_token=share`,
+      ]);
       expect(media.capture).toHaveBeenCalledExactlyOnceWith(
         expect.anything(),
         expect.anything(),
