@@ -10,7 +10,8 @@ import {
   InvalidImportInputError,
 } from './errors.ts';
 import {googleImporter} from './gmaps.ts';
-import {getInstagramStatuses, instagramImporter} from './instagram.ts';
+import {instagramImporter} from './instagram.ts';
+import {getMediaImportStatuses} from './media-status.ts';
 import {resolveTags} from './tags.ts';
 import type {ImportRun, ImportStatus} from './types.ts';
 
@@ -72,7 +73,7 @@ async function resolveImportStatuses(
   context: Pick<Context, 'db'>,
   preloadedRuns?: ImportRun[],
 ) {
-  const instagramStatuses = await getInstagramStatuses(
+  const mediaStatuses = await getMediaImportStatuses(
     runs.filter(run => run.type === 'instagram'),
     context,
     preloadedRuns,
@@ -81,7 +82,7 @@ async function resolveImportStatuses(
   return Promise.all(
     runs.map(run =>
       run.type === 'instagram'
-        ? statusResponse(run, instagramStatuses.get(run.id)!)
+        ? statusResponse(run, mediaStatuses.get(run.id)!)
         : importStatus(run, context),
     ),
   );

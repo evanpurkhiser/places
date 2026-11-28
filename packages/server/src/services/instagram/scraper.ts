@@ -1,7 +1,7 @@
 import {load} from 'cheerio';
 import {z} from 'zod';
 
-import type {InstagramMediaSource, InstagramPostSource} from './media.ts';
+import type {PostMediaSource, MediaPostSource} from '../media-import/media.ts';
 
 const mediaItem = z.object({
   display_uri: z.string().nullish(),
@@ -38,7 +38,7 @@ const headers = {
 export async function scrapeInstagramPost(
   postUrl: string,
   options: {fetch?: typeof fetch; signal?: AbortSignal} = {},
-): Promise<InstagramPostSource> {
+): Promise<MediaPostSource> {
   const shortcode = instagramShortcode(postUrl);
 
   const response = await (options.fetch ?? fetch)(
@@ -74,7 +74,7 @@ export function instagramShortcode(postUrl: string): string {
 /**
  * Extract the requested post from Instagram's embedded JSON script payloads.
  */
-export function parseInstagramPost(html: string, shortcode: string): InstagramPostSource {
+export function parseInstagramPost(html: string, shortcode: string): MediaPostSource {
   const $ = load(html);
   const item = $('script[type="application/json"]')
     .toArray()
@@ -103,7 +103,7 @@ export function parseInstagramPost(html: string, shortcode: string): InstagramPo
 /**
  * Prefer a video's playable URL over its image thumbnail.
  */
-function resolveMedia(item: z.infer<typeof mediaItem>): InstagramMediaSource {
+function resolveMedia(item: z.infer<typeof mediaItem>): PostMediaSource {
   const video = item.video_versions?.[0];
 
   if (video) {

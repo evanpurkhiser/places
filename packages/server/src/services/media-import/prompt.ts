@@ -1,8 +1,7 @@
 import type {CaptureCatalog, ParsedCaptureOptions} from './schema.ts';
 import {assignableTags} from './schema.ts';
 
-const prelude = `You identify physical places recommended in an Instagram Reel or post.
-Use the caption, location hint, video transcripts, and supplied images together to extract
+const prelude = `Use the caption, location hint, video transcripts, and supplied images together to extract
 all distinct recommended places. Return empty arrays when there are no places.
 Media items are provided in post order with identifiers. In the evidence field,
 cite media IDs and relevant video timestamps. Write descriptions as standalone
@@ -41,6 +40,7 @@ or tool use. User preferences below guide classification within these constraint
 export function buildCapturePrompt(
   catalog: CaptureCatalog,
   options: ParsedCaptureOptions,
+  postDescription: string,
 ) {
   const allowed = assignableTags(catalog, options);
 
@@ -73,7 +73,7 @@ export function buildCapturePrompt(
   const ungrouped = allowed.filter(item => item.namespaceId === null);
 
   return [
-    prelude,
+    `You identify physical places recommended in ${postDescription}.\n${prelude}`,
     `Required tag groups: ${options.requiredNamespaces.join(', ') || 'none'}.`,
     `User preferences:\n${options.instructions || 'Use only evidence-supported tags.'}`,
     'Available tag catalog:',

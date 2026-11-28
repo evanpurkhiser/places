@@ -4,7 +4,7 @@ import {describe, expect, it, vi} from 'vitest';
 
 import {capture} from './capture.ts';
 import rawFixture from './fixtures/cafe.json' with {type: 'json'};
-import type {InstagramVideo} from './media.ts';
+import type {PostVideo} from './media.ts';
 import {buildCapturePrompt} from './prompt.ts';
 import type {CaptureContent} from './schema.ts';
 import {captureContent, captureOptions} from './schema.ts';
@@ -77,7 +77,7 @@ function harness(outputs = [response([call()]), response([final()])]) {
     search: vi.fn().mockResolvedValue(fixture.candidates),
   };
 
-  const getFrames = vi.fn<InstagramVideo['getFrames']>();
+  const getFrames = vi.fn<PostVideo['getFrames']>();
   /**
    * Run capture with fixture defaults and per-test overrides.
    */
@@ -103,6 +103,7 @@ function harness(outputs = [response([call()]), response([final()])]) {
       catalog,
       {...fixture.options, ...options},
       signal,
+      {name: 'Instagram', postDescription: 'an Instagram Reel or post'},
     );
 
   return {run, google, requests, fetcher, getFrames, openai};
@@ -241,6 +242,8 @@ describe('Instagram capture', () => {
       },
       fixture.catalog,
       fixture.options,
+      undefined,
+      {name: 'Instagram', postDescription: 'an Instagram Reel or post'},
     );
     expect(first).toHaveBeenCalledWith([2], expect.any(AbortSignal));
     expect(second).toHaveBeenCalledWith([2], expect.any(AbortSignal));
@@ -291,6 +294,7 @@ describe('Instagram capture', () => {
     const prompt = buildCapturePrompt(
       fixture.catalog,
       captureOptions.parse(fixture.options),
+      'an Instagram Reel or post',
     );
 
     expect(prompt).toContain(

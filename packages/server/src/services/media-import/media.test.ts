@@ -5,7 +5,7 @@ import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 
 import type {FFmpeg} from './ffmpeg.ts';
-import {prepareInstagramPost, type InstagramPostSource} from './media.ts';
+import {prepareMediaPost, type MediaPostSource} from './media.ts';
 
 const metadata = {
   externalId: 'ExamplePost',
@@ -41,7 +41,7 @@ function harness(hasAudio = true) {
   const transcribe = vi.fn().mockResolvedValue([{start: 1, end: 3, text: 'A cafe'}]);
   const dependencies = {ffmpeg, fetch: fetcher, transcribe};
   const prepare = (signal?: AbortSignal) =>
-    prepareInstagramPost(
+    prepareMediaPost(
       {
         ...metadata,
         caption: 'A cafe',
@@ -132,7 +132,7 @@ describe('Instagram post preparation', () => {
       new Response('second image', {headers: {'content-type': 'image/webp'}}),
     );
     {
-      await using post = await prepareInstagramPost(
+      await using post = await prepareMediaPost(
         {
           ...metadata,
           caption: 'Cafes',
@@ -165,7 +165,7 @@ describe('Instagram post preparation', () => {
 
   it('prepares mixed media with distinct video sources and cleans up both', async () => {
     const {dependencies, ffmpeg, fetcher, transcribe} = harness();
-    const source: InstagramPostSource = {
+    const source: MediaPostSource = {
       ...metadata,
       caption: 'Mixed post',
       media: [
@@ -182,7 +182,7 @@ describe('Instagram post preparation', () => {
     ffmpeg.image.mockImplementation(async (path, timestamp) =>
       Buffer.from(`${await readFile(path, 'utf8')} at ${timestamp}`),
     );
-    const post = await prepareInstagramPost(source, dependencies, {temporaryRoot: root});
+    const post = await prepareMediaPost(source, dependencies, {temporaryRoot: root});
     expect(post.media.map(item => item.kind)).toEqual(
       source.media.map(item => item.kind),
     );
@@ -209,7 +209,7 @@ describe('Instagram post preparation', () => {
           : Promise.reject(new Error('Later download failed')),
       );
       await expect(
-        prepareInstagramPost(
+        prepareMediaPost(
           {
             ...metadata,
             caption: '',
@@ -237,7 +237,7 @@ describe('Instagram post preparation', () => {
         ? Promise.resolve(new Response('video'))
         : Promise.reject(new Error('Image failed')),
     );
-    const pending = prepareInstagramPost(
+    const pending = prepareMediaPost(
       {
         ...metadata,
         caption: '',
