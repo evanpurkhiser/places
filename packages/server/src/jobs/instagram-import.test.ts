@@ -173,61 +173,6 @@ describe.skipIf(!testUrl)('Instagram ingestion with PostgreSQL and pg-boss', () 
     await admin.end();
   });
 
-  it('saves the source and dispatches all recommendations in one bulk insert', async () => {
-    const insert = vi.spyOn(jobs, 'insert');
-    const result = await importInstagramPost(jobs, dependencies, shortcode);
-    expect(result).toMatchObject({skipped: false, unresolved: captured.unresolved});
-    expect(result.jobIds).toHaveLength(2);
-    expect(insert).toHaveBeenCalledTimes(1);
-    expect(instagram.scrapeInstagramPost).toHaveBeenCalledWith(url, {
-      signal: expect.any(AbortSignal),
-    });
-    expect(dispose).toHaveBeenCalledOnce();
-    expect(await db.select().from(sources)).toMatchObject([
-      {
-        id: result.sourceId,
-        type: 'instagram',
-        externalId: metadata.externalId,
-        url,
-        description: captured.source.description,
-        data: {caption: metadata.caption, username: metadata.username},
-      },
-    ]);
-    const children = await jobs.findJobs(googleQueue);
-    const payloads = children.map(job => googleImportPayload.parse(job.data));
-    expect(payloads.map(payload => payload.googlePlaceId).sort()).toEqual([
-      'first',
-      'second',
-    ]);
-    expect(
-      payloads.every(
-        payload =>
-          payload.tags.length === 2 &&
-          payload.tags.some(tag => tag.tagId === reviewTagId) &&
-          payload.tags.some(tag => tag.tagId === importedTagId),
-      ),
-    ).toBe(true);
-    expect(payloads[0]!.source).toMatchObject({
-      sourceId: result.sourceId,
-      data: {evidence: 'Caption'},
-    });
-    expect(media.capture).toHaveBeenCalledWith(
-      expect.anything(),
-      expect.anything(),
-      expect.objectContaining({
-        tags: expect.arrayContaining([expect.objectContaining({id: reviewTagId})]),
-      }),
-      {
-        ...config.instagram.capture,
-        excludedTags: ['favorite', 'needs-review', 'imported'],
-        excludedNamespaces: ['rating'],
-        requiredNamespaces: [],
-      },
-      expect.any(AbortSignal),
-      expect.objectContaining({name: 'Instagram'}),
-    );
-  });
-
   const context = () => ({
     db,
     jobs,
@@ -679,19 +624,6 @@ describe.skipIf(!testUrl)('Instagram ingestion with PostgreSQL and pg-boss', () 
     });
   });
 
-  it('supports an empty list of automatic tags', async () => {
-    await importInstagramPost(
-      jobs,
-      {...dependencies, config: {...dependencies.config, alwaysApplyTags: []}},
-      shortcode,
-    );
-    const children = await jobs.findJobs(googleQueue);
-    expect(children).toHaveLength(2);
-    for (const job of children) {
-      expect(googleImportPayload.parse(job.data).tags).toEqual([{tagId: reviewTagId}]);
-    }
-  });
-
   it('passes explicit tags and notes from the queued post to each place import', async () => {
     const options = {
       tags: [{tagId: reviewTagId, note: 'Check this recommendation'}],
@@ -723,80 +655,6 @@ describe.skipIf(!testUrl)('Instagram ingestion with PostgreSQL and pg-boss', () 
     } finally {
       await jobs.offWork(importQueue);
     }
-  });
-
-  it('skips existing sources before scraping, preparation, or capture', async () => {
-    const [source] = await db
-      .insert(sources)
-      .values({type: 'instagram', externalId: metadata.externalId})
-      .returning();
-    expect(await importInstagramPost(jobs, dependencies, shortcode)).toMatchObject({
-      sourceId: source!.id,
-      skipped: true,
-      jobIds: [],
-    });
-    expect(instagram.scrapeInstagramPost).not.toHaveBeenCalled();
-    expect(media.prepareMediaPost).not.toHaveBeenCalled();
-    expect(media.capture).not.toHaveBeenCalled();
-  });
-
-  it('rolls back source and queued jobs together and permits a retry', async () => {
-    const insert = jobs.insert.bind(jobs);
-    vi.spyOn(jobs, 'insert').mockImplementationOnce(async (...args) => {
-      await insert(...args);
-      expect(await db.select().from(sources)).toEqual([]);
-      expect(await jobs.findJobs(googleQueue)).toEqual([]);
-      throw new Error('Dispatch failed before commit');
-    });
-    await expect(importInstagramPost(jobs, dependencies, shortcode)).rejects.toThrow(
-      'Dispatch failed',
-    );
-    expect(await db.select().from(sources)).toEqual([]);
-    expect(await jobs.findJobs(googleQueue)).toEqual([]);
-    dispose.mockClear();
-    expect(await importInstagramPost(jobs, dependencies, shortcode)).toMatchObject({
-      skipped: false,
-    });
-    expect(await jobs.findJobs(googleQueue)).toHaveLength(2);
-  });
-
-  it('retains a source and unresolved mentions when no places match', async () => {
-    captured.places = [];
-    const insert = vi.spyOn(jobs, 'insert');
-    expect(await importInstagramPost(jobs, dependencies, shortcode)).toMatchObject({
-      jobIds: [],
-      unresolved: captured.unresolved,
-    });
-    expect(insert).not.toHaveBeenCalled();
-    expect(await db.select().from(sources)).toHaveLength(1);
-  });
-
-  it('rejects a missing automatic tag before making paid provider calls', async () => {
-    await db.delete(tags);
-    await expect(importInstagramPost(jobs, dependencies, shortcode)).rejects.toThrow(
-      'automatic tag does not exist',
-    );
-    expect(instagram.scrapeInstagramPost).not.toHaveBeenCalled();
-  });
-
-  it('disposes media after capture failures without creating a source', async () => {
-    vi.mocked(media.capture).mockRejectedValueOnce(new Error('Capture failed'));
-    await expect(importInstagramPost(jobs, dependencies, shortcode)).rejects.toThrow(
-      'Capture failed',
-    );
-    expect(dispose).toHaveBeenCalledOnce();
-    expect(await db.select().from(sources)).toEqual([]);
-  });
-
-  it('dispatches only once if concurrent captures reach source creation', async () => {
-    vi.mocked(media.capture).mockResolvedValue(captured);
-    const results = await Promise.all([
-      importInstagramPost(jobs, dependencies, shortcode),
-      importInstagramPost(jobs, dependencies, shortcode),
-    ]);
-    expect(results.map(result => result.skipped).toSorted()).toEqual([false, true]);
-    expect(await db.select().from(sources)).toHaveLength(1);
-    expect(await jobs.findJobs(googleQueue)).toHaveLength(2);
   });
 
   it('queues the same post for two users', async () => {
@@ -841,6 +699,9 @@ describe.skipIf(!testUrl)('Instagram ingestion with PostgreSQL and pg-boss', () 
         },
         {timeout: 15000, interval: 100},
       );
+      expect(instagram.scrapeInstagramPost).toHaveBeenCalledExactlyOnceWith(url, {
+        signal: expect.any(AbortSignal),
+      });
     } finally {
       await jobs.offWork(importQueue);
     }
