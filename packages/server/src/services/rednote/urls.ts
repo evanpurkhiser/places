@@ -1,0 +1,54 @@
+const noteHosts = new Set([
+  'rednote.com',
+  'www.rednote.com',
+  'xiaohongshu.com',
+  'www.xiaohongshu.com',
+]);
+const shareHosts = new Set(['xhslink.com', 'xhslink.cn']);
+const notePath =
+  /^\/(?:explore|discovery\/item|user\/profile\/[a-f0-9]{24})\/([a-f0-9]{24})\/?$/i;
+const sharePath = /^\/(?:[A-Za-z]\/)?[A-Za-z0-9]+\/?$/;
+
+export function canonicalNoteUrl(externalId: string) {
+  return `https://www.rednote.com/discovery/item/${externalId}`;
+}
+
+export function parseRedNoteUrl(input: string | URL) {
+  const url = URL.parse(input);
+
+  if (
+    !url ||
+    !['https:', 'http:'].includes(url.protocol) ||
+    url.username ||
+    url.password ||
+    url.port
+  ) {
+    return null;
+  }
+
+  url.protocol = 'https:';
+  url.hash = '';
+
+  const externalId = noteHosts.has(url.hostname)
+    ? notePath.exec(url.pathname)?.[1]?.toLowerCase()
+    : undefined;
+
+  if (externalId) {
+    const noteUrl = new URL(canonicalNoteUrl(externalId));
+    for (const key of ['xsec_token', 'xsec_source']) {
+      const value = url.searchParams.get(key);
+      if (value) {
+        noteUrl.searchParams.set(key, value);
+      }
+    }
+
+    return {kind: 'note', externalId, url: noteUrl} as const;
+  }
+
+  if (shareHosts.has(url.hostname) && sharePath.test(url.pathname)) {
+    url.search = '';
+    return {kind: 'share', url} as const;
+  }
+
+  return null;
+}

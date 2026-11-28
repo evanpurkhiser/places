@@ -70,6 +70,7 @@ it('defaults worker settings independently and supports partial overrides', () =
   ).toEqual({batchSize: 3, concurrency: 1});
   expect(configSchema.parse({...testConfig, database}).workers).toEqual({
     'instagram-import': {batchSize: 1, concurrency: 1},
+    'rednote-import': {batchSize: 1, concurrency: 1},
     'gmaps-import': {batchSize: 1, concurrency: 1},
     'gmaps-sync': {batchSize: 1, concurrency: 1},
   });
@@ -78,13 +79,19 @@ it('defaults worker settings independently and supports partial overrides', () =
       .workers,
   ).toEqual({
     'instagram-import': {batchSize: 1, concurrency: 1},
+    'rednote-import': {batchSize: 1, concurrency: 1},
     'gmaps-import': {batchSize: 1, concurrency: 1},
     'gmaps-sync': {batchSize: 3, concurrency: 1},
   });
 });
 
 it.each([0, -1, 1.5, '8'])('rejects invalid worker size %s', value => {
-  for (const queue of ['gmaps-import', 'gmaps-sync', 'instagram-import']) {
+  for (const queue of [
+    'gmaps-import',
+    'gmaps-sync',
+    'instagram-import',
+    'rednote-import',
+  ]) {
     for (const field of ['batchSize', 'concurrency']) {
       expect(
         configSchema.safeParse({
@@ -142,4 +149,34 @@ it('requires Instagram settings and a shared OpenAI key', () => {
       false,
     );
   }
+});
+
+it('enables RedNote imports with independent capture and tagging settings', () => {
+  const input = {...testConfig, database: {url: 'postgres://localhost/places'}};
+  const instagramOnly = configSchema.parse(input);
+  expect(instagramOnly.rednote).toBeUndefined();
+
+  const rednote = {
+    alwaysApplyTags: ['status.needs-review'],
+    excludedTags: [],
+    excludedNamespaces: [],
+    requiredNamespaces: [],
+    capture: {model: 'rednote', instructions: 'Read the Chinese caption.'},
+  };
+  const config = configSchema.parse({...input, rednote});
+
+  expect(config.rednote).toMatchObject(rednote);
+  expect(config.instagram).toEqual(instagramOnly.instagram);
+});
+
+it('reports incomplete explicit RedNote settings at the provider path', () => {
+  const result = configSchema.safeParse({
+    ...testConfig,
+    database: {url: 'postgres://localhost/places'},
+    rednote: {...testConfig.instagram, capture: {maxTurns: 4}},
+  });
+
+  expect(result.error?.issues).toContainEqual(
+    expect.objectContaining({path: ['rednote', 'capture', 'model']}),
+  );
 });

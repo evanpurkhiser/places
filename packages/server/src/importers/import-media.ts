@@ -48,6 +48,7 @@ interface MediaPostInput {
   externalId: string;
   url: string;
   load(signal: AbortSignal): Promise<MediaPostSource>;
+  fetchMedia?: typeof fetch;
 }
 
 /**
@@ -122,11 +123,7 @@ export async function importMediaPost(
     return dependencies.db.transaction(tx => saveExistingSource(tx, existing.id, run));
   }
 
-  const {captured, alwaysApplyTagIds} = await capturePost(
-    dependencies,
-    provider,
-    post.load,
-  );
+  const {captured, alwaysApplyTagIds} = await capturePost(dependencies, provider, post);
   return dispatchPlaces(
     dependencies.db,
     jobs,
@@ -145,7 +142,7 @@ export async function importMediaPost(
 async function capturePost(
   {db, google, openai, ffmpeg, config}: MediaImportDependencies,
   provider: MediaProvider,
-  load: MediaPostInput['load'],
+  {load, fetchMedia}: MediaPostInput,
 ) {
   const [catalogTags, catalogNamespaces] = await Promise.all([
     db.select().from(tags),
@@ -167,6 +164,7 @@ async function capturePost(
     source,
     {
       ffmpeg,
+      fetch: fetchMedia,
       transcribe: createTranscriber(openai),
     },
     {signal},

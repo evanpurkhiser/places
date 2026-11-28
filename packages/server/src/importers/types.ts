@@ -15,7 +15,7 @@ export interface ImportStatus {
 }
 
 export interface Importer {
-  type: 'gmaps' | 'instagram';
+  type: ImportRun['type'];
   accepts(input: string): boolean;
   enqueue(
     input: string,

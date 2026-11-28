@@ -2,7 +2,8 @@
 
 ## Background jobs
 
-pg-boss runs three queues: `instagram-import`, `gmaps-import`, and `gmaps-sync`.
+pg-boss runs `instagram-import`, `rednote-import`, `gmaps-import`,
+and `gmaps-sync`.
 Workers run as a separate process:
 
 ```bash
@@ -15,6 +16,9 @@ Per-queue throughput is configured in the server YAML:
 ```yaml
 workers:
   instagram-import:
+    batchSize: 1
+    concurrency: 1
+  rednote-import:
     batchSize: 1
     concurrency: 1
   gmaps-import:
@@ -41,11 +45,13 @@ Sync queues a Google metadata refresh for each matching place.
 The response reports `matched`, `queued`, `alreadyQueued`, and `jobIds`;
 status ends as `updated`, `unchanged`, `missing`, or `superseded`.
 
-## Instagram ingestion
+## Media ingestion
 
 Pasting an Instagram URL queues a job keyed by the post's shortcode.
-It skips existing sources, scrapes the media, captures the places it mentions,
-and atomically saves the source plus a batch of Google import jobs.
+A RedNote note or share link queues a job that resolves to the note ID.
+Both workers skip existing sources, fetch the media,
+capture the places the post mentions,
+and atomically save the source plus a batch of Google import jobs.
 The worker needs `ffmpeg` and `ffprobe` on `PATH`.
 
 ```yaml
@@ -59,6 +65,10 @@ instagram:
     reasoningEffort: medium
     instructions: Assign a type and evidence-supported atmosphere tags.
 ```
+
+To enable RedNote imports,
+add a separate `rednote` section with its own capture and tagging settings.
+For notes that require a share token, use a fresh link copied from the app.
 
 The OpenAI key lives at the top level, shared by model integrations:
 

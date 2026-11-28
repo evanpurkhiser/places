@@ -202,7 +202,7 @@ export const parser = merge(
             ),
           ),
           input: argument(zod(importInput, {metavar: 'INPUT', placeholder: ''}), {
-            description: message`URL or provider reference to import. Supports Google Maps URLs, gmaps:<place_id>, and Instagram post or reel URLs.`,
+            description: message`URL or provider reference to import. Supports Google Maps URLs, gmaps:<place_id>, Instagram posts and reels, and RedNote note and share URLs.`,
           }),
         }),
       ),

@@ -13,6 +13,12 @@ const dispatchResult = z.object({
   skipped: z.boolean(),
 });
 
+export async function getMediaImportStatus(run: ImportRun, context: Pick<Context, 'db'>) {
+  const statuses = await getMediaImportStatuses([run], context);
+
+  return statuses.get(run.id)!;
+}
+
 export async function getMediaImportStatuses(
   runs: ImportRun[],
   context: Pick<Context, 'db'>,
