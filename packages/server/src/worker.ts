@@ -6,6 +6,7 @@ import {registerImportWorker} from './jobs/gmaps-import.ts';
 import {registerSyncWorker} from './jobs/gmaps-sync.ts';
 import {startJobs} from './jobs/index.ts';
 import {registerInstagramImportWorker} from './jobs/instagram-import.ts';
+import {registerRedNoteImportWorker} from './jobs/rednote-import.ts';
 import {createGooglePlaces} from './services/google/index.ts';
 import {createFFmpeg} from './services/media-import/index.ts';
 
@@ -31,6 +32,14 @@ await registerInstagramImportWorker(
   {db, google, openai, ffmpeg, config: config.instagram},
   config.workers['instagram-import'],
 );
+
+if (config.rednote) {
+  await registerRedNoteImportWorker(
+    jobs,
+    {db, google, openai, ffmpeg, config: config.rednote},
+    config.workers['rednote-import'],
+  );
+}
 
 console.log('Places workers started.');
 

@@ -76,20 +76,22 @@ omit `--notes` to keep the current note or pass `''` to clear it.
 pnpm places import 'https://maps.app.goo.gl/...'          # Maps link
 pnpm places import 'gmaps:ChIJ...' --wait --tag type.cafe
 pnpm places import 'https://www.instagram.com/p/...' --wait
+pnpm places import 'https://xhslink.com/o/...' --wait
 pnpm places search-gmaps 'coffee shops in East Village, NYC'
 pnpm places import runs
 pnpm places import runs --limit 100
 pnpm places import runs JOB_ID
 ```
 
-Import returns a job ID and `importType` (`gmaps` or `instagram`).
+Import returns a job ID and `importType` (`gmaps`, `instagram`, or `rednote`).
 `--wait` polls once per second until completion and prints the result as JSON.
 Repeat `--tag` to apply tags, `--notes TEXT` for a place note,
 and `--tag-note NAME NOTE` for a per-assignment note.
 
 Supported inputs: `query_place_id`, `q=place_id:...`, `ftid`,
 Maps place links with a `data=` payload
-(including Takeout exports), and Instagram post/reel URLs.
+(including Takeout exports),
+Instagram post and reel URLs, and RedNote note and share URLs.
 
 ## Listing and sorting
 

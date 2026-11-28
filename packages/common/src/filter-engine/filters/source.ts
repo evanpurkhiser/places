@@ -26,7 +26,7 @@ export const source = defineFilter({
     {
       query: 'source[text:"date night"]',
       description:
-        'Search source descriptions, Instagram captions, and association descriptions.',
+        'Search source descriptions, post captions, and association descriptions.',
     },
     {query: 'has[source]', description: 'Places with at least one attached source.'},
     {query: '!has[source]', description: 'Places without attached sources.'},
@@ -34,7 +34,7 @@ export const source = defineFilter({
   parameters: {
     type: {
       description:
-        'Exact provider type, ignoring case, such as instagram. Unknown types match no places.',
+        'Exact provider type, ignoring case, such as instagram or rednote. Unknown types match no places.',
       type: textLiteral,
       operators: equality,
       optional: true,
@@ -53,7 +53,7 @@ export const source = defineFilter({
     },
     text: {
       description:
-        'Match any source description, Instagram caption, or description on this place association.',
+        'Match any source description, post caption, or description on this place association.',
       type: text,
       operators: equality,
       optional: true,

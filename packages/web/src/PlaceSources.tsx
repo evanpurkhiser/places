@@ -1,7 +1,7 @@
 import {useState} from 'react';
 
 import {Popover} from '@base-ui/react/popover';
-import {ArrowUpRight, Instagram} from 'lucide-react';
+import {ArrowUpRight, Images, Instagram} from 'lucide-react';
 
 import type {Place} from './rpc.ts';
 
@@ -18,7 +18,7 @@ function webUrl(value: string | null | undefined) {
   }
 }
 
-function Thumbnail({url}: {url: string}) {
+function Thumbnail({url, provider}: {url: string; provider: string}) {
   const [failed, setFailed] = useState(false);
 
   if (failed) {
@@ -29,7 +29,7 @@ function Thumbnail({url}: {url: string}) {
     <img
       className="source-thumbnail"
       src={url}
-      alt="Instagram preview"
+      alt={`${provider} preview`}
       loading="lazy"
       referrerPolicy="no-referrer"
       onError={() => setFailed(true)}
@@ -38,11 +38,19 @@ function Thumbnail({url}: {url: string}) {
 }
 
 export function PlaceSources({place}: {place: Place}) {
-  const sources = (place.sources ?? []).filter(({source}) => source.type === 'instagram');
+  const sources = place.sources ?? [];
 
   if (!sources.length) {
     return null;
   }
+
+  const instagramOnly = sources.every(({source}) => source.type === 'instagram');
+  const title = instagramOnly
+    ? 'Instagram'
+    : sources.every(({source}) => source.type === 'rednote')
+      ? 'RedNote'
+      : 'Sources';
+  const Icon = instagramOnly ? Instagram : Images;
 
   return (
     <Popover.Root>
@@ -51,9 +59,9 @@ export function PlaceSources({place}: {place: Place}) {
         openOnHover
         delay={200}
         closeDelay={150}
-        aria-label={`Instagram sources for ${place.name}`}
+        aria-label={`${title} for ${place.name}`}
       >
-        <Instagram size={14} />
+        <Icon size={14} />
       </Popover.Trigger>
       <Popover.Portal>
         <Popover.Positioner
@@ -63,29 +71,37 @@ export function PlaceSources({place}: {place: Place}) {
           sideOffset={6}
         >
           <Popover.Popup className="source-card">
-            <Popover.Title className="source-card-title">Instagram</Popover.Title>
+            <Popover.Title className="source-card-title">{title}</Popover.Title>
             {sources.map(association => {
               const {source} = association;
+              const provider = source.type === 'instagram' ? 'Instagram' : 'RedNote';
               const url =
                 webUrl(source.url) ??
-                (source.externalId
+                (source.type === 'instagram' && source.externalId
                   ? `https://www.instagram.com/p/${encodeURIComponent(source.externalId)}/`
                   : undefined);
               const thumbnail = webUrl(source.data?.thumbnailUrl);
 
               return (
                 <article className="source-entry" key={association.sourceId}>
-                  {thumbnail && <Thumbnail key={thumbnail} url={thumbnail} />}
+                  {thumbnail && (
+                    <Thumbnail key={thumbnail} url={thumbnail} provider={provider} />
+                  )}
                   <div className="source-text">
-                    {source.data?.username && <strong>@{source.data.username}</strong>}
+                    {source.data?.username && (
+                      <strong>
+                        {source.type === 'instagram' ? '@' : ''}
+                        {source.data.username}
+                      </strong>
+                    )}
                     <p>
                       {association.description ||
                         source.description ||
-                        'Saved from Instagram.'}
+                        `Saved from ${provider}.`}
                     </p>
                     {url && (
                       <a href={url} target="_blank" rel="noreferrer">
-                        Open on Instagram <ArrowUpRight size={12} />
+                        Open on {provider} <ArrowUpRight size={12} />
                       </a>
                     )}
                   </div>

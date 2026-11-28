@@ -19,7 +19,14 @@ export const instagramSourceData = z.strictObject({
 });
 export type InstagramSourceData = z.infer<typeof instagramSourceData>;
 
-export const sourceType = z.literal('instagram').describe('Source provider type.');
+export const rednoteSourceData = instagramSourceData.extend({
+  caption: z.string().describe('RedNote note title and body.'),
+  username: z.string().min(1).nullable().describe('RedNote author name.'),
+});
+
+export const sourceType = z
+  .enum(['instagram', 'rednote'])
+  .describe('Source provider type.');
 
 const sourceFields = z.object({
   id: sourceId,
@@ -43,10 +50,14 @@ const sourceFields = z.object({
  */
 export const source = z.discriminatedUnion('type', [
   sourceFields.extend({
-    type: sourceType,
+    type: z.literal(sourceType.enum.instagram),
     data: instagramSourceData
       .nullable()
       .describe('Instagram metadata, or null when unavailable.'),
+  }),
+  sourceFields.extend({
+    type: z.literal(sourceType.enum.rednote),
+    data: rednoteSourceData.nullable(),
   }),
 ]);
 export type Source = z.infer<typeof source>;

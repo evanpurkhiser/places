@@ -126,10 +126,10 @@ export const importInput = z
   .min(1)
   .max(4096)
   .describe(
-    'Google Maps URL, gmaps:<place_id> reference, or Instagram post or reel URL.',
+    'Google Maps URL, gmaps:<place_id> reference, Instagram post or reel URL, or RedNote URL.',
   );
 export const importType = z
-  .enum(['gmaps', 'instagram'])
+  .enum(['gmaps', 'instagram', 'rednote'])
   .describe('Provider selected for the import.');
 const jobState = z
   .enum(['created', 'retry', 'active', 'completed', 'cancelled', 'failed'])

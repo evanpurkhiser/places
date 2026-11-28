@@ -10,17 +10,11 @@ import type {ImportOptions} from '../importers/types.ts';
 import {instagramShortcode} from '../services/instagram/index.ts';
 
 import {importPayload as googleImportPayload} from './gmaps-import.ts';
+import {mediaImportQueueOptions} from './media-import.ts';
 import {registerWorker} from './worker.ts';
 
 export const importQueue = 'instagram-import';
-export const queueOptions = {
-  policy: 'exclusive',
-  retryLimit: 3,
-  retryDelay: 10,
-  retryBackoff: true,
-  expireInSeconds: 900,
-  deleteAfterSeconds: 7 * 24 * 60 * 60,
-};
+export const queueOptions = mediaImportQueueOptions;
 const importPayload = z.object({
   shortcode: z.string().regex(/^[A-Za-z0-9_-]+$/),
   tags: googleImportPayload.shape.tags,

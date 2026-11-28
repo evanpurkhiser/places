@@ -9,6 +9,10 @@ import {
   importQueue as instagramImportQueue,
   queueOptions as instagramImportOptions,
 } from './instagram-import.ts';
+import {
+  importQueue as rednoteImportQueue,
+  queueOptions as rednoteImportOptions,
+} from './rednote-import.ts';
 
 export async function startJobs(connectionString: string) {
   const boss = new PgBoss({connectionString});
@@ -19,6 +23,7 @@ export async function startJobs(connectionString: string) {
     await boss.start();
     await boss.createQueue(googleImportQueue, googleImportOptions);
     await boss.createQueue(instagramImportQueue, instagramImportOptions);
+    await boss.createQueue(rednoteImportQueue, rednoteImportOptions);
     await boss.createQueue(googleSyncQueue, {
       ...googleImportOptions,
       policy: 'exclusive',

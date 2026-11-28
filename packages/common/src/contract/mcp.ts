@@ -95,7 +95,8 @@ export const mcpTools = {
     }),
     import: mcp.tool({
       name: 'places_import',
-      description: 'Queue a place import from a Google Maps or Instagram input.',
+      description:
+        'Queue a place import from a Google Maps, Instagram, or RedNote input.',
       annotations: {...write, openWorldHint: true},
     }),
     getImportRun: mcp.tool({

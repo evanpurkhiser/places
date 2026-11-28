@@ -5,6 +5,7 @@ import {readFile} from 'node:fs/promises';
 import {parseArgs} from 'node:util';
 
 import {instagramConfig} from './config/instagram.ts';
+import {mediaImportConfig} from './config/media-import.ts';
 
 /**
  * Define per-queue throughput with a queue-specific concurrency default.
@@ -32,6 +33,7 @@ export const workersConfig = z
     'gmaps-import': workerQueue(1),
     'gmaps-sync': workerQueue(1),
     'instagram-import': workerQueue(1),
+    'rednote-import': workerQueue(1),
   })
   .prefault({});
 export type WorkerQueueConfig = z.infer<typeof workersConfig>['gmaps-sync'];
@@ -57,11 +59,16 @@ export const configSchema = z.strictObject({
         .trim()
         .min(1)
         .describe(
-          'OpenAI API key shared by model integrations; required for Instagram ingestion.',
+          'OpenAI API key shared by model integrations; required for media imports.',
         ),
     })
     .describe('OpenAI integration.'),
   instagram: instagramConfig,
+  rednote: mediaImportConfig
+    .optional()
+    .describe(
+      'RedNote capture and tagging settings. Set this section to enable RedNote imports.',
+    ),
   workers: workersConfig,
   server: z
     .strictObject({

@@ -12,10 +12,11 @@ import {
 import {googleImporter} from './gmaps.ts';
 import {instagramImporter} from './instagram.ts';
 import {getMediaImportStatuses} from './media-status.ts';
+import {rednoteImporter} from './rednote.ts';
 import {resolveTags} from './tags.ts';
 import type {ImportRun, ImportStatus} from './types.ts';
 
-const importers = [googleImporter, instagramImporter];
+const importers = [googleImporter, instagramImporter, rednoteImporter];
 
 export async function enqueueImport(
   input: string,
@@ -27,7 +28,7 @@ export async function enqueueImport(
 
   if (!importer) {
     throw new InvalidImportInputError(
-      'Unsupported import input. Currently supported: Google Maps place URLs, gmaps:<place_id>, and Instagram post or reel URLs.',
+      'Unsupported import input. Currently supported: Google Maps place URLs, gmaps:<place_id>, Instagram posts and reels, and RedNote notes.',
     );
   }
 
@@ -74,14 +75,14 @@ async function resolveImportStatuses(
   preloadedRuns?: ImportRun[],
 ) {
   const mediaStatuses = await getMediaImportStatuses(
-    runs.filter(run => run.type === 'instagram'),
+    runs.filter(run => run.type !== 'gmaps'),
     context,
     preloadedRuns,
   );
 
   return Promise.all(
     runs.map(run =>
-      run.type === 'instagram'
+      run.type !== 'gmaps'
         ? statusResponse(run, mediaStatuses.get(run.id)!)
         : importStatus(run, context),
     ),

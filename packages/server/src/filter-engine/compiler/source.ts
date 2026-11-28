@@ -5,7 +5,6 @@ import {and, eq, exists, or, sql, type SQL} from 'drizzle-orm';
 import {QueryBuilder} from 'drizzle-orm/pg-core';
 
 import {places, placeSources, sources} from '../../db/schema.ts';
-import {matchInstagramCaption} from '../../importers/instagram/filter-engine.ts';
 import type {Context} from '../context.ts';
 
 import {matchText} from './text.ts';
@@ -36,7 +35,7 @@ export const sourceCompiler = {
         text
           ? or(
               matchText(sources.description, text.value, text.operator),
-              matchInstagramCaption(text.value, text.operator),
+              matchText(sql`${sources.data}->>'caption'`, text.value, text.operator),
               matchText(placeSources.description, text.value, text.operator),
             )
           : undefined,

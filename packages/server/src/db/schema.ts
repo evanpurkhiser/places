@@ -209,7 +209,7 @@ export const placeSources = pgTable(
   ],
 );
 
-const importRunTypes = ['instagram', 'gmaps'] as const;
+const importRunTypes = ['instagram', 'gmaps', 'rednote'] as const;
 const importRunStates = [
   'created',
   'active',

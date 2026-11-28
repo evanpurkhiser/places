@@ -1,5 +1,5 @@
 import type {PlaceSourceInput} from '@places/common/contract/source';
-import {and, eq, sql} from 'drizzle-orm';
+import {and, eq, inArray, sql} from 'drizzle-orm';
 
 import type {Database} from '../db/index.ts';
 import {importRuns, places, placeSaves, placeSources, placeTags} from '../db/schema.ts';
@@ -95,7 +95,7 @@ export function importPlace(
       await lockImportSource(tx, source.sourceId);
     }
 
-    // Repeat Instagram imports link their run even if some places are still pending.
+    // Repeat media imports link their run even if some places are still pending.
     const sourceUsers = source
       ? await tx
           .selectDistinct({userId: importRuns.requestedByUserId})
@@ -103,7 +103,7 @@ export function importPlace(
           .where(
             and(
               eq(importRuns.sourceId, source.sourceId),
-              eq(importRuns.type, 'instagram'),
+              inArray(importRuns.type, ['instagram', 'rednote']),
             ),
           )
       : [];

@@ -41,14 +41,13 @@ describe('source filters', () => {
 
   it('parameterizes identifiers, URLs, and text', async () => {
     const result = await compile(
-      `source[type:INSTAGRAM, url:"https://example.com/a'b", text:"100%_good"]`,
+      `source[type:REDNOTE, url:"https://example.com/a'b", text:"100%_good"]`,
     );
 
     expect(result.params).toEqual([
-      'instagram',
+      'rednote',
       "https://example.com/a'b",
       '%100\\%\\_good%',
-      'instagram',
       '%100\\%\\_good%',
       '%100\\%\\_good%',
     ]);
