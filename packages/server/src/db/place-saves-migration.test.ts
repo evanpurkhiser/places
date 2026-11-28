@@ -28,13 +28,14 @@ it.skipIf(!testUrl)(
         migration.sql.some(statement => statement.includes('CREATE TABLE "place_saves"')),
       );
       expect(migrationIndex).toBeGreaterThan(0);
+      const setupStatements = migrations
+        .slice(0, migrationIndex)
+        .flatMap(migration => migration.sql);
 
       const connection = await db.$client.connect();
       try {
-        for (const migration of migrations.slice(0, migrationIndex)) {
-          for (const statement of migration.sql) {
-            await connection.query(statement);
-          }
+        for (const statement of setupStatements) {
+          await connection.query(statement);
         }
 
         const placeId = randomUUID();
