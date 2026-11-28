@@ -13,9 +13,9 @@ import type {TranscriptSegment} from './transcribing.ts';
 export type VideoFrame = {url: string; timestampSeconds: number};
 
 /**
- * Post identity and display metadata supplied by Instagram.
+ * Post identity and display metadata supplied by the provider.
  */
-export type InstagramPostMetadata = {
+export type MediaPostMetadata = {
   externalId: string;
   caption: string;
   username: string | null;
@@ -25,31 +25,30 @@ export type InstagramPostMetadata = {
 };
 
 /**
- * A downloadable image or video in an Instagram post.
+ * A downloadable image or video in a post.
  */
-export type InstagramMediaSource = {kind: 'image' | 'video'; url: string};
+export type PostMediaSource = {kind: 'image' | 'video'; url: string};
 
 /**
  * Resolved post metadata and media URLs in their original order.
  */
-export type InstagramPostSource = InstagramPostMetadata & {media: InstagramMediaSource[]};
+export type MediaPostSource = MediaPostMetadata & {media: PostMediaSource[]};
 
 /**
  * Prepared post consumed by capture. Keep its using scope open throughout capture
  * so video frames remain available; disposal releases all video resources.
  */
-export type InstagramPost = InstagramPostMetadata &
-  AsyncDisposable & {media: InstagramMedia[]};
+export type MediaPost = MediaPostMetadata & AsyncDisposable & {media: PostMedia[]};
 
 /**
  * An identified image or video within a prepared post.
  */
-export type InstagramMedia = InstagramVideo | InstagramImage;
+export type PostMedia = PostVideo | PostImage;
 
 /**
  * A video with timestamped transcription and on-demand frame extraction.
  */
-export type InstagramVideo = AsyncDisposable & {
+export type PostVideo = AsyncDisposable & {
   id: string;
   kind: 'video';
   durationSeconds: number;
@@ -60,7 +59,7 @@ export type InstagramVideo = AsyncDisposable & {
 /**
  * An image held in memory in its original format.
  */
-export type InstagramImage = {id: string; kind: 'image'; image: string};
+export type PostImage = {id: string; kind: 'image'; image: string};
 
 interface MediaDependencies {
   ffmpeg: FFmpeg;
@@ -71,11 +70,11 @@ interface MediaDependencies {
 /**
  * Prepare media concurrently, preserve post order, and own video cleanup.
  */
-export async function prepareInstagramPost(
-  source: InstagramPostSource,
+export async function prepareMediaPost(
+  source: MediaPostSource,
   dependencies: MediaDependencies,
   options: {temporaryRoot?: string; signal?: AbortSignal} = {},
-): Promise<InstagramPost> {
+): Promise<MediaPost> {
   const resources = new AsyncDisposableStack();
 
   const pending = source.media.map(async (item, index) => {
@@ -117,9 +116,9 @@ async function makeVideo(
   url: string,
   dependencies: MediaDependencies,
   options: {temporaryRoot?: string; signal?: AbortSignal},
-): Promise<InstagramVideo> {
+): Promise<PostVideo> {
   const directory = await mkdtempDisposable(
-    join(options.temporaryRoot ?? tmpdir(), 'instagram-'),
+    join(options.temporaryRoot ?? tmpdir(), 'places-media-'),
   );
   const controller = new AbortController();
   const signal = options.signal
@@ -200,7 +199,7 @@ async function fetchMedia(url: string, fetcher: typeof fetch, signal?: AbortSign
 
   if (!response.ok || !response.body) {
     await response.body?.cancel();
-    throw new Error('Instagram media download failed.');
+    throw new Error('Post media download failed.');
   }
 
   return response;
@@ -221,7 +220,7 @@ async function makeImage(
   url: string,
   fetcher: typeof fetch,
   signal?: AbortSignal,
-): Promise<InstagramImage> {
+): Promise<PostImage> {
   const response = await fetchMedia(url, fetcher, signal);
   const bytes = Buffer.from(await response.bytes());
   return {

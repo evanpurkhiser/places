@@ -2,7 +2,7 @@ import {namespace} from '@places/common/contract/namespace';
 import {tag} from '@places/common/contract/tag';
 import {z} from 'zod';
 
-import {instagramCaptureConfig, instagramConfig} from '../../config/instagram.ts';
+import {mediaCaptureConfig, mediaImportConfig} from '../../config/media-import.ts';
 
 import {transcriptSegments} from './transcribing.ts';
 
@@ -33,10 +33,10 @@ export const captureContent = z.strictObject({
 });
 export type CaptureContent = z.input<typeof captureContent>;
 
-export const captureOptions = instagramCaptureConfig.extend({
-  excludedTags: instagramConfig.shape.excludedTags,
-  excludedNamespaces: instagramConfig.shape.excludedNamespaces,
-  requiredNamespaces: instagramConfig.shape.requiredNamespaces,
+export const captureOptions = mediaCaptureConfig.extend({
+  excludedTags: mediaImportConfig.shape.excludedTags,
+  excludedNamespaces: mediaImportConfig.shape.excludedNamespaces,
+  requiredNamespaces: mediaImportConfig.shape.requiredNamespaces,
 });
 export type CaptureOptions = z.input<typeof captureOptions>;
 export type ParsedCaptureOptions = z.output<typeof captureOptions>;

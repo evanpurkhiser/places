@@ -15,7 +15,7 @@ import type {z} from 'zod';
 import type {GooglePlaces} from '../google/index.ts';
 
 import {CaptureError} from './errors.ts';
-import type {InstagramPost} from './media.ts';
+import type {MediaPost} from './media.ts';
 import {buildCapturePrompt} from './prompt.ts';
 import {
   assignableTags,
@@ -58,7 +58,7 @@ function resolveAssignableTags(catalog: CaptureCatalog, options: ParsedCaptureOp
 /**
  * Package prepared text and images with labels the model can cite as evidence.
  */
-function contentInput(post: InstagramPost): Exclude<UserMessageItem['content'], string> {
+function contentInput(post: MediaPost): Exclude<UserMessageItem['content'], string> {
   const content = captureContent.parse({
     caption: post.caption,
     location: post.location,
@@ -143,26 +143,27 @@ function resolveResult(
 }
 
 /**
- * Analyze prepared Instagram content without writing places, sources, or tags.
+ * Analyze prepared post content without writing places, sources, or tags.
  */
 export async function capture(
   dependencies: CaptureDependencies,
-  post: InstagramPost,
+  post: MediaPost,
   catalogInput: CaptureCatalog,
   optionsInput: CaptureOptions,
-  signal?: AbortSignal,
+  signal: AbortSignal | undefined,
+  provider: {name: string; postDescription: string},
 ) {
   const options = captureOptions.parse(optionsInput);
   const catalog = captureCatalog.parse(catalogInput);
   const schema = captureOutput(resolveAssignableTags(catalog, options));
   const tools = createCaptureTools(dependencies.google, post);
-  const prompt = buildCapturePrompt(catalog, options);
+  const prompt = buildCapturePrompt(catalog, options, provider.postDescription);
   const timeout = AbortSignal.timeout(options.timeoutMs);
   const requestSignal = signal ? AbortSignal.any([signal, timeout]) : timeout;
   requestSignal.throwIfAborted();
 
   const agent = new Agent({
-    name: 'Instagram capture',
+    name: `${provider.name} capture`,
     model: new OpenAIResponsesModel(dependencies.openai, options.model),
     instructions: prompt,
     tools,

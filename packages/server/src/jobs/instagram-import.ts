@@ -3,10 +3,8 @@ import {z} from 'zod';
 
 import type {WorkerQueueConfig} from '../config.ts';
 import type {Database} from '../db/index.ts';
-import {
-  importInstagramPost,
-  type InstagramImportDependencies,
-} from '../importers/import-instagram.ts';
+import {importInstagramPost} from '../importers/import-instagram.ts';
+import type {MediaImportDependencies} from '../importers/import-media.ts';
 import {withImportEnqueue, withImportRun} from '../importers/runs.ts';
 import type {ImportOptions} from '../importers/types.ts';
 import {instagramShortcode} from '../services/instagram/index.ts';
@@ -54,7 +52,7 @@ export function enqueueInstagramImport(
  */
 export function registerInstagramImportWorker(
   jobs: PgBoss,
-  dependencies: InstagramImportDependencies,
+  dependencies: MediaImportDependencies,
   options: WorkerQueueConfig,
 ) {
   return registerWorker(

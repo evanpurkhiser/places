@@ -7,7 +7,7 @@ import {registerSyncWorker} from './jobs/gmaps-sync.ts';
 import {startJobs} from './jobs/index.ts';
 import {registerInstagramImportWorker} from './jobs/instagram-import.ts';
 import {createGooglePlaces} from './services/google/index.ts';
-import {createFFmpeg} from './services/instagram/index.ts';
+import {createFFmpeg} from './services/media-import/index.ts';
 
 const config = await loadConfig();
 

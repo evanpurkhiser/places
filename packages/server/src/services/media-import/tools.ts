@@ -9,7 +9,7 @@ import {z} from 'zod';
 
 import {type GooglePlaces, searchDetails} from '../google/index.ts';
 
-import type {InstagramPost} from './media.ts';
+import type {MediaPost} from './media.ts';
 
 const searchParameters = z.strictObject({
   query: googleSearchQuery,
@@ -21,7 +21,7 @@ const searchParameters = z.strictObject({
  */
 export function createCaptureTools(
   google: Pick<GooglePlaces, 'search'>,
-  post: InstagramPost,
+  post: MediaPost,
 ) {
   const searchPlaces = tool({
     name: 'searchPlaces',

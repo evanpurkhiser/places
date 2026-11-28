@@ -22,10 +22,8 @@ import {
   users,
 } from '../db/schema.ts';
 import {ImportUnavailableError, InvalidImportInputError} from '../importers/errors.ts';
-import {
-  importInstagramPost,
-  type InstagramImportDependencies,
-} from '../importers/import-instagram.ts';
+import {importInstagramPost} from '../importers/import-instagram.ts';
+import type {MediaImportDependencies} from '../importers/import-media.ts';
 import {importPlace} from '../importers/import-place.ts';
 import {enqueueImport, getImportStatus} from '../importers/index.ts';
 import {
@@ -35,6 +33,7 @@ import {
 } from '../importers/runs.ts';
 import {createGooglePlaces} from '../services/google/index.ts';
 import * as instagram from '../services/instagram/index.ts';
+import * as media from '../services/media-import/index.ts';
 
 import {
   registerImportWorker,
@@ -51,7 +50,11 @@ import {
 vi.mock('../services/instagram/index.ts', async importOriginal => ({
   ...(await importOriginal<typeof instagram>()),
   scrapeInstagramPost: vi.fn(),
-  prepareInstagramPost: vi.fn(),
+}));
+
+vi.mock('../services/media-import/index.ts', async importOriginal => ({
+  ...(await importOriginal<typeof media>()),
+  prepareMediaPost: vi.fn(),
   capture: vi.fn(),
 }));
 
@@ -85,8 +88,8 @@ describe.skipIf(!testUrl)('Instagram ingestion with PostgreSQL and pg-boss', () 
   });
   let defaultUserId: string;
   let jobs: Awaited<ReturnType<typeof startJobs>>;
-  let dependencies: InstagramImportDependencies;
-  let captured: instagram.CaptureResult;
+  let dependencies: MediaImportDependencies;
+  let captured: media.CaptureResult;
   let reviewTagId: string;
   let importedTagId: string;
   const dispose = vi.fn(async () => {});
@@ -103,7 +106,7 @@ describe.skipIf(!testUrl)('Instagram ingestion with PostgreSQL and pg-boss', () 
       db,
       google: createGooglePlaces(),
       openai: new OpenAI({apiKey: config.openai.key}),
-      ffmpeg: instagram.createFFmpeg(),
+      ffmpeg: media.createFFmpeg(),
       config: config.instagram,
     };
   }, 30000);
@@ -152,12 +155,12 @@ describe.skipIf(!testUrl)('Instagram ingestion with PostgreSQL and pg-boss', () 
       unresolved: [{name: 'Unknown cafe', reason: 'No identifying details'}],
     };
     vi.mocked(instagram.scrapeInstagramPost).mockResolvedValue({...metadata, media: []});
-    vi.mocked(instagram.prepareInstagramPost).mockResolvedValue({
+    vi.mocked(media.prepareMediaPost).mockResolvedValue({
       ...metadata,
       media: [],
       [Symbol.asyncDispose]: dispose,
     });
-    vi.mocked(instagram.capture).mockImplementation(() => {
+    vi.mocked(media.capture).mockImplementation(() => {
       expect(dispose).not.toHaveBeenCalled();
       return Promise.resolve(captured);
     });
@@ -208,7 +211,7 @@ describe.skipIf(!testUrl)('Instagram ingestion with PostgreSQL and pg-boss', () 
       sourceId: result.sourceId,
       data: {evidence: 'Caption'},
     });
-    expect(instagram.capture).toHaveBeenCalledWith(
+    expect(media.capture).toHaveBeenCalledWith(
       expect.anything(),
       expect.anything(),
       expect.objectContaining({
@@ -221,6 +224,7 @@ describe.skipIf(!testUrl)('Instagram ingestion with PostgreSQL and pg-boss', () 
         requiredNamespaces: [],
       },
       expect.any(AbortSignal),
+      expect.objectContaining({name: 'Instagram'}),
     );
   });
 
@@ -477,7 +481,7 @@ describe.skipIf(!testUrl)('Instagram ingestion with PostgreSQL and pg-boss', () 
       placeIds: expect.arrayContaining(saved),
     });
     expect(await db.select().from(placeSources)).toHaveLength(2);
-    expect(instagram.capture).toHaveBeenCalledOnce();
+    expect(media.capture).toHaveBeenCalledOnce();
   });
 
   it('completes an import with no matched places', async () => {
@@ -641,7 +645,7 @@ describe.skipIf(!testUrl)('Instagram ingestion with PostgreSQL and pg-boss', () 
       await jobs.offWork(importQueue);
     }
 
-    expect(instagram.capture).toHaveBeenCalledOnce();
+    expect(media.capture).toHaveBeenCalledOnce();
   });
 
   it('retains a failed capture without requiring a source', async () => {
@@ -732,8 +736,8 @@ describe.skipIf(!testUrl)('Instagram ingestion with PostgreSQL and pg-boss', () 
       jobIds: [],
     });
     expect(instagram.scrapeInstagramPost).not.toHaveBeenCalled();
-    expect(instagram.prepareInstagramPost).not.toHaveBeenCalled();
-    expect(instagram.capture).not.toHaveBeenCalled();
+    expect(media.prepareMediaPost).not.toHaveBeenCalled();
+    expect(media.capture).not.toHaveBeenCalled();
   });
 
   it('rolls back source and queued jobs together and permits a retry', async () => {
@@ -776,7 +780,7 @@ describe.skipIf(!testUrl)('Instagram ingestion with PostgreSQL and pg-boss', () 
   });
 
   it('disposes media after capture failures without creating a source', async () => {
-    vi.mocked(instagram.capture).mockRejectedValueOnce(new Error('Capture failed'));
+    vi.mocked(media.capture).mockRejectedValueOnce(new Error('Capture failed'));
     await expect(importInstagramPost(jobs, dependencies, shortcode)).rejects.toThrow(
       'Capture failed',
     );
@@ -785,7 +789,7 @@ describe.skipIf(!testUrl)('Instagram ingestion with PostgreSQL and pg-boss', () 
   });
 
   it('dispatches only once if concurrent captures reach source creation', async () => {
-    vi.mocked(instagram.capture).mockResolvedValue(captured);
+    vi.mocked(media.capture).mockResolvedValue(captured);
     const results = await Promise.all([
       importInstagramPost(jobs, dependencies, shortcode),
       importInstagramPost(jobs, dependencies, shortcode),
